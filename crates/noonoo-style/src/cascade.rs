@@ -284,6 +284,7 @@ pub(crate) fn compute(doc: &Document, stylesheets: &[Stylesheet]) -> Vec<Option<
                 &candidate.values,
                 font_size,
                 root_font_size,
+                parent.as_ref(),
             );
         }
 

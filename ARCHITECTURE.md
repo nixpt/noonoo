@@ -76,6 +76,7 @@ Seventeen crates in five tiers. Arrows point *downward only*.
 | `noonoo-csv` | CSV/TSV → HTML table | — (owned) |
 | `noonoo-ini` | INI → value model (JSON) | — (owned) |
 | `noonoo-svg` | SVG subset → paint commands | — (owned) |
+| `noonoo-hx` | htmx-like `hx-*` attributes → fetch + DOM swap | — (owned) |
 | `noonoo-net` | loading: `file:` + `data:` owned; `http` behind a feature | TLS (borrowed, not wired) |
 | `noonoo-engine` | the working document (parse→style→layout) | — (orchestrates) |
 | `noonoo-headless` | tree dump, virtual clock, synthetic input | — |

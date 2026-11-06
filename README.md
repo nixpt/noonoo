@@ -40,6 +40,7 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | [`noonoo-csv`](crates/noonoo-csv) | CSV/TSV → HTML table |
 | [`noonoo-ini`](crates/noonoo-ini) | INI → value model (JSON) |
 | [`noonoo-svg`](crates/noonoo-svg) | SVG subset → paint commands |
+| [`noonoo-hx`](crates/noonoo-hx) | htmx-like declarative attributes → fetch + DOM swap |
 | [`noonoo-net`](crates/noonoo-net) | Loading: `file:` + `data:` owned; `http` behind a feature |
 | [`noonoo-engine`](crates/noonoo-engine) | Orchestration: a working document |
 | [`noonoo-headless`](crates/noonoo-headless) | Tree dump, virtual clock, synthetic input |

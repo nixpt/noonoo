@@ -25,6 +25,8 @@ members = [
     # orchestration
     "crates/noonoo-engine",
     "crates/noonoo-headless",
+    # higher layers
+    "crates/noonoo-hx",
     # output
     "crates/noonoo-paint",
     "crates/noonoo-shell",
@@ -74,6 +76,7 @@ noonoo-svg = { path = "crates/noonoo-svg", version = "0.4.0" }
 noonoo-net = { path = "crates/noonoo-net", version = "0.4.0" }
 noonoo-engine = { path = "crates/noonoo-engine", version = "0.4.0" }
 noonoo-headless = { path = "crates/noonoo-headless", version = "0.4.0" }
+noonoo-hx = { path = "crates/noonoo-hx", version = "0.4.0" }
 noonoo-paint = { path = "crates/noonoo-paint", version = "0.4.0" }
 noonoo-shell = { path = "crates/noonoo-shell", version = "0.4.0" }
 

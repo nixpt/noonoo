@@ -103,7 +103,37 @@ pub(crate) fn apply(
     values: &[Value],
     font_size: f32,
     root: f32,
+    parent: Option<&ComputedStyle>,
 ) {
+    // Global CSS-wide keywords: `inherit` / `initial` / `unset`.
+    if let [Value::Keyword(keyword)] = values {
+        match keyword.to_ascii_lowercase().as_str() {
+            "inherit" => {
+                if let Some(parent) = parent {
+                    copy_property(style, parent, property);
+                }
+                return;
+            }
+            "initial" => {
+                let initial = ComputedStyle::default();
+                copy_property(style, &initial, property);
+                return;
+            }
+            "unset" => {
+                if is_inherited(property) {
+                    if let Some(parent) = parent {
+                        copy_property(style, parent, property);
+                    }
+                } else {
+                    let initial = ComputedStyle::default();
+                    copy_property(style, &initial, property);
+                }
+                return;
+            }
+            _ => {}
+        }
+    }
+
     match property {
         Property::Display => {
             if let Some(k) = keyword(values) {
@@ -416,4 +446,78 @@ fn overflow(values: &[Value]) -> Option<Overflow> {
         "auto" => Overflow::Auto,
         _ => return None,
     })
+}
+
+/// Whether a property inherits by default.
+fn is_inherited(property: &Property) -> bool {
+    matches!(
+        property,
+        Property::Color
+            | Property::FontSize
+            | Property::FontWeight
+            | Property::FontStyle
+            | Property::FontFamily
+            | Property::LineHeight
+            | Property::TextAlign
+            | Property::WhiteSpace
+            | Property::Visibility
+            | Property::Cursor
+    )
+}
+
+/// Copy one property's value from `src` into `dst` (for `inherit`/`initial`).
+fn copy_property(dst: &mut ComputedStyle, src: &ComputedStyle, property: &Property) {
+    match property {
+        Property::Display => dst.display = src.display,
+        Property::Position => dst.position = src.position,
+        Property::Width => dst.width = src.width,
+        Property::Height => dst.height = src.height,
+        Property::MarginTop => dst.margin.top = src.margin.top,
+        Property::MarginRight => dst.margin.right = src.margin.right,
+        Property::MarginBottom => dst.margin.bottom = src.margin.bottom,
+        Property::MarginLeft => dst.margin.left = src.margin.left,
+        Property::PaddingTop => dst.padding.top = src.padding.top,
+        Property::PaddingRight => dst.padding.right = src.padding.right,
+        Property::PaddingBottom => dst.padding.bottom = src.padding.bottom,
+        Property::PaddingLeft => dst.padding.left = src.padding.left,
+        Property::BorderTopWidth => dst.border_width.top = src.border_width.top,
+        Property::BorderRightWidth => dst.border_width.right = src.border_width.right,
+        Property::BorderBottomWidth => dst.border_width.bottom = src.border_width.bottom,
+        Property::BorderLeftWidth => dst.border_width.left = src.border_width.left,
+        Property::BorderTopStyle => dst.border_style.top = src.border_style.top,
+        Property::BorderRightStyle => dst.border_style.right = src.border_style.right,
+        Property::BorderBottomStyle => dst.border_style.bottom = src.border_style.bottom,
+        Property::BorderLeftStyle => dst.border_style.left = src.border_style.left,
+        Property::BorderTopColor => dst.border_color.top = src.border_color.top,
+        Property::BorderRightColor => dst.border_color.right = src.border_color.right,
+        Property::BorderBottomColor => dst.border_color.bottom = src.border_color.bottom,
+        Property::BorderLeftColor => dst.border_color.left = src.border_color.left,
+        Property::BoxSizing => dst.box_sizing = src.box_sizing,
+        Property::FlexDirection => dst.flex_direction = src.flex_direction,
+        Property::FlexWrap => dst.flex_wrap = src.flex_wrap,
+        Property::FlexGrow => dst.flex_grow = src.flex_grow,
+        Property::FlexShrink => dst.flex_shrink = src.flex_shrink,
+        Property::FlexBasis => dst.flex_basis = src.flex_basis,
+        Property::JustifyContent => dst.justify_content = src.justify_content,
+        Property::AlignItems => dst.align_items = src.align_items,
+        Property::AlignSelf => dst.align_self = src.align_self,
+        Property::RowGap => dst.row_gap = src.row_gap,
+        Property::ColumnGap => dst.column_gap = src.column_gap,
+        Property::Color => dst.color = src.color,
+        Property::BackgroundColor => dst.background_color = src.background_color,
+        Property::FontSize => dst.font_size = src.font_size,
+        Property::FontWeight => dst.font_weight = src.font_weight,
+        Property::FontStyle => dst.font_style = src.font_style,
+        Property::FontFamily => dst.font_family = src.font_family.clone(),
+        Property::LineHeight => dst.line_height = src.line_height,
+        Property::TextAlign => dst.text_align = src.text_align,
+        Property::WhiteSpace => dst.white_space = src.white_space,
+        Property::Opacity => dst.opacity = src.opacity,
+        Property::OverflowX => dst.overflow_x = src.overflow_x,
+        Property::OverflowY => dst.overflow_y = src.overflow_y,
+        Property::ZIndex => dst.z_index = src.z_index,
+        Property::Visibility => dst.visibility = src.visibility,
+        Property::Cursor => dst.cursor = src.cursor.clone(),
+        _ => {}
+    }
 }

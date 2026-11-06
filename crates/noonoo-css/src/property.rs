@@ -415,6 +415,7 @@ pub fn parse_declaration(
             Property::OverflowY,
         ),
         "flex" => Some(expand_flex(values.clone(), important)),
+        "flex-flow" => Some(expand_flex_flow(values.clone(), important)),
         "border" => Some(expand_border(values.clone(), important)),
         _ => None,
     };
@@ -474,6 +475,28 @@ fn four(values: &[Value]) -> Option<[Value; 4]> {
         [a, b, c, d] => Some([a.clone(), b.clone(), c.clone(), d.clone()]),
         _ => None,
     }
+}
+
+fn expand_flex_flow(values: Vec<Value>, important: bool) -> Vec<Declaration> {
+    let mut out = Vec::new();
+    for value in values {
+        if let Value::Keyword(keyword) = &value {
+            match keyword.as_str() {
+                "row" | "row-reverse" | "column" | "column-reverse" => {
+                    out.push(decl(
+                        Property::FlexDirection,
+                        vec![value.clone()],
+                        important,
+                    ));
+                }
+                "nowrap" | "wrap" | "wrap-reverse" => {
+                    out.push(decl(Property::FlexWrap, vec![value.clone()], important));
+                }
+                _ => {}
+            }
+        }
+    }
+    out
 }
 
 fn expand_flex(values: Vec<Value>, important: bool) -> Vec<Declaration> {
@@ -621,6 +644,12 @@ mod tests {
         let decls = parse_declaration("gap", "1px 2px", true).unwrap();
         assert_eq!(props(&decls), vec!["row-gap", "column-gap"]);
         assert!(decls[0].important);
+    }
+
+    #[test]
+    fn flex_flow_expands() {
+        let decls = parse_declaration("flex-flow", "column wrap", false).unwrap();
+        assert_eq!(props(&decls), vec!["flex-direction", "flex-wrap"]);
     }
 
     #[test]

@@ -1,10 +1,11 @@
-//! Flexbox: row and column, grow/shrink, `justify-content`, gaps.
+//! Flexbox: row and column, grow/shrink, `justify-content`, gaps, and — for a
+//! row — `flex-wrap` (items spill onto additional lines).
 //!
-//! v1 does not wrap and places items on the cross-start edge (no
-//! `align-items` cross positioning yet); column flex stacks natural heights.
+//! v1 places items on the cross-start edge (no `align-items` cross positioning
+//! yet); column flex stacks natural heights.
 
 use noonoo_dom::NodeId;
-use noonoo_style::{ComputedStyle, Dimension, Display, FlexDirection, JustifyContent};
+use noonoo_style::{ComputedStyle, Dimension, Display, FlexDirection, FlexWrap, JustifyContent};
 
 use crate::{Ctx, resolve};
 
@@ -26,34 +27,56 @@ pub(crate) fn layout_flex_children(
         })
         .collect();
 
+    if items.is_empty() {
+        return (Vec::new(), 0.0);
+    }
+
     let row = matches!(
         style.flex_direction,
         FlexDirection::Row | FlexDirection::RowReverse
     );
-
     if !row {
-        let mut indices = Vec::new();
-        let mut y = content_y;
-        for &item in &items {
-            let height = ctx.layout_element(item, content_x, y, content_width);
-            if let Some(index) = ctx.tree_index(item) {
-                indices.push(index);
-            }
-            y += height + style.row_gap;
-        }
-        return (indices, (y - content_y).max(0.0));
+        return layout_column(ctx, style, &items, content_x, content_y, content_width);
     }
+    layout_row(ctx, style, &items, content_x, content_y, content_width)
+}
 
-    let count = items.len();
-    if count == 0 {
-        return (Vec::new(), 0.0);
+fn layout_column(
+    ctx: &mut Ctx<'_>,
+    style: &ComputedStyle,
+    items: &[NodeId],
+    content_x: f32,
+    content_y: f32,
+    content_width: f32,
+) -> (Vec<usize>, f32) {
+    let mut indices = Vec::new();
+    let mut y = content_y;
+    for &item in items {
+        let height = ctx.layout_element(item, content_x, y, content_width);
+        if let Some(index) = ctx.tree_index(item) {
+            indices.push(index);
+        }
+        y += height + style.row_gap;
     }
+    (indices, (y - content_y).max(0.0))
+}
+
+fn layout_row(
+    ctx: &mut Ctx<'_>,
+    style: &ComputedStyle,
+    items: &[NodeId],
+    content_x: f32,
+    content_y: f32,
+    content_width: f32,
+) -> (Vec<usize>, f32) {
+    let count = items.len();
     let gap = style.column_gap;
 
+    // Base main sizes and flex factors.
     let mut bases = Vec::with_capacity(count);
     let mut grows = Vec::with_capacity(count);
     let mut shrinks = Vec::with_capacity(count);
-    for &item in &items {
+    for &item in items {
         let item_style = ctx.style(item);
         let basis = match item_style.flex_basis {
             Dimension::Auto => None,
@@ -71,42 +94,72 @@ pub(crate) fn layout_flex_children(
         shrinks.push(item_style.flex_shrink);
     }
 
-    let gaps = gap * (count as f32 - 1.0);
-    let used: f32 = bases.iter().sum::<f32>() + gaps;
-    let free = content_width - used;
-    if free > 0.0 {
-        let total_grow: f32 = grows.iter().sum();
-        if total_grow > 0.0 {
-            for (i, base) in bases.iter_mut().enumerate() {
-                *base += free * grows[i] / total_grow;
+    // Partition into lines when wrapping is on.
+    let mut lines: Vec<Vec<usize>> = Vec::new();
+    if style.flex_wrap == FlexWrap::NoWrap {
+        lines.push((0..count).collect());
+    } else {
+        let mut current: Vec<usize> = Vec::new();
+        let mut used = 0.0;
+        for (i, &base) in bases.iter().enumerate() {
+            let addition = if current.is_empty() { base } else { gap + base };
+            if !current.is_empty() && used + addition > content_width {
+                lines.push(std::mem::take(&mut current));
+                used = base;
+            } else {
+                used += addition;
             }
+            current.push(i);
         }
-    } else if free < 0.0 {
-        let weights: Vec<f32> = (0..count).map(|i| shrinks[i] * bases[i]).collect();
-        let total: f32 = weights.iter().sum();
-        if total > 0.0 {
-            for (i, base) in bases.iter_mut().enumerate() {
-                *base = (*base + free * weights[i] / total).max(0.0);
-            }
+        if !current.is_empty() {
+            lines.push(current);
         }
     }
-
-    let remaining = (content_width - (bases.iter().sum::<f32>() + gaps)).max(0.0);
-    let (start, extra) = justify_offset(style.justify_content, remaining, count);
 
     let mut indices = Vec::new();
-    let mut x = content_x + start;
-    let mut max_height = 0.0_f32;
-    for (i, &item) in items.iter().enumerate() {
-        ctx.layout_element(item, x, content_y, bases[i]);
-        if let Some(index) = ctx.tree_index(item) {
-            max_height = max_height.max(ctx.box_height(index));
-            indices.push(index);
+    let mut cursor_y = content_y;
+
+    for line in &lines {
+        let n = line.len();
+        let line_gaps = gap * n.saturating_sub(1) as f32;
+        let mut line_bases: Vec<f32> = line.iter().map(|&i| bases[i]).collect();
+        let free = content_width - line_bases.iter().sum::<f32>() - line_gaps;
+
+        if free > 0.0 {
+            let total_grow: f32 = line.iter().map(|&i| grows[i]).sum();
+            if total_grow > 0.0 {
+                for (k, &i) in line.iter().enumerate() {
+                    line_bases[k] += free * grows[i] / total_grow;
+                }
+            }
+        } else if free < 0.0 {
+            let weights: Vec<f32> = line.iter().map(|&i| shrinks[i] * bases[i]).collect();
+            let total: f32 = weights.iter().sum();
+            if total > 0.0 {
+                for (k, weight) in weights.iter().enumerate() {
+                    line_bases[k] = (line_bases[k] + free * weight / total).max(0.0);
+                }
+            }
         }
-        x += bases[i] + gap + extra;
+
+        let used: f32 = line_bases.iter().sum::<f32>() + line_gaps;
+        let remaining = (content_width - used).max(0.0);
+        let (start, extra) = justify_offset(style.justify_content, remaining, n);
+
+        let mut x = content_x + start;
+        let mut line_height = 0.0_f32;
+        for (k, &i) in line.iter().enumerate() {
+            ctx.layout_element(items[i], x, cursor_y, line_bases[k]);
+            if let Some(index) = ctx.tree_index(items[i]) {
+                line_height = line_height.max(ctx.box_height(index));
+                indices.push(index);
+            }
+            x += line_bases[k] + gap + extra;
+        }
+        cursor_y += line_height + style.row_gap;
     }
 
-    (indices, max_height)
+    (indices, (cursor_y - content_y - style.row_gap).max(0.0))
 }
 
 fn justify_offset(justify: JustifyContent, free: f32, count: usize) -> (f32, f32) {

@@ -89,6 +89,19 @@ fn flex_justify_centers() {
 }
 
 #[test]
+fn flex_row_wraps() {
+    let (doc, tree) = page(
+        r#"<div id="f"><div id="a"></div><div id="b"></div><div id="c"></div></div>"#,
+        "#f { display: flex; flex-wrap: wrap } #a, #b, #c { width: 80px; height: 20px }",
+        100.0,
+    );
+    // 100px wide, 80px items: one per line.
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.y, 0.0);
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.y, 20.0);
+    assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.y, 40.0);
+}
+
+#[test]
 fn text_align_centers_the_text() {
     let (doc, tree) = page(
         r#"<div id="a">hi</div>"#,

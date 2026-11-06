@@ -120,4 +120,23 @@ mod tests {
         let p = doc.get_elements_by_tag_name("p")[0];
         assert_eq!(styles.get(p).unwrap().color, Color::rgb(255, 0, 0));
     }
+
+    #[test]
+    fn global_keywords_inherit_and_initial() {
+        // `inherit` on a non-inherited property takes the parent's value.
+        let (doc, styles) = styled(
+            "<div><span>x</span></div>",
+            "div { margin-top: 20px } span { margin-top: inherit }",
+        );
+        let span = doc.get_elements_by_tag_name("span")[0];
+        assert_eq!(styles.get(span).unwrap().margin.top, Dimension::Px(20.0));
+
+        // `initial` on an inherited property resets it.
+        let (doc, styles) = styled(
+            "<div><span>x</span></div>",
+            "div { color: red } span { color: initial }",
+        );
+        let span = doc.get_elements_by_tag_name("span")[0];
+        assert_eq!(styles.get(span).unwrap().color, Color::BLACK);
+    }
 }
