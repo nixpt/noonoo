@@ -1,6 +1,6 @@
 [package]
 name = "noonoo-engine"
-description = "Noonoo's orchestration: a parsed, styleable, layable engine over a DOM document."
+description = "Noonoo's orchestration: a parsed, styled, layable engine over a DOM document."
 version.workspace = true
 license.workspace = true
 homepage.workspace = true
@@ -12,13 +12,12 @@ rust-version.workspace = true
 [features]
 default = ["std"]
 std = []
-# Pull in the borrowed-engine layers (style + layout). Without them the engine
-# is a parsed DOM + stylesheets; with them it resolves like a browser page.
-resolve = ["dep:noonoo-style", "dep:noonoo-layout"]
+# Pull in the layout layer. Style is always on (we own it); layout lands next.
+resolve = ["dep:noonoo-layout"]
 
 [dependencies]
 noonoo-dom.workspace = true
 noonoo-html.workspace = true
 noonoo-css.workspace = true
-noonoo-style = { workspace = true, optional = true }
+noonoo-style.workspace = true
 noonoo-layout = { workspace = true, optional = true }

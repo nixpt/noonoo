@@ -71,6 +71,12 @@ impl Engine {
         self.stylesheets = collect_stylesheets(&self.dom);
     }
 
+    /// Compute every element's style: cascade the collected stylesheets over the
+    /// user-agent sheet and any inline `style` attributes.
+    pub fn compute_styles(&self) -> noonoo_style::Styles {
+        noonoo_style::compute(&self.dom, &self.stylesheets)
+    }
+
     /// Consume the engine and return its document.
     pub fn into_dom(self) -> Document {
         self.dom
@@ -131,5 +137,18 @@ mod tests {
         );
         // The empty one is dropped, the unclosed one fails to parse, the valid one stays.
         assert_eq!(engine.stylesheets().len(), 1);
+    }
+
+    #[test]
+    fn computes_styles_for_a_page() {
+        let engine = Engine::from_html(
+            "<style>p { display: flex; color: red; margin: 5px }</style><p>x</p>",
+        );
+        let styles = engine.compute_styles();
+        let p = engine.dom().get_elements_by_tag_name("p")[0];
+        let style = styles.get(p).unwrap();
+        assert_eq!(style.display, noonoo_style::Display::Flex);
+        assert_eq!(style.color, noonoo_css::Color::rgb(255, 0, 0));
+        assert_eq!(style.margin.top, noonoo_style::Dimension::Px(5.0));
     }
 }

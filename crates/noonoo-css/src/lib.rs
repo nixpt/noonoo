@@ -556,7 +556,7 @@ impl Stylesheet {
                     block: Some(block),
                 });
             } else {
-                let declarations = parse_declarations(source, &tokens[open + 1..close]);
+                let declarations = declarations_from_tokens(source, &tokens[open + 1..close]);
                 rules.push(Rule::Qualified {
                     selector: prelude,
                     declarations,
@@ -577,7 +577,14 @@ fn split_at_rule(prelude: &str) -> (String, String) {
     )
 }
 
-fn parse_declarations(source: &str, tokens: &[Token]) -> Vec<RawDeclaration> {
+/// Parse a `name: value; …` declaration list (e.g. an element's `style`
+/// attribute) into [`RawDeclaration`]s.
+pub fn parse_declarations(source: &str) -> Vec<RawDeclaration> {
+    let tokens = tokenize(source);
+    declarations_from_tokens(source, &tokens)
+}
+
+fn declarations_from_tokens(source: &str, tokens: &[Token]) -> Vec<RawDeclaration> {
     let mut declarations = Vec::new();
     let mut i = 0;
     while i < tokens.len() {

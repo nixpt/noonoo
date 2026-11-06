@@ -9,7 +9,7 @@ use crate::value::{Color, Value, parse_values};
 use noonoo_parse::ParseResult;
 
 /// A known CSS property (longhand), or one Noonoo does not model.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Property {
     /// `display`.
     Display,

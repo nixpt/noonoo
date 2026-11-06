@@ -129,7 +129,9 @@ dependencies = [
 name = "noonoo-style"
 version = "0.0.1"
 dependencies = [
+ "noonoo-css",
  "noonoo-dom",
+ "noonoo-html",
 ]
 
 [[package]]

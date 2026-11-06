@@ -1,6 +1,6 @@
 [package]
 name = "noonoo-style"
-description = "Noonoo's style resolution: stylesheet ingestion and the cascade."
+description = "Noonoo's style engine: the CSS cascade, inheritance, and computed values."
 version.workspace = true
 license.workspace = true
 homepage.workspace = true
@@ -12,8 +12,10 @@ rust-version.workspace = true
 [features]
 default = ["std"]
 std = []
-# Servo CSS engine (stylo): parse + cascade + computed values.
-stylo = []
 
 [dependencies]
+noonoo-css.workspace = true
 noonoo-dom.workspace = true
+
+[dev-dependencies]
+noonoo-html.workspace = true
