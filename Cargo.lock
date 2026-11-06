@@ -47,7 +47,7 @@ dependencies = [
 name = "vaji-headless"
 version = "0.0.1"
 dependencies = [
- "vaji-engine",
+ "vaji-dom",
  "vaji-events",
 ]
 

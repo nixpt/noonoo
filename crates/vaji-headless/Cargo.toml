@@ -14,5 +14,5 @@ default = ["std"]
 std = []
 
 [dependencies]
-vaji-engine.workspace = true
+vaji-dom.workspace = true
 vaji-events.workspace = true
