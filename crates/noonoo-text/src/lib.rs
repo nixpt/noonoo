@@ -1,24 +1,105 @@
 //! # noonoo-text
 //!
-//! Text shaping, font fallback, and line breaking.
+//! Text layout: line breaking and alignment, over a **shaping seam**.
 //!
-//! ## Borrow boundary
-//!
-//! This crate is the **only** place that may name `parley` (and, through it,
-//! `fontique` / `swash` / `skrifa`). It answers one question for the layout
-//! crate — "given this string, this style, and this available width, what are
-//! the lines and their metrics?" — and returns a Noonoo-shaped value.
-//!
-//! Text is split out from layout (which the replaced engine did not do) because
-//! the two are genuinely different engines with genuinely different failure
-//! modes: a layout bug is boxes in the wrong place, a text bug is glyphs in the
-//! wrong place. Keeping them in separate crates makes each boundary one place
-//! to look and one place to measure.
-//!
-//! Wired in a later slice. See `docs/ROADMAP.md`.
+//! This is Phase C of the dependency-exit plan (`docs/DEPENDENCY-EXIT.md`):
+//! we own the line-breaking and alignment (the layout-level text work), while
+//! **shaping** — turning a string into positioned glyphs, with fonts, kerning
+//! and complex scripts — stays a borrowed concern behind [`Shaper`]. The crate
+//! ships [`MetricShaper`] (a dependency-free advance model) so text lays out
+//! deterministically today; real shaping plugs in behind the same trait.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
+
+mod paragraph;
+
+pub use paragraph::{Line, Paragraph, Run, align, layout_paragraph, wrap};
+
+/// Turns text into advances and line metrics.
+///
+/// The seam the whole crate is built on: line breaking asks a `Shaper` how wide
+/// a run is and how tall a line is, and never touches glyphs itself.
+pub trait Shaper {
+    /// The advance width of `text` on one line.
+    fn advance(&self, text: &str, font_size: f32, bold: bool) -> f32;
+
+    /// The natural line height for `font_size`.
+    fn line_height(&self, font_size: f32) -> f32;
+}
+
+/// A dependency-free stand-in: a fixed advance per character and a
+/// font-size–relative line height. Not typography — a deterministic baseline.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct MetricShaper;
+
+impl Shaper for MetricShaper {
+    fn advance(&self, text: &str, font_size: f32, bold: bool) -> f32 {
+        let factor = if bold { 0.55 } else { 0.50 };
+        text.chars().count() as f32 * factor * font_size
+    }
+
+    fn line_height(&self, font_size: f32) -> f32 {
+        font_size * 1.2
+    }
+}
+
+/// Horizontal alignment within a line box.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Align {
+    /// Left / start.
+    #[default]
+    Start,
+    /// Right / end.
+    End,
+    /// Centered.
+    Center,
+    /// Flush to both edges.
+    Justify,
+}
+
+/// How whitespace and line breaks are handled.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum WhiteSpace {
+    /// Collapse and wrap.
+    #[default]
+    Normal,
+    /// Collapse, no wrapping.
+    NoWrap,
+    /// Preserve, no wrapping.
+    Pre,
+    /// Preserve and wrap.
+    PreWrap,
+    /// Collapse but honour newlines.
+    PreLine,
+}
+
+/// The style inputs line breaking needs.
+#[derive(Clone, Copy, Debug)]
+pub struct TextStyle {
+    /// Font size, in pixels.
+    pub font_size: f32,
+    /// Whether the text is bold.
+    pub bold: bool,
+    /// Line height, in pixels (`0` means "ask the shaper").
+    pub line_height: f32,
+    /// Horizontal alignment.
+    pub align: Align,
+    /// Whitespace handling.
+    pub white_space: WhiteSpace,
+}
+
+impl Default for TextStyle {
+    fn default() -> Self {
+        Self {
+            font_size: 16.0,
+            bold: false,
+            line_height: 0.0,
+            align: Align::Start,
+            white_space: WhiteSpace::Normal,
+        }
+    }
+}
 
 /// The version of this crate, taken from the workspace.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

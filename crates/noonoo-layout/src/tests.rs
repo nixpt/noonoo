@@ -5,7 +5,7 @@ fn page(html: &str, css: &str, width: f32) -> (Document, LayoutTree) {
     let doc = noonoo_html::parse(html);
     let sheet = noonoo_css::Stylesheet::parse(css).unwrap();
     let styles = noonoo_style::compute(&doc, &[sheet]);
-    let tree = layout(&doc, &styles, Size::new(width, 600.0), &HeuristicMeasurer);
+    let tree = layout(&doc, &styles, Size::new(width, 600.0), &MetricShaper);
     (doc, tree)
 }
 
@@ -86,4 +86,25 @@ fn flex_justify_centers() {
     );
     let a = tree.get(id(&doc, "a")).unwrap();
     assert_eq!(a.rect.x, 150.0);
+}
+
+#[test]
+fn text_align_centers_the_text() {
+    let (doc, tree) = page(
+        r#"<div id="a">hi</div>"#,
+        "#a { text-align: center; font-size: 10px }",
+        100.0,
+    );
+    let text_box = tree
+        .boxes()
+        .iter()
+        .find(|b| b.kind == BoxKind::Text)
+        .expect("a text box");
+    // "hi" is 10px wide in a 100px line, centered → starts at 45.
+    assert!(
+        (text_box.rect.x - 45.0).abs() < 0.001,
+        "x = {}",
+        text_box.rect.x
+    );
+    let _ = doc;
 }

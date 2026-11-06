@@ -66,7 +66,7 @@ Seventeen crates in five tiers. Arrows point *downward only*.
 | `noonoo-html` | HTML tokenizer + tree builder → `noonoo-dom` | — (owned) |
 | `noonoo-dom` | tree, `NodeId`, checked mutation, queries | — |
 | `noonoo-events` | input model, dispatch + **bubbling** | — |
-| `noonoo-text` | shaping, fonts, line breaking | `parley` (+ fontique/swash/skrifa) |
+| `noonoo-text` | line breaking + alignment (shaping behind `Shaper`) | `parley` (via the seam, not yet wired) |
 | `noonoo-motion` | springs, velocity-preserving retarget | — (owned) |
 | `noonoo-style` | the cascade: matching → inheritance → computed values | — (owned; replaces `stylo`) |
 | `noonoo-layout` | box layout: block, inline, flex | — (owned; replaces `taffy`) |

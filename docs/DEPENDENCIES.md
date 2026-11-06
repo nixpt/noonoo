@@ -14,7 +14,7 @@ them and **own** the integration.
 | --- | --- | --- |
 | `stylo` (+ `selectors`, `cssparser`) | — | **Owned.** Phase A replaced it with a documented CSS subset (`noonoo-css` + `noonoo-style`); `stylo` is not a dependency. See [`DEPENDENCY-EXIT.md`](DEPENDENCY-EXIT.md). |
 | `taffy` | — | **Owned.** Phase B replaced it with `noonoo-layout` (block / inline / flex); `taffy` is not a dependency. |
-| `parley` (+ `fontique`/`swash`/`skrifa`) | `noonoo-text` | **Keep.** Shaping, line breaking, font management. |
+| `parley` (+ `fontique`/`swash`/`skrifa`) | `noonoo-text` | **Keep for shaping.** Line breaking + alignment are owned (`noonoo-text`); shaping plugs in behind the `Shaper` seam. |
 | `anyrender` / `vello` / `wgpu` | `noonoo-paint`, `noonoo-shell` | **Keep.** GPU 2D, behind a feature. |
 | `winit`, `accesskit` | `noonoo-shell` | **Keep.** Windowing + a11y, behind features. |
 

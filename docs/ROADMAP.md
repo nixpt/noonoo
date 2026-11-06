@@ -112,6 +112,7 @@ The borrowed engines are scored in `DEPENDENCY-EXIT.md`. The path to dropping
   *✅ (v1: block, inline, and flex — row/column, grow/shrink, justify, gaps)*
 - **Phase C — text (trims `parley`).** line-breaking + `text-align`; shaping
   stays borrowed.
+  *✅ (line breaking, wrapping, and alignment owned; shaping behind the `Shaper` seam)*
 - **Phase D — paint.** the command stream + a recording backend (keep the GPU).
 - **Phase E — net / SVG.** thin HTTP client; SVG subset.
 

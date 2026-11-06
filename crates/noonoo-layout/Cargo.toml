@@ -17,6 +17,7 @@ std = []
 noonoo-dom.workspace = true
 noonoo-style.workspace = true
 noonoo-geometry.workspace = true
+noonoo-text.workspace = true
 
 [dev-dependencies]
 noonoo-css.workspace = true

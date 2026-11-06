@@ -101,6 +101,7 @@ dependencies = [
  "noonoo-geometry",
  "noonoo-html",
  "noonoo-style",
+ "noonoo-text",
 ]
 
 [[package]]

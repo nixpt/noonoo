@@ -31,7 +31,7 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | [`noonoo-dom`](crates/noonoo-dom) | The tree, stable `NodeId`s, checked mutation, queries |
 | [`noonoo-geometry`](crates/noonoo-geometry) | Points, sizes, and rectangles |
 | [`noonoo-events`](crates/noonoo-events) | Input model and DOM dispatch with bubbling |
-| [`noonoo-text`](crates/noonoo-text) | Text shaping, fonts, line breaking |
+| [`noonoo-text`](crates/noonoo-text) | Line breaking + alignment (shaping behind a seam) |
 | [`noonoo-motion`](crates/noonoo-motion) | Springs, velocity-preserving retarget |
 | [`noonoo-style`](crates/noonoo-style) | Style ingestion and the cascade |
 | [`noonoo-layout`](crates/noonoo-layout) | Box layout: computed style → boxes (block / inline / flex) |

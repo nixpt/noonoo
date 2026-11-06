@@ -27,7 +27,6 @@
 mod block;
 mod flex;
 mod resolve;
-pub mod text;
 
 use std::collections::HashMap;
 
@@ -35,7 +34,7 @@ use noonoo_dom::{Document, NodeData, NodeId};
 use noonoo_geometry::{Rect, Size};
 use noonoo_style::{BoxSizing, ComputedStyle, Display, Edges, Styles};
 
-pub use text::{HeuristicMeasurer, TextMeasurer};
+pub use noonoo_text::{Align, MetricShaper, Shaper};
 
 /// The role a laid-out box plays.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -121,12 +120,12 @@ pub fn layout(
     document: &Document,
     styles: &Styles,
     viewport: Size,
-    measurer: &dyn TextMeasurer,
+    shaper: &dyn Shaper,
 ) -> LayoutTree {
     let mut ctx = Ctx {
         document,
         styles,
-        measurer,
+        shaper,
         tree: LayoutTree::default(),
     };
 
@@ -135,8 +134,14 @@ pub fn layout(
         if ctx.is_block_level(child) {
             y += ctx.layout_element(child, 0.0, y, viewport.width);
         } else {
-            let (indices, height) =
-                block::layout_inline_run(&mut ctx, &[child], 0.0, y, viewport.width, 16.0, false);
+            let (indices, height) = block::layout_inline_run(
+                &mut ctx,
+                &[child],
+                0.0,
+                y,
+                viewport.width,
+                &ComputedStyle::default(),
+            );
             ctx.tree.roots.extend(indices);
             y += height;
         }
@@ -148,7 +153,7 @@ pub fn layout(
 pub(crate) struct Ctx<'a> {
     pub document: &'a Document,
     pub styles: &'a Styles,
-    pub measurer: &'a dyn TextMeasurer,
+    pub shaper: &'a dyn Shaper,
     pub tree: LayoutTree,
 }
 
@@ -227,8 +232,6 @@ impl Ctx<'_> {
         let content_y = origin_y + border.top + padding.top;
 
         let children_nodes = child_nodes(self.document, node);
-        let font_size = style.font_size;
-        let bold = style.font_weight >= 600;
 
         let (child_indices, content_height) = match style.display {
             Display::Flex | Display::InlineFlex => flex::layout_flex_children(
@@ -245,8 +248,7 @@ impl Ctx<'_> {
                 content_x,
                 content_y,
                 content_width,
-                font_size,
-                bold,
+                &style,
             ),
         };
 

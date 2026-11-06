@@ -63,9 +63,8 @@ pub(crate) fn layout_flex_children(
             .or_else(|| resolve::dimension(item_style.width, content_width))
             .unwrap_or_else(|| {
                 let text = ctx.document.text_content(item);
-                ctx.measurer
-                    .measure(&text, item_style.font_size, item_style.font_weight >= 600)
-                    .width
+                ctx.shaper
+                    .advance(&text, item_style.font_size, item_style.font_weight >= 600)
             });
         bases.push(base.max(0.0));
         grows.push(item_style.flex_grow);

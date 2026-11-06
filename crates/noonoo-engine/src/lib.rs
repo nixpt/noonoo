@@ -77,14 +77,14 @@ impl Engine {
         noonoo_style::compute(&self.dom, &self.stylesheets)
     }
 
-    /// Lay the document out for a viewport, using the given text measurer.
+    /// Lay the document out for a viewport, using the given text shaper.
     pub fn layout(
         &self,
         viewport: noonoo_geometry::Size,
-        measurer: &dyn noonoo_layout::TextMeasurer,
+        shaper: &dyn noonoo_layout::Shaper,
     ) -> noonoo_layout::LayoutTree {
         let styles = self.compute_styles();
-        noonoo_layout::layout(&self.dom, &styles, viewport, measurer)
+        noonoo_layout::layout(&self.dom, &styles, viewport, shaper)
     }
 
     /// Consume the engine and return its document.
@@ -167,7 +167,7 @@ mod tests {
         let engine = Engine::from_html("<style>#a { height: 40px }</style><div id=\"a\"></div>");
         let tree = engine.layout(
             noonoo_geometry::Size::new(300.0, 200.0),
-            &noonoo_layout::HeuristicMeasurer,
+            &noonoo_layout::MetricShaper,
         );
         let a = engine.dom().get_element_by_id("a").unwrap();
         let box_ = tree.get(a).unwrap();
