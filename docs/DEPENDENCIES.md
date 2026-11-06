@@ -12,17 +12,17 @@ them and **own** the integration.
 
 | Engine | Reached from | Verdict |
 | --- | --- | --- |
-| `stylo` (+ `selectors`, `cssparser`, `style_*`) | `noonoo-core::style` | **Keep.** The CSS cascade is Servo's crown jewel; re-deriving it is out of scope. |
-| `taffy` | `noonoo-core::layout` | **Keep.** Flexbox + grid, a solved problem. |
-| `parley` (+ `fontique`/`swash`/`skrifa`) | `noonoo-core::layout` | **Keep.** Shaping, line breaking, font management. |
+| `stylo` (+ `selectors`, `cssparser`) | — | **Owned.** Phase A replaced it with a documented CSS subset (`noonoo-css` + `noonoo-style`); `stylo` is not a dependency. See [`DEPENDENCY-EXIT.md`](DEPENDENCY-EXIT.md). |
+| `taffy` | `noonoo-layout` | **Keep** (next to own). Flexbox + grid, a solved problem. |
+| `parley` (+ `fontique`/`swash`/`skrifa`) | `noonoo-text` | **Keep.** Shaping, line breaking, font management. |
 | `anyrender` / `vello` / `wgpu` | `noonoo-paint`, `noonoo-shell` | **Keep.** GPU 2D, behind a feature. |
 | `winit`, `accesskit` | `noonoo-shell` | **Keep.** Windowing + a11y, behind features. |
 
 ## The rules that keep the surface thin
 
-1. **One module per borrowed engine.** `stylo` is named only in
-   `noonoo-core::style`; `taffy`/`parley` only in `noonoo-core::layout`. The contact
-   points are countable in one file, so "what would a swap cost?" has an answer.
+1. **One module per borrowed engine.** `taffy` is named only in `noonoo-layout`;
+   `parley` only in `noonoo-text`. The contact points are countable in one file,
+   so "what would a swap cost?" has an answer.
 2. **No abstraction-for-its-own-sake.** These engines will not be swapped, so
    they are *not* hidden behind traits. A wrap-for-wrap's-sake layer costs more
    than it saves.
@@ -63,9 +63,9 @@ layer: small, spec-defined, and load-bearing for the engine's own formats.
 - **HTML** (`noonoo-html`) parses into `noonoo-dom` directly — parsing must never be
   a silent no-op (the replaced engine let consumers forget to install a parser
   provider).
-- **CSS** (`noonoo-css`) owns the *syntax* (CSS Syntax Level 3 tokens + a rule
-  splitter). The **cascade** — selector matching and computed values — stays
-  borrowed (`stylo`), because that is the genuinely huge part.
+- **CSS** (`noonoo-css` + `noonoo-style`) is **owned end to end** — tokens, selectors,
+  the value/property model, and the cascade (`docs/DEPENDENCY-EXIT.md` Phase A).
+  No `stylo`, no `cssparser`.
 
 The line is deliberate: we own the small, spec-shaped syntax; we buy the
 multi-year engines.

@@ -14,6 +14,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+mod apply;
 mod cascade;
 pub mod computed;
 pub mod ua;

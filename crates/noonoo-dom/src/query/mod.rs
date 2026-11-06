@@ -1,10 +1,10 @@
 //! Queries against the tree.
 //!
 //! Reads are separated from writes on purpose: a query never mutates, so it is
-//! total and panic-free. The selector subset here is deliberately small —
-//! compound `tag`, `#id`, `.class` — and expands as the style engine arrives;
-//! what matters now is that the *shape* (parse once, match many, return ids) is
-//! fixed.
+//! total and panic-free. The matcher here is a deliberately minimal compound
+//! subset (`tag`, `#id`, `.class`) with no dependencies. The full selector
+//! engine — combinators, attributes, pseudo-classes, specificity — lives in
+//! `noonoo-css` (`selector::SelectorList`); this keeps `noonoo-dom` a leaf.
 
 use crate::node::ElementData;
 
@@ -13,7 +13,8 @@ use crate::node::ElementData;
 pub enum SelectorError {
     /// The selector was empty.
     Empty,
-    /// The selector uses syntax Noonoo does not support yet (combinators, etc.).
+    /// The selector uses syntax this minimal matcher does not support
+    /// (combinators, attributes, pseudo-classes, …).
     Unsupported(String),
 }
 

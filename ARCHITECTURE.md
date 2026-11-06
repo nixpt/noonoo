@@ -44,7 +44,7 @@ Seventeen crates in five tiers. Arrows point *downward only*.
 ┌───▼────┐ ┌───▼────┐ ┌────▼─────┐ ┌──▼──────┐ ┌──▼────┐ ┌───▼────┐
 │ noonoo-  │ │ noonoo-  │ │ noonoo-    │ │ noonoo-   │ │ noonoo- │ │ noonoo-  │
 │ style  │ │ layout │ │ text     │ │ html    │ │ net   │ │ events │
-│ stylo  │ │ taffy  │ │ parley   │ │ html5   │ │ http  │ │ bubble │
+│ owned  │ │ taffy  │ │ parley   │ │ html5   │ │ http  │ │ bubble │
 └───┬────┘ └───┬────┘ └──────────┘ └──┬──────┘ └───────┘ └───┬────┘
     │          │                       │                      │
     └──────────┴───────────┬───────────┴──────────────────────┘
@@ -61,14 +61,14 @@ Seventeen crates in five tiers. Arrows point *downward only*.
 |---|---|---|
 | `noonoo-parse` | shared parsing primitives: `Span`, `ParseError`, `Cursor` | — |
 | `noonoo-json` | JSON parse + value model + writer | — (owned) |
-| `noonoo-css` | CSS **syntax**: tokenizer + rule splitter | — (cascade still borrowed) |
+| `noonoo-css` | CSS: tokenizer, selectors (parse/specificity/match), value & property model | — (owned) |
 | `noonoo-caison` | CAISON parse + JSON projection | — (owned) |
 | `noonoo-html` | HTML tokenizer + tree builder → `noonoo-dom` | — (owned) |
 | `noonoo-dom` | tree, `NodeId`, checked mutation, queries | — |
 | `noonoo-events` | input model, dispatch + **bubbling** | — |
 | `noonoo-text` | shaping, fonts, line breaking | `parley` (+ fontique/swash/skrifa) |
 | `noonoo-motion` | springs, velocity-preserving retarget | — (owned) |
-| `noonoo-style` | style ingest, cascade, incremental restyle | `stylo` (+ selectors/cssparser) |
+| `noonoo-style` | the cascade: matching → inheritance → computed values | — (owned; replaces `stylo`) |
 | `noonoo-layout` | boxes and geometry | `taffy` |
 | `noonoo-net` | loading: http/file/data/exo | `reqwest` (feature-gated) |
 | `noonoo-engine` | the working document (parse→style→layout) | — (orchestrates) |
@@ -77,18 +77,17 @@ Seventeen crates in five tiers. Arrows point *downward only*.
 | `noonoo-shell` | window, event loop, a11y, GPU surface | `winit`, `wgpu`, `accesskit` |
 | `noonoo` | umbrella + CLI | — |
 
-**Parsers are owned, not borrowed.** The four format crates (`noonoo-json`,
-`noonoo-css`, `noonoo-caison`, `noonoo-html`) are dependency-free and exist because a
-parser is a *syntax* layer — small, spec-defined, and load-bearing for the
-engine's own formats. What stays borrowed is the part that is genuinely huge:
-`noonoo-style` drives `stylo` for selector matching and the cascade (it consumes
-`noonoo-css` tokens only as far as its own syntax needs).
+**Parsers and the style engine are owned, not borrowed.** The four format crates
+(`noonoo-json`, `noonoo-css`, `noonoo-caison`, `noonoo-html`) are dependency-free,
+and `noonoo-style` runs the cascade itself (`docs/DEPENDENCY-EXIT.md` Phase A) —
+`stylo` is not a dependency. What stays borrowed is only the genuinely huge:
+`noonoo-layout` (`taffy`), `noonoo-text` (`parley`), and the GPU/windowing stack.
 
 ## Data flow
 
 ```
  bytes ─▶ noonoo-html ─▶ noonoo-dom ─▶ noonoo-style ─▶ noonoo-layout ─▶ noonoo-paint ─▶ backend
-                       (tree)      (stylo)       (taffy+noonoo-text)  (commands)
+                       (tree)      (owned cascade)  (taffy+noonoo-text)  (commands)
                                    ▲                                     │
                         noonoo-engine orchestrates all of the above      │
                                                                           ▼
@@ -96,14 +95,15 @@ engine's own formats. What stays borrowed is the part that is genuinely huge:
 ```
 
 Each arrow is a small, typed value crossing a crate boundary. Nothing downstream
-of `noonoo-dom` knows where a node came from; nothing outside `noonoo-style` knows
-`stylo` exists.
+of `noonoo-dom` knows where a node came from; nothing outside `noonoo-css` knows
+how a selector is spelled.
 
 ## Invariants to keep true
 
 - **Identity is defined once.** `noonoo_dom::NodeId` is the only node handle.
-- **Borrowed engines stay behind their crate.** `grep -r stylo crates` lands in
-  `noonoo-style` alone; `taffy` in `noonoo-layout`; `parley` in `noonoo-text`.
+- **Borrowed engines stay behind their crate.** `grep -r taffy crates` lands in
+  `noonoo-layout` alone; `parley` in `noonoo-text`. `stylo` appears nowhere —
+  the cascade is ours.
 - **`forbid(unsafe_code)` stays on every crate except `noonoo-shell`.**
 - **The default build stays dependency-light.** New backend work lands behind a
   feature; it does not become a default.
