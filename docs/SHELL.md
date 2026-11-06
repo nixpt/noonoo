@@ -1,11 +1,11 @@
-# Vaji — Multi-document windows & the shell
+# Noonoo — Multi-document windows & the shell
 
-This note records what the engine Vaji replaces got wrong about hosting more
-than one document in a window, and the model Vaji adopts instead. It is drawn
+This note records what the engine Noonoo replaces got wrong about hosting more
+than one document in a window, and the model Noonoo adopts instead. It is drawn
 from the surfer-browser / arniko history (`RECONCILE-browser-engine-consolidation`,
 `SURF-ENGINE-2`, `SURF-SUBDOC-1`, the `SHELL-SPLIT-*` arc, and the origin-gating
-lesson), and it decides the shape of `vaji-shell`, `vaji-engine`, `vaji-paint`,
-and `vaji-dom`.
+lesson), and it decides the shape of `noonoo-shell`, `noonoo-engine`, `noonoo-paint`,
+and `noonoo-dom`.
 
 ## 1. What went wrong
 
@@ -38,11 +38,11 @@ The intended destination (`SURF-SUBDOC-1`) is the opposite of the workaround:
 paints, hit-tests, scrolls and forwards input to the page document — which needs
 a `Send` document and real sub-document support.
 
-## 2. The model Vaji adopts
+## 2. The model Noonoo adopts
 
 - **A window hosts many documents.** One chrome document plus zero-or-more
   content documents, each first-class. No "one root + one overlay slot."
-- **Documents are `Send`.** Vaji's tree owns no `Rc`/`RefCell` and promises
+- **Documents are `Send`.** Noonoo's tree owns no `Rc`/`RefCell` and promises
   nothing `unsafe`, so a document is `Send` whenever its payload is. Content
   documents can therefore be **worker-owned** — the property the old engine
   lacked and the reason the texture workaround existed.
@@ -53,7 +53,7 @@ a `Send` document and real sub-document support.
   scroll outward.
 - **Composition is a seam, not a side effect.** Per-document render targets,
   overlay/blit, scene effects and **dirty regions** are first-class in
-  `vaji-paint` — so a host can decouple one document's GPU cost from another's
+  `noonoo-paint` — so a host can decouple one document's GPU cost from another's
   frame without a fork.
 - **Origin is bound to the document at creation, never derived from a URL.**
   A document carries a trust context; navigation is gated against it. (The old
@@ -64,16 +64,16 @@ a `Send` document and real sub-document support.
 
 | Concern | Crate | Shape |
 |---|---|---|
-| Host node that a sub-document attaches to | `vaji-dom` | a node's optional sub-document slot |
-| Document + trust context + sub-document orchestration | `vaji-engine` | `Engine { dom, origin, subs }` |
-| Size a sub-document viewport from the host node's box | `vaji-layout` | layout of an embedded viewport |
-| Paint a sub-document inline; render targets; overlays; dirty regions | `vaji-paint` | `RenderTarget`, overlay/blit, `DirtyRegions` |
-| Host N documents; input routing, focus, IME, lifecycle | `vaji-shell` | `WindowHost { chrome, content }` |
-| Navigation gated by a document's origin | `vaji-net` | `navigation_allowed(origin, target)` |
+| Host node that a sub-document attaches to | `noonoo-dom` | a node's optional sub-document slot |
+| Document + trust context + sub-document orchestration | `noonoo-engine` | `Engine { dom, origin, subs }` |
+| Size a sub-document viewport from the host node's box | `noonoo-layout` | layout of an embedded viewport |
+| Paint a sub-document inline; render targets; overlays; dirty regions | `noonoo-paint` | `RenderTarget`, overlay/blit, `DirtyRegions` |
+| Host N documents; input routing, focus, IME, lifecycle | `noonoo-shell` | `WindowHost { chrome, content }` |
+| Navigation gated by a document's origin | `noonoo-net` | `navigation_allowed(origin, target)` |
 
 ## 4. Surface to add
 
-### `vaji-engine`
+### `noonoo-engine`
 - **`Origin`** — a document's trust context: `Shell` (trusted chrome),
   `Content` (untrusted), `Custom(name)` (an app's own privileged scheme). Set at
   construction; readable, not URL-derived. Default for `Engine::new` is
@@ -82,48 +82,48 @@ a `Send` document and real sub-document support.
   `attach_sub_document(host: NodeId, child: Engine)` and lookup. A sub-document
   is an `Engine`, so it carries its own origin and DOM.
 
-### `vaji-dom`
+### `noonoo-dom`
 - A host node may carry a **sub-document marker** so layout/paint/queries can
   see that a node hosts an embedded document (the tree stays the single source
   of identity).
 
-### `vaji-layout`
+### `noonoo-layout`
 - Given a host node with a sub-document, size the embedded viewport from the
   node's computed box and resolve it.
 
-### `vaji-paint`
+### `noonoo-paint`
 - `RenderTarget` (per-document rasterization), a **blit/overlay** path, and a
   **dirty-region** channel so a host re-renders only what changed. Cap the
   overlay count at *many*, not one.
 
-### `vaji-shell`
+### `noonoo-shell`
 - `WindowHost` owning the chrome document and a set of content documents, with
   input routed to the right document at the right offset/focus; **real**
   `resumed`/suspend lifecycle hooks and a public event conversion (the old
   `convert_events` was private and `resumed` was a no-op stub).
 
-### `vaji-net`
+### `noonoo-net`
 - `navigation_allowed(origin, target) -> bool`, consulted before following a
   navigation, so an internal command scheme is reachable only from `Shell`.
 
 ## 5. Lessons to encode (bugs that cost real time)
 
-| Lesson | Evidence | Vaji's stance |
+| Lesson | Evidence | Noonoo's stance |
 |---|---|---|
-| `resumed()` was a no-op → device published from the wrong hook | `app/event_handling.rs` | real lifecycle hooks in `vaji-shell` |
+| `resumed()` was a no-op → device published from the wrong hook | `app/event_handling.rs` | real lifecycle hooks in `noonoo-shell` |
 | `watch::send` silently drops the value with zero receivers; needs `send_replace` | `app/cache.rs` | host-side, but documented in the shell |
-| `register_texture` needs `COPY_SRC` **and** `STORAGE_BINDING` | `app/worker/paint.rs` | encoded + tested in `vaji-paint` |
+| `register_texture` needs `COPY_SRC` **and** `STORAGE_BINDING` | `app/worker/paint.rs` | encoded + tested in `noonoo-paint` |
 | Single-slot overlays forced a scene-merge hack | `set_overlay_scene` docs | N overlays |
-| `replace_document` per chrome keystroke dropped focus/scroll | `RENDERING_PERFORMANCE_PLAN.md` | retained docs + mutation vocabulary (`vaji-dom::mutate`) |
+| `replace_document` per chrome keystroke dropped focus/scroll | `RENDERING_PERFORMANCE_PLAN.md` | retained docs + mutation vocabulary (`noonoo-dom::mutate`) |
 | Origin check bolted on after a real escape | SURF-ORIGIN-1 | origin bound to the document at creation |
-| Bubbling absent in the old shell; `UiEvent` routed into a dead map | `event_routing.rs` | `vaji-events` bubbles; `vaji-shell` routes to the owning document |
+| Bubbling absent in the old shell; `UiEvent` routed into a dead map | `event_routing.rs` | `noonoo-events` bubbles; `noonoo-shell` routes to the owning document |
 
 ## 6. Roadmap impact
 
 The single "Shell" slice becomes three, in this order (see
 [`ROADMAP.md`](ROADMAP.md)):
 
-1. **Composition** — `vaji-paint` render targets, overlays, dirty regions.
+1. **Composition** — `noonoo-paint` render targets, overlays, dirty regions.
 2. **Multi-document shell** — `WindowHost` with chrome + content documents,
    input routing, focus, real lifecycle.
 3. **Sub-documents** — attach a `Send` document to a host node and have the

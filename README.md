@@ -1,17 +1,17 @@
-# Vaji
+# Noonoo
 
 **A clean-room, modular HTML/CSS rendering engine.**
 
-*Vaji* is shortened from *Vajigan*; the name traces to Sanskrit *vājin* (वाजिन्) —
-"swift", "winged horse" — a fast courier between markup and pixels.
+*Noonoo* — a deliberately unmistakable name: short, memorable, and free on
+every registry this project publishes to.
 
-Vaji turns markup and stylesheets into laid-out, paintable form. It is a
+Noonoo turns markup and stylesheets into laid-out, paintable form. It is a
 from-scratch reimplementation of the ideas in `bliss-engine` (itself a fork of
 upstream Blitz), decomposed into small crates and built to be the **substrate**
 that a UI framework (arniko) and a browser (surfer) build on.
 
 > **Clean room.** No code here is copied from `bliss-engine`, Blitz, or any other
-> rendering engine. Vaji is written from behaviour and specification. The
+> rendering engine. Noonoo is written from behaviour and specification. The
 > third-party engines it depends on (Servo's *stylo*, *taffy*, *parley*,
 > *anyrender/vello*, *winit*) are ordinary crates.io dependencies, pinned in one
 > place and reached through one crate each — never vendored, never forked.
@@ -19,32 +19,32 @@ that a UI framework (arniko) and a browser (surfer) build on.
 ## Crates
 
 The engine replaces one ~19k-LOC `bliss-dom` monolith with small, single-purpose
-crates. Depend on the one you need; reach for `vaji` only when you want all of it.
+crates. Depend on the one you need; reach for `noonoo` only when you want all of it.
 
 | Crate | Responsibility |
 | --- | --- |
-| [`vaji-parse`](crates/vaji-parse) | Shared parsing primitives: spans, positions, errors, cursor |
-| [`vaji-json`](crates/vaji-json) | JSON parser, value model, and writer |
-| [`vaji-css`](crates/vaji-css) | CSS syntax: tokenizer and rule splitter |
-| [`vaji-caison`](crates/vaji-caison) | CAISON parse and its JSON projection |
-| [`vaji-html`](crates/vaji-html) | HTML tokenizer and tree builder into `vaji-dom` |
-| [`vaji-dom`](crates/vaji-dom) | The tree, stable `NodeId`s, checked mutation, queries |
-| [`vaji-events`](crates/vaji-events) | Input model and DOM dispatch with bubbling |
-| [`vaji-text`](crates/vaji-text) | Text shaping, fonts, line breaking |
-| [`vaji-motion`](crates/vaji-motion) | Springs, velocity-preserving retarget |
-| [`vaji-style`](crates/vaji-style) | Style ingestion and the cascade |
-| [`vaji-layout`](crates/vaji-layout) | Box layout: computed style → boxes |
-| [`vaji-net`](crates/vaji-net) | Document loading: `http(s)`/`file`/`data`/`exo` |
-| [`vaji-engine`](crates/vaji-engine) | Orchestration: a working document |
-| [`vaji-headless`](crates/vaji-headless) | Tree dump, virtual clock, synthetic input |
-| [`vaji-paint`](crates/vaji-paint) | Layout → render commands, scene effects, overlays |
-| [`vaji-shell`](crates/vaji-shell) | Window, event loop, a11y, GPU surface (feature-gated) |
-| [`vaji`](crates/vaji) | Umbrella re-export + the `vaji` command line |
+| [`noonoo-parse`](crates/noonoo-parse) | Shared parsing primitives: spans, positions, errors, cursor |
+| [`noonoo-json`](crates/noonoo-json) | JSON parser, value model, and writer |
+| [`noonoo-css`](crates/noonoo-css) | CSS syntax: tokenizer and rule splitter |
+| [`noonoo-caison`](crates/noonoo-caison) | CAISON parse and its JSON projection |
+| [`noonoo-html`](crates/noonoo-html) | HTML tokenizer and tree builder into `noonoo-dom` |
+| [`noonoo-dom`](crates/noonoo-dom) | The tree, stable `NodeId`s, checked mutation, queries |
+| [`noonoo-events`](crates/noonoo-events) | Input model and DOM dispatch with bubbling |
+| [`noonoo-text`](crates/noonoo-text) | Text shaping, fonts, line breaking |
+| [`noonoo-motion`](crates/noonoo-motion) | Springs, velocity-preserving retarget |
+| [`noonoo-style`](crates/noonoo-style) | Style ingestion and the cascade |
+| [`noonoo-layout`](crates/noonoo-layout) | Box layout: computed style → boxes |
+| [`noonoo-net`](crates/noonoo-net) | Document loading: `http(s)`/`file`/`data`/`exo` |
+| [`noonoo-engine`](crates/noonoo-engine) | Orchestration: a working document |
+| [`noonoo-headless`](crates/noonoo-headless) | Tree dump, virtual clock, synthetic input |
+| [`noonoo-paint`](crates/noonoo-paint) | Layout → render commands, scene effects, overlays |
+| [`noonoo-shell`](crates/noonoo-shell) | Window, event loop, a11y, GPU surface (feature-gated) |
+| [`noonoo`](crates/noonoo) | Umbrella re-export + the `noonoo` command line |
 
 ## Why it exists
 
 Two consumers — **arniko** (a reactive UI framework) and **surfer-browser** —
-build on the engine Vaji replaces, and both carry workarounds for it. Vaji is
+build on the engine Noonoo replaces, and both carry workarounds for it. Noonoo is
 built to be what they'd rather build on: a decomposed substrate with correct
 events, stable node ids, checked mutation, a working `set_inner_html`, real
 accessibility, and first-class sub-documents and headless tooling. See
@@ -63,7 +63,7 @@ slices. See [`docs/ROADMAP.md`](docs/ROADMAP.md) and
 ```sh
 cargo build
 cargo test --workspace
-cargo run -p vaji -- --version
+cargo run -p noonoo -- --version
 ```
 
 The workspace MSRV is **1.89**. CI checks it explicitly.
@@ -73,7 +73,7 @@ The workspace MSRV is **1.89**. CI checks it explicitly.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — crate map, data flow, invariants
 - [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md) — the dependency policy
 - [`docs/CONSUMERS.md`](docs/CONSUMERS.md) — arniko & surfer: what they use, what they fight
-- [`docs/FEATURE-OWNERSHIP.md`](docs/FEATURE-OWNERSHIP.md) — what belongs in Vaji vs. the consumer
+- [`docs/FEATURE-OWNERSHIP.md`](docs/FEATURE-OWNERSHIP.md) — what belongs in Noonoo vs. the consumer
 - [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) — the drop-in switch and the api-drift gate
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — slices
 

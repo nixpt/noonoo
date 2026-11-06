@@ -1,7 +1,7 @@
-# Vaji — Consumers
+# Noonoo — Consumers
 
-This documents who consumes the engine Vaji replaces, what they touch, and what
-that means for Vaji's surface. **Scope:** the two consumers Vaji is being built
+This documents who consumes the engine Noonoo replaces, what they touch, and what
+that means for Noonoo's surface. **Scope:** the two consumers Noonoo is being built
 *for* — **surfer-browser** and **arniko**. Exosphere and the rest of the fleet
 are **out of scope here** and carry their own tickets (see the note at the end).
 
@@ -102,11 +102,11 @@ are **never imported in source** — they exist only as Cargo feature glue.
 
 ### 1.4 Friction & wants (the interesting part)
 
-| # | Friction | Where | Vaji's answer |
+| # | Friction | Where | Noonoo's answer |
 |---|---|---|---|
 | 1 | `DomController::set_inner_html` **appends**, doesn't replace → consumer wrote `replace_inner_html` | `super-surfer/src/app/shell/layout.rs:1173-1184` | replace semantics, guaranteed |
 | 2 | `downcast_mut` always failed (resolved on the outer `Box`) | `shell/layout.rs:152-181` | no `Box<dyn Document>`-downcast dance; type-safe handles |
-| 3 | `set_text_content` returns `InvalidMutation` for elements; `set_node_text` no-ops on elements | `browser/js.rs:512-527` | checked mutation (`vaji-dom::mutate`) returns errors, never silent no-ops |
+| 3 | `set_text_content` returns `InvalidMutation` for elements; `set_node_text` no-ops on elements | `browser/js.rs:512-527` | checked mutation (`noonoo-dom::mutate`) returns errors, never silent no-ops |
 | 4 | `set_attribute` snapshot on a never-styled element **panics Stylo** | `surfer-page/src/render/engine.rs:2019` (test `#[ignore]`d) | snapshot always valid; restyle-on-demand |
 | 5 | `bliss-dom` `incremental` feature off → every edit rebuilds all layout | `engine.rs:909-914` | incremental restyle is the default |
 | 6 | Node ids are recyclable slab indices → consumer mints stable handles | `surfer/src/devtools/mod.rs:13-24` | `NodeId` never reused |
@@ -202,26 +202,26 @@ Stylo, no bliss-dom**"* and gives the boundary doctrine:
 
 The shipped code contradicts the "no bliss-dom" half (BLISS-HOME-2 kept arniko a
 bliss consumer). **The doctrine half is the part to keep**, and it maps cleanly
-onto Vaji: parsing/style/layout/paint in Vaji; reactivity in arniko; compositing
+onto Noonoo: parsing/style/layout/paint in Noonoo; reactivity in arniko; compositing
 in mustang.
 
 ### 2.4 Friction & wants
 
-| # | Friction | Where | Vaji's answer |
+| # | Friction | Where | Noonoo's answer |
 |---|---|---|---|
-| 1 | `set_inner_html` silently did nothing unless `HtmlProvider` was installed; content absent entirely in some paths | `reactive/app.rs:243-247`, `examples/texture_overlay_spike.rs:24-34` | parsing is unconditional (`vaji-html`) |
-| 2 | Events **do not bubble** — sink called once with `current_target = target`; ancestor handlers never fire; two consumer workarounds | `.dejavue/plan.md:7` | `vaji-events::dispatch_path` |
+| 1 | `set_inner_html` silently did nothing unless `HtmlProvider` was installed; content absent entirely in some paths | `reactive/app.rs:243-247`, `examples/texture_overlay_spike.rs:24-34` | parsing is unconditional (`noonoo-html`) |
+| 2 | Events **do not bubble** — sink called once with `current_target = target`; ancestor handlers never fire; two consumer workarounds | `.dejavue/plan.md:7` | `noonoo-events::dispatch_path` |
 | 3 | `DocumentMutator` is **infallible** and silently no-ops → arniko deleted its error enum as dead code | `reactive/direct_mut.rs:187-191` | checked mutation returns `Result` |
-| 4 | a11y never wired (`accesskit_xplat` declared, unused) | `docs/PRODUCTION_READINESS_SPEC.md:142` | a11y tree built from `vaji-dom`, on by default |
+| 4 | a11y never wired (`accesskit_xplat` declared, unused) | `docs/PRODUCTION_READINESS_SPEC.md:142` | a11y tree built from `noonoo-dom`, on by default |
 | 5 | `networking` feature enables `exo-bliss-net` but the crate is never imported | `docs/REMAINING_TRACKS.md:66` | net is a narrow, honest crate |
 | 6 | `root_element` widened to `Option` mid-flight (D-2c) | `REMAINING_TRACKS.md` | consistent total APIs |
-| 7 | `register_custom_paint_source` ids rely on a process-global counter; `ImageData` not public → texture handle uncacheable | `texture_overlay_spike.rs:194-259` | scene-effects/overlay seams are first-class (`vaji-paint`) |
+| 7 | `register_custom_paint_source` ids rely on a process-global counter; `ImageData` not public → texture handle uncacheable | `texture_overlay_spike.rs:194-259` | scene-effects/overlay seams are first-class (`noonoo-paint`) |
 
 ---
 
-## 3. The union Vaji must serve
+## 3. The union Noonoo must serve
 
-The consumer-visible surface Vaji must provide (or improve on), by crate:
+The consumer-visible surface Noonoo must provide (or improve on), by crate:
 
 - **Tree & mutation**: `Document` trait-ish facade, `DocumentMutator`,
   `DomController`, node inspection (`text_content`, `outer_html`,
@@ -246,8 +246,8 @@ Exosphere (`exo-workspace/exosphere`, via the `bliss-core` wrapper and the
 targets of this work and **get their own tickets**. Several of them are already
 dangling on paths to engine copies that were removed (the arniko in-tree `bliss-*`
 crates and `exosphere/crates/platform/rendering/`) — their cleanup is theirs to
-schedule, not Vaji's to absorb.
+schedule, not Noonoo's to absorb.
 
-The Vaji-side obligation toward them is only this: keep the surface
+The Noonoo-side obligation toward them is only this: keep the surface
 compatibility-friendly (see [`COMPATIBILITY.md`](COMPATIBILITY.md)) so a later
 adopt-or-not decision stays cheap.

@@ -1,0 +1,18 @@
+[package]
+name = "noonoo-html"
+description = "Noonoo's HTML parser: tokenizer and tree builder into noonoo-dom."
+version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+noonoo-dom.workspace = true
+noonoo-parse.workspace = true

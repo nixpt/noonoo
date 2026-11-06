@@ -1,0 +1,22 @@
+[package]
+name = "noonoo-paint"
+description = "Noonoo's paint: layout boxes into a backend-neutral render command stream."
+version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["std"]
+std = []
+# GPU/CPU rasterizer (anyrender).
+render = []
+# SVG rendering (usvg).
+svg = []
+
+[dependencies]
+noonoo-dom.workspace = true
+noonoo-layout.workspace = true

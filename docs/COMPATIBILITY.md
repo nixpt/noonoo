@@ -1,6 +1,6 @@
-# Vaji — Compatibility & Migration
+# Noonoo — Compatibility & Migration
 
-The goal: **switching a consumer from the `bliss-*` stack to the `vaji-*` stack
+The goal: **switching a consumer from the `bliss-*` stack to the `noonoo-*` stack
 is cheap, and the cost of doing so is measured rather than guessed.**
 
 Two mechanisms make it cheap (package aliasing + compat shims), and one tool
@@ -18,7 +18,7 @@ Cargo lets a dependency key differ from the package name:
 bliss-dom = { version = "0.3", optional = true }
 
 # after — same import path in every source file
-bliss-dom = { package = "vaji-dom", version = "0.1", optional = true }
+bliss-dom = { package = "noonoo-dom", version = "0.1", optional = true }
 ```
 
 The dependency **key** (`bliss-dom`) is the extern-crate name, so
@@ -31,21 +31,21 @@ API matches" is exactly what `api-drift` measures.
 ## 2. Compat shims (for API fidelity and clean measurement)
 
 `api-drift` matches items by **path** (`bliss_dom::Document`). A crate whose lib
-name is `vaji_dom` would diff against `bliss_dom` as *every item removed + every
+name is `noonoo_dom` would diff against `bliss_dom` as *every item removed + every
 item added*. Two options:
 
 - **Option A (recommended)** — ship a small `compat/` set of **shim crates** whose
   `[lib] name` matches the bliss crate it stands in for (`bliss_dom`,
-  `bliss_html`, ...) and which simply re-export from the `vaji-*` crates:
+  `bliss_html`, ...) and which simply re-export from the `noonoo-*` crates:
 
   ```toml
   # compat/bliss-dom/Cargo.toml
   [package]
-  name = "vaji-bliss-dom-compat"
+  name = "noonoo-bliss-dom-compat"
   [lib]
   name = "bliss_dom"
   [dependencies]
-  vaji-dom = { path = "../../crates/vaji-dom" }
+  noonoo-dom = { path = "../../crates/noonoo-dom" }
   ```
 
   The shim is simultaneously (a) the drop-in target consumers alias to, and
@@ -55,7 +55,7 @@ item added*. Two options:
   before diffing. Cheaper to build, more churn for consumers. Kept as a fallback.
 
 During the port, a **transient** `[patch.crates-io]` override (uncommitted) is
-the right way to test a consumer against local Vaji without publishing —
+the right way to test a consumer against local Noonoo without publishing —
 the same pattern arniko already documents for `mustang`.
 
 ## 3. The measurement tool: api-drift
@@ -97,17 +97,17 @@ cargo +nightly-2026-08-28 rustdoc -p bliss-dom \
 # 2. turn it into a committed snapshot
 tools/api-snapshot/target/debug/api-snapshot \
     target/doc/bliss_dom.json bliss-dom-rust-public "bliss-dom 0.3.2" \
-    --out ../../libs/vaji/api-drift/bliss/bliss-dom.snapshot.json
+    --out ../../libs/noonoo/api-drift/bliss/bliss-dom.snapshot.json
 
 # repeat for each crate/feature set; the snapshot is committed
 ```
 
-To **measure a port**, snapshot the same crate name on the Vaji side (via the
+To **measure a port**, snapshot the same crate name on the Noonoo side (via the
 compat shim, so the lib name matches) and diff:
 
 ```sh
 api-diff api-drift/bliss/bliss-dom.snapshot.json \
-         api-drift/vaji/bliss-dom.snapshot.json
+         api-drift/noonoo/bliss-dom.snapshot.json
 # -> [Compatible/Added] ... / [Breaking/Removed] ... / [Warning/SignatureChanged] ...
 # exit 2 if anything is Breaking
 ```
@@ -119,7 +119,7 @@ api-diff api-drift/bliss/bliss-dom.snapshot.json \
 - `Compatible` additions never fail.
 - Every intentional break must be recorded with `api-drift note` and carries a
   migration line in the changelog.
-- Snapshots are committed under `api-drift/{bliss,vaji}/`; the `bliss/` side is
+- Snapshots are committed under `api-drift/{bliss,noonoo}/`; the `bliss/` side is
   the frozen reference the port is measured against.
 
 ## 5. What we snapshot first

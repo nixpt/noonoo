@@ -1,7 +1,7 @@
-# Vaji — Dependency Policy
+# Noonoo — Dependency Policy
 
 The engine it replaces locks **634 packages** (with `bliss-dom` alone pulling
-**192** normal-transitive crates). Vaji's dependency story is a designed
+**192** normal-transitive crates). Noonoo's dependency story is a designed
 outcome, not a byproduct.
 
 ## The rule: buy the engines, own the seams
@@ -12,16 +12,16 @@ them and **own** the integration.
 
 | Engine | Reached from | Verdict |
 | --- | --- | --- |
-| `stylo` (+ `selectors`, `cssparser`, `style_*`) | `vaji-core::style` | **Keep.** The CSS cascade is Servo's crown jewel; re-deriving it is out of scope. |
-| `taffy` | `vaji-core::layout` | **Keep.** Flexbox + grid, a solved problem. |
-| `parley` (+ `fontique`/`swash`/`skrifa`) | `vaji-core::layout` | **Keep.** Shaping, line breaking, font management. |
-| `anyrender` / `vello` / `wgpu` | `vaji-paint`, `vaji-shell` | **Keep.** GPU 2D, behind a feature. |
-| `winit`, `accesskit` | `vaji-shell` | **Keep.** Windowing + a11y, behind features. |
+| `stylo` (+ `selectors`, `cssparser`, `style_*`) | `noonoo-core::style` | **Keep.** The CSS cascade is Servo's crown jewel; re-deriving it is out of scope. |
+| `taffy` | `noonoo-core::layout` | **Keep.** Flexbox + grid, a solved problem. |
+| `parley` (+ `fontique`/`swash`/`skrifa`) | `noonoo-core::layout` | **Keep.** Shaping, line breaking, font management. |
+| `anyrender` / `vello` / `wgpu` | `noonoo-paint`, `noonoo-shell` | **Keep.** GPU 2D, behind a feature. |
+| `winit`, `accesskit` | `noonoo-shell` | **Keep.** Windowing + a11y, behind features. |
 
 ## The rules that keep the surface thin
 
 1. **One module per borrowed engine.** `stylo` is named only in
-   `vaji-core::style`; `taffy`/`parley` only in `vaji-core::layout`. The contact
+   `noonoo-core::style`; `taffy`/`parley` only in `noonoo-core::layout`. The contact
    points are countable in one file, so "what would a swap cost?" has an answer.
 2. **No abstraction-for-its-own-sake.** These engines will not be swapped, so
    they are *not* hidden behind traits. A wrap-for-wrap's-sake layer costs more
@@ -37,7 +37,7 @@ them and **own** the integration.
 
 ## Incidental dependencies we decline
 
-A non-exhaustive list of things the previous engine carried that Vaji will not,
+A non-exhaustive list of things the previous engine carried that Noonoo will not,
 because the standard library or an already-present dependency covers them:
 
 - `html-escape`, `percent-encoding` — subsumed by URL/string handling.
@@ -50,20 +50,20 @@ because the standard library or an already-present dependency covers them:
 
 ## Owned syntax (the parser crates)
 
-One class of dependency Vaji *does* write itself: **format parsers**. The four
-parser crates — `vaji-parse`, `vaji-json`, `vaji-css`, `vaji-caison`,
-`vaji-html` — are dependency-free and exist because a parser is a *syntax*
+One class of dependency Noonoo *does* write itself: **format parsers**. The four
+parser crates — `noonoo-parse`, `noonoo-json`, `noonoo-css`, `noonoo-caison`,
+`noonoo-html` — are dependency-free and exist because a parser is a *syntax*
 layer: small, spec-defined, and load-bearing for the engine's own formats.
 
-- **JSON** (`vaji-json`) is needed to *project* other formats into a
+- **JSON** (`noonoo-json`) is needed to *project* other formats into a
   machine-readable shape (CAISON does this), so owning it removes a ubiquitous
   incidental dependency.
-- **CAISON** (`vaji-caison`) is the ecosystem's AI-native config format; a
+- **CAISON** (`noonoo-caison`) is the ecosystem's AI-native config format; a
   parser for it belongs beside the tree it feeds.
-- **HTML** (`vaji-html`) parses into `vaji-dom` directly — parsing must never be
+- **HTML** (`noonoo-html`) parses into `noonoo-dom` directly — parsing must never be
   a silent no-op (the replaced engine let consumers forget to install a parser
   provider).
-- **CSS** (`vaji-css`) owns the *syntax* (CSS Syntax Level 3 tokens + a rule
+- **CSS** (`noonoo-css`) owns the *syntax* (CSS Syntax Level 3 tokens + a rule
   splitter). The **cascade** — selector matching and computed values — stays
   borrowed (`stylo`), because that is the genuinely huge part.
 

@@ -1,0 +1,37 @@
+[package]
+name = "noonoo"
+description = "Noonoo: a modular HTML/CSS rendering engine, and the `noonoo` command line."
+version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+default-run = "noonoo"
+
+[features]
+default = ["std"]
+std = ["noonoo-dom/std", "noonoo-paint/std", "noonoo-net/std"]
+headless = ["dep:noonoo-headless"]
+window = ["noonoo-shell/window"]
+gpu = ["noonoo-shell/gpu"]
+http = ["noonoo-net/http"]
+
+[dependencies]
+noonoo-engine.workspace = true
+noonoo-dom.workspace = true
+noonoo-events.workspace = true
+noonoo-headless = { workspace = true, optional = true }
+noonoo-html.workspace = true
+noonoo-layout.workspace = true
+noonoo-motion.workspace = true
+noonoo-net.workspace = true
+noonoo-paint.workspace = true
+noonoo-shell.workspace = true
+noonoo-style.workspace = true
+noonoo-text.workspace = true
+
+[[bin]]
+name = "noonoo"
+path = "src/main.rs"

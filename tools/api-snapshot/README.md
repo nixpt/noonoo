@@ -1,4 +1,4 @@
-# api-snapshot (Vaji tooling)
+# api-snapshot (Noonoo tooling)
 
 Two tiny binaries that fill the gaps in [`api-drift`](../../../api-drift):
 
@@ -7,7 +7,7 @@ Two tiny binaries that fill the gaps in [`api-drift`](../../../api-drift):
 - **`api-diff`** — diff two snapshots, print classified breaks, exit `2` when
   anything is `Breaking` (api-drift's CLI has no `diff` command).
 
-This crate is **excluded from the Vaji workspace** on purpose: it pulls
+This crate is **excluded from the Noonoo workspace** on purpose: it pulls
 `serde_json` and a path dependency on `api-drift`, and the engine build must not
 pay for either.
 
@@ -27,11 +27,11 @@ cargo +nightly-2026-08-28 rustdoc -p bliss-dom -- \
     -Z unstable-options --output-format json          # -> target/doc/bliss_dom.json
 
 # 2. snapshot it
-/workspace/projects/libs/vaji/tools/api-snapshot/target/debug/api-snapshot \
+/workspace/projects/libs/noonoo/tools/api-snapshot/target/debug/api-snapshot \
     target/doc/bliss_dom.json \
     bliss-dom-rust-public \
     "bliss-dom 0.3.2" \
-    --out /workspace/projects/libs/vaji/api-drift/bliss/bliss-dom.snapshot.json
+    --out /workspace/projects/libs/noonoo/api-drift/bliss/bliss-dom.snapshot.json
 ```
 
 Notes:

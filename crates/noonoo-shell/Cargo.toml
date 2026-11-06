@@ -1,0 +1,24 @@
+[package]
+name = "noonoo-shell"
+description = "Noonoo's interactive driver: windowing, event loop, native surface."
+version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+# The shell is opt-in: a build that only needs the engine does not pay for a
+# window, a GPU, or a screen reader.
+default = []
+window = [] # native window + event loop (winit)
+gpu = [] # GPU surface (wgpu + vello)
+a11y = [] # accessibility tree (accesskit)
+
+[dependencies]
+noonoo-engine.workspace = true
+noonoo-events.workspace = true
+noonoo-net.workspace = true
+noonoo-paint.workspace = true

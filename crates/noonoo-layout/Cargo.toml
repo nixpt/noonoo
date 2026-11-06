@@ -1,0 +1,21 @@
+[package]
+name = "noonoo-layout"
+description = "Noonoo's box layout: computed style into boxes and geometry."
+version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["std"]
+std = []
+# Taffy: flexbox + grid box layout.
+taffy = []
+
+[dependencies]
+noonoo-dom.workspace = true
+noonoo-style.workspace = true
+noonoo-text.workspace = true

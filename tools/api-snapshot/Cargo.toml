@@ -3,9 +3,9 @@ name = "api-snapshot"
 version = "0.0.1"
 edition = "2021"
 publish = false
-description = "Vaji tooling: rustdoc JSON -> api-drift snapshot, and snapshot diff."
+description = "Noonoo tooling: rustdoc JSON -> api-drift snapshot, and snapshot diff."
 
-# Deliberately OUTSIDE the vaji workspace (see the workspace `exclude`): the
+# Deliberately OUTSIDE the noonoo workspace (see the workspace `exclude`): the
 # engine build must not pay for serde_json or the api-drift path dep.
 [dependencies]
 api-drift = { path = "../../../../api-drift/crates/api-drift", features = ["producer", "serde"] }

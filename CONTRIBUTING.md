@@ -1,4 +1,4 @@
-# Contributing to Vaji
+# Contributing to Noonoo
 
 ## Before you write code
 
@@ -38,4 +38,4 @@ default build stays dependency-light: no GPU, no window, no screen reader.
 ## Commits
 
 Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, ...), scoped by crate
-where it helps (`feat(vaji-core): ...`).
+where it helps (`feat(noonoo-core): ...`).

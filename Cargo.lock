@@ -3,130 +3,130 @@
 version = 4
 
 [[package]]
-name = "vaji"
+name = "noonoo"
 version = "0.0.1"
 dependencies = [
- "vaji-dom",
- "vaji-engine",
- "vaji-events",
- "vaji-headless",
- "vaji-html",
- "vaji-layout",
- "vaji-motion",
- "vaji-net",
- "vaji-paint",
- "vaji-shell",
- "vaji-style",
- "vaji-text",
+ "noonoo-dom",
+ "noonoo-engine",
+ "noonoo-events",
+ "noonoo-headless",
+ "noonoo-html",
+ "noonoo-layout",
+ "noonoo-motion",
+ "noonoo-net",
+ "noonoo-paint",
+ "noonoo-shell",
+ "noonoo-style",
+ "noonoo-text",
 ]
 
 [[package]]
-name = "vaji-caison"
+name = "noonoo-caison"
 version = "0.0.1"
 dependencies = [
- "vaji-json",
- "vaji-parse",
+ "noonoo-json",
+ "noonoo-parse",
 ]
 
 [[package]]
-name = "vaji-css"
+name = "noonoo-css"
 version = "0.0.1"
 dependencies = [
- "vaji-parse",
+ "noonoo-parse",
 ]
 
 [[package]]
-name = "vaji-dom"
+name = "noonoo-dom"
 version = "0.0.1"
 
 [[package]]
-name = "vaji-engine"
+name = "noonoo-engine"
 version = "0.0.1"
 dependencies = [
- "vaji-dom",
- "vaji-events",
- "vaji-html",
- "vaji-layout",
- "vaji-net",
- "vaji-style",
+ "noonoo-dom",
+ "noonoo-events",
+ "noonoo-html",
+ "noonoo-layout",
+ "noonoo-net",
+ "noonoo-style",
 ]
 
 [[package]]
-name = "vaji-events"
+name = "noonoo-events"
 version = "0.0.1"
 dependencies = [
- "vaji-dom",
+ "noonoo-dom",
 ]
 
 [[package]]
-name = "vaji-headless"
+name = "noonoo-headless"
 version = "0.0.1"
 dependencies = [
- "vaji-dom",
- "vaji-events",
+ "noonoo-dom",
+ "noonoo-events",
 ]
 
 [[package]]
-name = "vaji-html"
+name = "noonoo-html"
 version = "0.0.1"
 dependencies = [
- "vaji-dom",
- "vaji-parse",
+ "noonoo-dom",
+ "noonoo-parse",
 ]
 
 [[package]]
-name = "vaji-json"
+name = "noonoo-json"
 version = "0.0.1"
 dependencies = [
- "vaji-parse",
+ "noonoo-parse",
 ]
 
 [[package]]
-name = "vaji-layout"
+name = "noonoo-layout"
 version = "0.0.1"
 dependencies = [
- "vaji-dom",
- "vaji-style",
- "vaji-text",
+ "noonoo-dom",
+ "noonoo-style",
+ "noonoo-text",
 ]
 
 [[package]]
-name = "vaji-motion"
+name = "noonoo-motion"
 version = "0.0.1"
 
 [[package]]
-name = "vaji-net"
+name = "noonoo-net"
 version = "0.0.1"
 
 [[package]]
-name = "vaji-paint"
+name = "noonoo-paint"
 version = "0.0.1"
 dependencies = [
- "vaji-dom",
- "vaji-layout",
+ "noonoo-dom",
+ "noonoo-layout",
 ]
 
 [[package]]
-name = "vaji-parse"
+name = "noonoo-parse"
 version = "0.0.1"
 
 [[package]]
-name = "vaji-shell"
+name = "noonoo-shell"
 version = "0.0.1"
 dependencies = [
- "vaji-engine",
- "vaji-events",
- "vaji-net",
- "vaji-paint",
+ "noonoo-engine",
+ "noonoo-events",
+ "noonoo-net",
+ "noonoo-paint",
 ]
 
 [[package]]
-name = "vaji-style"
+name = "noonoo-style"
 version = "0.0.1"
 dependencies = [
- "vaji-dom",
+ "noonoo-dom",
 ]
 
 [[package]]
-name = "vaji-text"
+name = "noonoo-text"
 version = "0.0.1"

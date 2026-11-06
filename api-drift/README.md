@@ -1,7 +1,7 @@
 # api-drift baseline
 
-The reference API snapshots Vaji's compatibility is measured against: the public
-surface of the engine Vaji replaces, `nixpt/bliss-engine` **0.3.2** (the version
+The reference API snapshots Noonoo's compatibility is measured against: the public
+surface of the engine Noonoo replaces, `nixpt/bliss-engine` **0.3.2** (the version
 consumers resolve to), captured from **rustdoc JSON**.
 
 Produced with [`tools/api-snapshot`](../tools/api-snapshot) on
@@ -27,9 +27,9 @@ tools/api-snapshot/target/debug/api-snapshot \
 | `arniko-bliss` (facade) | `arniko-bliss-rust-public` | 84 | `d51fa3a03c8572ca6cea8143408cb2eeeffcc5562114f50d34620486bf0e1737` |
 
 `bliss-stylo-taffy`, `bliss-accesskit-xplat`, and `bliss-anyrender-vello` are
-**deliberately not snapshotted**: Vaji does not re-export them (the forks'
-capabilities move into `vaji-shell`/`vaji-paint` behind features; the bridge
-dissolves into the `vaji-style` → `vaji-layout` seam).
+**deliberately not snapshotted**: Noonoo does not re-export them (the forks'
+capabilities move into `noonoo-shell`/`noonoo-paint` behind features; the bridge
+dissolves into the `noonoo-style` → `noonoo-layout` seam).
 
 ## Caveats (why these numbers are smaller than the source looks)
 
@@ -45,10 +45,10 @@ dissolves into the `vaji-style` → `vaji-layout` seam).
 ## Using it
 
 ```sh
-# measure a Vaji shim against the baseline (same surface name, via a compat crate)
+# measure a Noonoo shim against the baseline (same surface name, via a compat crate)
 tools/api-snapshot/target/debug/api-diff \
     api-drift/bliss/bliss-dom.snapshot.json \
-    api-drift/vaji/bliss-dom.snapshot.json
+    api-drift/noonoo/bliss-dom.snapshot.json
 # exit 2 when anything is Breaking
 ```
 

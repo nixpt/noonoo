@@ -1,0 +1,17 @@
+[package]
+name = "noonoo-css"
+description = "Noonoo's CSS syntax layer: a CSS Syntax Level 3 tokenizer and rule splitter."
+version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+noonoo-parse.workspace = true

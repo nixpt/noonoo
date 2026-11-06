@@ -1,4 +1,4 @@
-# Vaji — Roadmap
+# Noonoo — Roadmap
 
 Slices are ordered so each ends in something observable and testable. Nothing
 lands behind a stub that pretends to work. The compatibility track
@@ -9,12 +9,12 @@ API snapshots are captured early, and the port is measured against them.
 
 Seventeen-crate workspace, decomposed along the boundaries in
 [`ARCHITECTURE.md`](ARCHITECTURE.md), design docs, CI, and a compiling,
-dependency-free skeleton. Working primitives with tests: the `vaji-dom` arena +
-checked mutation, `vaji-events` dispatch path, `vaji-motion` spring, `vaji-paint`
-command list, `vaji-engine` (the `Engine` type).
+dependency-free skeleton. Working primitives with tests: the `noonoo-dom` arena +
+checked mutation, `noonoo-events` dispatch path, `noonoo-motion` spring, `noonoo-paint`
+command list, `noonoo-engine` (the `Engine` type).
 
 **Done when:** `cargo check/test/clippy` pass with an empty dependency graph;
-`vaji --version` works.
+`noonoo --version` works.
 
 ## Slice 1 — Compatibility baseline
 
@@ -24,18 +24,18 @@ consumer-visible subset (`bliss-traits`, `bliss-dom`, `bliss-html`, `bliss-paint
 `tools/api-snapshot` helper and the diff gate.
 
 **Done when:** the snapshots are committed and `api-drift check` passes; the
-diff pipeline runs against a Vaji shim (even an empty one).
+diff pipeline runs against a Noonoo shim (even an empty one).
 
 ## Slice 2 — Ingest + tree dump
 
-`vaji-html` parses into `vaji-dom`; `vaji-headless` dumps the tree as JSON.
+`noonoo-html` parses into `noonoo-dom`; `noonoo-headless` dumps the tree as JSON.
 
-**Done when:** `vaji --tree fixture.html` prints JSON and a test asserts on the
+**Done when:** `noonoo --tree fixture.html` prints JSON and a test asserts on the
 structure with no screenshot.
 
 ## Slice 3 — Style
 
-Wire `stylo` behind `vaji-style`: parse a stylesheet, cascade, expose Vaji-shaped
+Wire `stylo` behind `noonoo-style`: parse a stylesheet, cascade, expose Noonoo-shaped
 computed values. Incremental restyle is the default.
 
 **Done when:** a fixture's computed `color`/`display` are asserted from a test,
@@ -43,22 +43,22 @@ and a second edit restyles incrementally.
 
 ## Slice 4 — Text + layout
 
-Wire `parley` behind `vaji-text`; wire `taffy` behind `vaji-layout`, consuming
-`vaji-style` + `vaji-text`.
+Wire `parley` behind `noonoo-text`; wire `taffy` behind `noonoo-layout`, consuming
+`noonoo-style` + `noonoo-text`.
 
 **Done when:** a fixture yields expected box rectangles and line boxes, asserted
 numerically.
 
 ## Slice 5 — Document + events
 
-`vaji-engine` ties parse→style→layout into a working `Engine`;
-`vaji-events` dispatches with bubbling into a `Document`.
+`noonoo-engine` ties parse→style→layout into a working `Engine`;
+`noonoo-events` dispatches with bubbling into a `Document`.
 
 **Done when:** a click on a nested node reaches an ancestor handler.
 
 ## Slice 6 — Paint
 
-`vaji-paint` turns layout into commands; a recording backend makes them
+`noonoo-paint` turns layout into commands; a recording backend makes them
 diff-able; scene effects + dirty regions are exposed.
 
 **Done when:** a fixture's command stream matches a golden file.
@@ -68,7 +68,7 @@ diff-able; scene effects + dirty regions are exposed.
 Feature-gated window (`winit` + `wgpu`/`vello`); accessibility on by default;
 real `resumed`/suspend hooks. Headless stays the default path.
 
-**Done when:** `cargo run -p vaji --features window,gpu` opens a window and the
+**Done when:** `cargo run -p noonoo --features window,gpu` opens a window and the
 a11y tree reaches AT-SPI on Linux without consumer re-enabling.
 
 ## Slice 8 — Sub-documents
@@ -88,10 +88,10 @@ Spring transitions with velocity-preserving retarget, wired to style animations.
 ## Slice 10 — Compat shims + the switch
 
 Publish the `compat/` shim crates (lib names matching the `bliss-*` crates),
-re-exporting Vaji. Prove the switch on a consumer fork behind a transient
+re-exporting Noonoo. Prove the switch on a consumer fork behind a transient
 `[patch.crates-io]`.
 
-**Done when:** a consumer compiles against Vaji shims with a manifest-only
+**Done when:** a consumer compiles against Noonoo shims with a manifest-only
 change and the `api-drift` diff for the consumer-visible subset shows no
 unrecorded `Breaking` item.
 
