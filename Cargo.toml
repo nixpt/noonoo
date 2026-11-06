@@ -6,10 +6,15 @@ members = [
     "crates/vaji-events",
     "crates/vaji-text",
     "crates/vaji-motion",
+    # parsers — owned syntax layers, dependency-free
+    "crates/vaji-parse",
+    "crates/vaji-json",
+    "crates/vaji-css",
+    "crates/vaji-caison",
+    "crates/vaji-html",
     # engine — one borrowed engine per crate, one module per boundary
     "crates/vaji-style",
     "crates/vaji-layout",
-    "crates/vaji-html",
     "crates/vaji-net",
     # orchestration
     "crates/vaji-engine",
@@ -40,6 +45,10 @@ edition = "2024"
 rust-version = "1.89"
 
 [workspace.dependencies]
+vaji-parse = { path = "crates/vaji-parse", version = "0.0.1" }
+vaji-json = { path = "crates/vaji-json", version = "0.0.1" }
+vaji-css = { path = "crates/vaji-css", version = "0.0.1" }
+vaji-caison = { path = "crates/vaji-caison", version = "0.0.1" }
 vaji-dom = { path = "crates/vaji-dom", version = "0.0.1" }
 vaji-events = { path = "crates/vaji-events", version = "0.0.1" }
 vaji-text = { path = "crates/vaji-text", version = "0.0.1" }

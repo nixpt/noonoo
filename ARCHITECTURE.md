@@ -24,7 +24,7 @@
 
 ## The crates
 
-Thirteen crates in four tiers. Arrows point *downward only*.
+Seventeen crates in five tiers. Arrows point *downward only*.
 
 ```
 ┌─ facade ──────────────────────────────────────────────────────────────────┐
@@ -59,19 +59,30 @@ Thirteen crates in four tiers. Arrows point *downward only*.
 
 | Crate | Owns | Borrowed engine (the only place it is named) |
 |---|---|---|
+| `vaji-parse` | shared parsing primitives: `Span`, `ParseError`, `Cursor` | — |
+| `vaji-json` | JSON parse + value model + writer | — (owned) |
+| `vaji-css` | CSS **syntax**: tokenizer + rule splitter | — (cascade still borrowed) |
+| `vaji-caison` | CAISON parse + JSON projection | — (owned) |
+| `vaji-html` | HTML tokenizer + tree builder → `vaji-dom` | — (owned) |
 | `vaji-dom` | tree, `NodeId`, checked mutation, queries | — |
 | `vaji-events` | input model, dispatch + **bubbling** | — |
 | `vaji-text` | shaping, fonts, line breaking | `parley` (+ fontique/swash/skrifa) |
 | `vaji-motion` | springs, velocity-preserving retarget | — (owned) |
-| `vaji-style` | stylesheet ingest, cascade, incremental restyle | `stylo` (+ selectors/cssparser) |
+| `vaji-style` | style ingest, cascade, incremental restyle | `stylo` (+ selectors/cssparser) |
 | `vaji-layout` | boxes and geometry | `taffy` |
-| `vaji-html` | markup → tree | an HTML parser |
 | `vaji-net` | loading: http/file/data/exo | `reqwest` (feature-gated) |
 | `vaji-engine` | the working document (parse→style→layout) | — (orchestrates) |
 | `vaji-headless` | tree dump, virtual clock, synthetic input | — |
 | `vaji-paint` | render command stream, scene effects, overlays | `anyrender`/`vello` (feature-gated) |
 | `vaji-shell` | window, event loop, a11y, GPU surface | `winit`, `wgpu`, `accesskit` |
 | `vaji` | umbrella + CLI | — |
+
+**Parsers are owned, not borrowed.** The four format crates (`vaji-json`,
+`vaji-css`, `vaji-caison`, `vaji-html`) are dependency-free and exist because a
+parser is a *syntax* layer — small, spec-defined, and load-bearing for the
+engine's own formats. What stays borrowed is the part that is genuinely huge:
+`vaji-style` drives `stylo` for selector matching and the cascade (it consumes
+`vaji-css` tokens only as far as its own syntax needs).
 
 ## Data flow
 

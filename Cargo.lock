@@ -21,6 +21,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "vaji-caison"
+version = "0.0.1"
+dependencies = [
+ "vaji-json",
+ "vaji-parse",
+]
+
+[[package]]
+name = "vaji-css"
+version = "0.0.1"
+dependencies = [
+ "vaji-parse",
+]
+
+[[package]]
 name = "vaji-dom"
 version = "0.0.1"
 
@@ -56,6 +71,14 @@ name = "vaji-html"
 version = "0.0.1"
 dependencies = [
  "vaji-dom",
+ "vaji-parse",
+]
+
+[[package]]
+name = "vaji-json"
+version = "0.0.1"
+dependencies = [
+ "vaji-parse",
 ]
 
 [[package]]
@@ -82,6 +105,10 @@ dependencies = [
  "vaji-dom",
  "vaji-layout",
 ]
+
+[[package]]
+name = "vaji-parse"
+version = "0.0.1"
 
 [[package]]
 name = "vaji-shell"

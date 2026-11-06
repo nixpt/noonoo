@@ -1,6 +1,6 @@
 [package]
 name = "vaji-html"
-description = "Vaji's markup ingestion: HTML (and later SVG) into a document tree."
+description = "Vaji's HTML parser: tokenizer and tree builder into vaji-dom."
 version.workspace = true
 license.workspace = true
 homepage.workspace = true
@@ -12,8 +12,7 @@ rust-version.workspace = true
 [features]
 default = ["std"]
 std = []
-# html5ever-based parsing.
-html5ever = []
 
 [dependencies]
 vaji-dom.workspace = true
+vaji-parse.workspace = true

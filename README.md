@@ -23,13 +23,17 @@ crates. Depend on the one you need; reach for `vaji` only when you want all of i
 
 | Crate | Responsibility |
 | --- | --- |
+| [`vaji-parse`](crates/vaji-parse) | Shared parsing primitives: spans, positions, errors, cursor |
+| [`vaji-json`](crates/vaji-json) | JSON parser, value model, and writer |
+| [`vaji-css`](crates/vaji-css) | CSS syntax: tokenizer and rule splitter |
+| [`vaji-caison`](crates/vaji-caison) | CAISON parse and its JSON projection |
+| [`vaji-html`](crates/vaji-html) | HTML tokenizer and tree builder into `vaji-dom` |
 | [`vaji-dom`](crates/vaji-dom) | The tree, stable `NodeId`s, checked mutation, queries |
 | [`vaji-events`](crates/vaji-events) | Input model and DOM dispatch with bubbling |
 | [`vaji-text`](crates/vaji-text) | Text shaping, fonts, line breaking |
 | [`vaji-motion`](crates/vaji-motion) | Springs, velocity-preserving retarget |
-| [`vaji-style`](crates/vaji-style) | Stylesheet ingestion and the cascade |
+| [`vaji-style`](crates/vaji-style) | Style ingestion and the cascade |
 | [`vaji-layout`](crates/vaji-layout) | Box layout: computed style → boxes |
-| [`vaji-html`](crates/vaji-html) | Markup ingestion into the tree |
 | [`vaji-net`](crates/vaji-net) | Document loading: `http(s)`/`file`/`data`/`exo` |
 | [`vaji-engine`](crates/vaji-engine) | Orchestration: a working document |
 | [`vaji-headless`](crates/vaji-headless) | Tree dump, virtual clock, synthetic input |

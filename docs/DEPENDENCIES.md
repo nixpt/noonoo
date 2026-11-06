@@ -48,6 +48,28 @@ because the standard library or an already-present dependency covers them:
   shim over a published clone.
 - Alpha-channel HTTP caching middleware as a hard default — opt-in at most.
 
+## Owned syntax (the parser crates)
+
+One class of dependency Vaji *does* write itself: **format parsers**. The four
+parser crates — `vaji-parse`, `vaji-json`, `vaji-css`, `vaji-caison`,
+`vaji-html` — are dependency-free and exist because a parser is a *syntax*
+layer: small, spec-defined, and load-bearing for the engine's own formats.
+
+- **JSON** (`vaji-json`) is needed to *project* other formats into a
+  machine-readable shape (CAISON does this), so owning it removes a ubiquitous
+  incidental dependency.
+- **CAISON** (`vaji-caison`) is the ecosystem's AI-native config format; a
+  parser for it belongs beside the tree it feeds.
+- **HTML** (`vaji-html`) parses into `vaji-dom` directly — parsing must never be
+  a silent no-op (the replaced engine let consumers forget to install a parser
+  provider).
+- **CSS** (`vaji-css`) owns the *syntax* (CSS Syntax Level 3 tokens + a rule
+  splitter). The **cascade** — selector matching and computed values — stays
+  borrowed (`stylo`), because that is the genuinely huge part.
+
+The line is deliberate: we own the small, spec-shaped syntax; we buy the
+multi-year engines.
+
 ## How we measure
 
 - **Locked package count** (`grep -c '^\[\[package\]\]' Cargo.lock`) — reported

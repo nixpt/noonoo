@@ -1,0 +1,18 @@
+[package]
+name = "vaji-caison"
+description = "Vaji's CAISON parser: Crush AI-native Semantic Object Notation."
+version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+vaji-parse.workspace = true
+vaji-json.workspace = true

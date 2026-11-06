@@ -7,7 +7,7 @@ API snapshots are captured early, and the port is measured against them.
 
 ## Slice 0 — Scaffold *(this slice)*
 
-Thirteen-crate workspace, decomposed along the boundaries in
+Seventeen-crate workspace, decomposed along the boundaries in
 [`ARCHITECTURE.md`](ARCHITECTURE.md), design docs, CI, and a compiling,
 dependency-free skeleton. Working primitives with tests: the `vaji-dom` arena +
 checked mutation, `vaji-events` dispatch path, `vaji-motion` spring, `vaji-paint`
