@@ -11,6 +11,7 @@ members = [
     "crates/noonoo-parse",
     "crates/noonoo-json",
     "crates/noonoo-css",
+    "crates/noonoo-selectors",
     "crates/noonoo-caison",
     "crates/noonoo-html",
     # engine — one borrowed engine per crate, one module per boundary
@@ -52,6 +53,7 @@ rust-version = "1.89"
 noonoo-parse = { path = "crates/noonoo-parse", version = "0.1.0" }
 noonoo-json = { path = "crates/noonoo-json", version = "0.1.0" }
 noonoo-css = { path = "crates/noonoo-css", version = "0.1.0" }
+noonoo-selectors = { path = "crates/noonoo-selectors", version = "0.1.0" }
 noonoo-caison = { path = "crates/noonoo-caison", version = "0.1.0" }
 noonoo-dom = { path = "crates/noonoo-dom", version = "0.1.0" }
 noonoo-events = { path = "crates/noonoo-events", version = "0.1.0" }

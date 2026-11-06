@@ -25,6 +25,7 @@ pub use noonoo_motion as motion;
 pub use noonoo_net as net;
 pub use noonoo_paint as paint;
 pub use noonoo_parse as parse;
+pub use noonoo_selectors as selectors;
 pub use noonoo_shell as shell;
 pub use noonoo_style as style;
 pub use noonoo_text as text;
@@ -36,6 +37,6 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub mod prelude {
     pub use crate::{
         caison, css, dom, engine, events, geometry, headless, html, json, layout, motion, net,
-        paint, parse, style, text,
+        paint, parse, selectors, style, text,
     };
 }

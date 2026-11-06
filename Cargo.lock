@@ -20,6 +20,7 @@ dependencies = [
  "noonoo-net",
  "noonoo-paint",
  "noonoo-parse",
+ "noonoo-selectors",
  "noonoo-shell",
  "noonoo-style",
  "noonoo-text",
@@ -54,6 +55,7 @@ dependencies = [
  "noonoo-geometry",
  "noonoo-html",
  "noonoo-layout",
+ "noonoo-paint",
  "noonoo-style",
 ]
 
@@ -116,13 +118,26 @@ version = "0.1.0"
 name = "noonoo-paint"
 version = "0.1.0"
 dependencies = [
- "noonoo-dom",
+ "noonoo-css",
+ "noonoo-geometry",
+ "noonoo-html",
+ "noonoo-json",
  "noonoo-layout",
+ "noonoo-style",
 ]
 
 [[package]]
 name = "noonoo-parse"
 version = "0.1.0"
+
+[[package]]
+name = "noonoo-selectors"
+version = "0.1.0"
+dependencies = [
+ "noonoo-css",
+ "noonoo-dom",
+ "noonoo-parse",
+]
 
 [[package]]
 name = "noonoo-shell"
@@ -141,6 +156,7 @@ dependencies = [
  "noonoo-css",
  "noonoo-dom",
  "noonoo-html",
+ "noonoo-selectors",
 ]
 
 [[package]]

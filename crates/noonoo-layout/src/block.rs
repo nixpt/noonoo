@@ -25,13 +25,10 @@ fn map_align(align: TextAlign) -> noonoo_text::Align {
     }
 }
 
-/// Lay out the block-and-inline children of a box.
-///
-/// Consecutive inline-level children (text and inline elements) form one inline
-/// formatting context; block-level children are stacked. Returns the placed
-/// child indices and the content height.
+/// Lay out the block-and-inline children of `parent_node`.
 pub(crate) fn layout_block_children(
     ctx: &mut Ctx<'_>,
+    parent_node: NodeId,
     children: &[NodeId],
     content_x: f32,
     content_y: f32,
@@ -64,8 +61,15 @@ pub(crate) fn layout_block_children(
                 i += 1;
             }
             if !run.is_empty() {
-                let (mut placed, height) =
-                    layout_inline_run(ctx, &run, content_x, y, content_width, parent_style);
+                let (mut placed, height) = layout_inline_run(
+                    ctx,
+                    parent_node,
+                    &run,
+                    content_x,
+                    y,
+                    content_width,
+                    parent_style,
+                );
                 indices.append(&mut placed);
                 y += height;
             }
@@ -85,15 +89,18 @@ pub(crate) fn layout_block_children(
 /// A word or atomic inline box, ready to be wrapped onto a line.
 struct Item {
     node: NodeId,
+    style_node: NodeId,
     kind: BoxKind,
+    text: String,
     width: f32,
     height: f32,
 }
 
 /// Lay out an inline formatting context: text and inline boxes wrapped into
-/// lines no wider than `width`, then aligned per the container's `text-align`.
+/// lines no wider than `width`, aligned per the container's `text-align`.
 pub(crate) fn layout_inline_run(
     ctx: &mut Ctx<'_>,
+    parent_node: NodeId,
     nodes: &[NodeId],
     x: f32,
     y: f32,
@@ -119,7 +126,9 @@ pub(crate) fn layout_inline_run(
                 for word in text.split_whitespace() {
                     items.push(Item {
                         node,
+                        style_node: parent_node,
                         kind: BoxKind::Text,
+                        text: word.to_owned(),
                         width: ctx.shaper.advance(word, font, bold),
                         height: line_height,
                     });
@@ -135,10 +144,12 @@ pub(crate) fn layout_inline_run(
                 };
                 items.push(Item {
                     node,
+                    style_node: node,
                     kind: BoxKind::Inline,
                     width: ctx
                         .shaper
                         .advance(&content, style.font_size, style.font_weight >= 600),
+                    text: content,
                     height,
                 });
             }
@@ -176,8 +187,10 @@ pub(crate) fn layout_inline_run(
             line_h = line_h.max(item.height);
             let index = ctx.push(LayoutBox {
                 node: Some(item.node),
+                style_node: item.style_node,
                 kind: item.kind,
                 rect: Rect::new(cursor_x, cursor_y, item.width, item.height),
+                text: Some(item.text.clone()),
                 margin: no_edges(),
                 padding: no_edges(),
                 border: no_edges(),

@@ -1,7 +1,7 @@
 //! Selector parsing from the CSS token stream.
 
 use super::*;
-use crate::{Token, TokenKind, tokenize};
+use noonoo_css::{Token, TokenKind, tokenize};
 use noonoo_parse::{ParseError, ParseResult};
 // --- parsing ---------------------------------------------------------------
 

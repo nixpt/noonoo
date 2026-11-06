@@ -87,6 +87,17 @@ impl Engine {
         noonoo_layout::layout(&self.dom, &styles, viewport, shaper)
     }
 
+    /// Lay out and paint the document, returning the render command stream.
+    pub fn paint(
+        &self,
+        viewport: noonoo_geometry::Size,
+        shaper: &dyn noonoo_layout::Shaper,
+    ) -> noonoo_paint::CommandList {
+        let styles = self.compute_styles();
+        let layout = noonoo_layout::layout(&self.dom, &styles, viewport, shaper);
+        noonoo_paint::paint(&styles, &layout)
+    }
+
     /// Consume the engine and return its document.
     pub fn into_dom(self) -> Document {
         self.dom
@@ -173,5 +184,17 @@ mod tests {
         let box_ = tree.get(a).unwrap();
         assert_eq!(box_.rect.width, 300.0);
         assert_eq!(box_.rect.height, 40.0);
+    }
+
+    #[test]
+    fn paints_a_page() {
+        let engine = Engine::from_html(
+            "<style>#a { background-color: #102030 }</style><div id=\"a\">hi</div>",
+        );
+        let list = engine.paint(
+            noonoo_geometry::Size::new(200.0, 100.0),
+            &noonoo_layout::MetricShaper,
+        );
+        assert!(!list.is_empty());
     }
 }

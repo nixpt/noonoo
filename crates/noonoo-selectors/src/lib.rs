@@ -9,6 +9,9 @@
 //! this crate stays dependency-free and the style/engine layers supply the view
 //! over `noonoo-dom`.
 
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
+
 /// A CSS specificity, split into its three components.
 ///
 /// Ordering is the CSS priority: more ids wins, then more classes/attributes/

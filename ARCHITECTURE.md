@@ -61,7 +61,8 @@ Seventeen crates in five tiers. Arrows point *downward only*.
 |---|---|---|
 | `noonoo-parse` | shared parsing primitives: `Span`, `ParseError`, `Cursor` | — |
 | `noonoo-json` | JSON parse + value model + writer | — (owned) |
-| `noonoo-css` | CSS: tokenizer, selectors (parse/specificity/match), value & property model | — (owned) |
+| `noonoo-css` | CSS: tokenizer, rule splitter, value & property model | — (owned) |
+| `noonoo-selectors` | CSS selectors: parse, specificity, match | — (owned) |
 | `noonoo-caison` | CAISON parse + JSON projection | — (owned) |
 | `noonoo-html` | HTML tokenizer + tree builder → `noonoo-dom` | — (owned) |
 | `noonoo-dom` | tree, `NodeId`, checked mutation, queries | — |

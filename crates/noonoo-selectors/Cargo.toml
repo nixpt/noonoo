@@ -1,0 +1,21 @@
+[package]
+name = "noonoo-selectors"
+description = "Noonoo's CSS selectors: parsing, specificity, and matching."
+version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+noonoo-css.workspace = true
+noonoo-parse.workspace = true
+
+[dev-dependencies]
+noonoo-dom.workspace = true

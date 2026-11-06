@@ -54,10 +54,14 @@ pub enum BoxKind {
 pub struct LayoutBox {
     /// The source node, if any (anonymous boxes have none).
     pub node: Option<NodeId>,
+    /// The element whose computed style governs this box's painting.
+    pub style_node: NodeId,
     /// The box's role.
     pub kind: BoxKind,
     /// The border-box rectangle.
     pub rect: Rect,
+    /// The text this box draws, if any (text runs; inline element content).
+    pub text: Option<String>,
     /// Resolved margins.
     pub margin: Edges<f32>,
     /// Resolved padding.
@@ -113,6 +117,11 @@ impl LayoutTree {
     pub fn roots(&self) -> impl Iterator<Item = &LayoutBox> {
         self.roots.iter().map(|&i| &self.boxes[i])
     }
+
+    /// Indices of the top-level boxes.
+    pub fn root_indices(&self) -> &[usize] {
+        &self.roots
+    }
 }
 
 /// Lay out `document` for the given `viewport`.
@@ -133,9 +142,13 @@ pub fn layout(
     for child in child_nodes(document, document.root()) {
         if ctx.is_block_level(child) {
             y += ctx.layout_element(child, 0.0, y, viewport.width);
+            if let Some(index) = ctx.tree_index(child) {
+                ctx.tree.roots.push(index);
+            }
         } else {
             let (indices, height) = block::layout_inline_run(
                 &mut ctx,
+                child,
                 &[child],
                 0.0,
                 y,
@@ -244,6 +257,7 @@ impl Ctx<'_> {
             ),
             _ => block::layout_block_children(
                 self,
+                node,
                 &children_nodes,
                 content_x,
                 content_y,
@@ -259,12 +273,14 @@ impl Ctx<'_> {
 
         let index = self.push(LayoutBox {
             node: Some(node),
+            style_node: node,
             kind: match style.display {
                 Display::Flex | Display::InlineFlex => BoxKind::Flex,
                 Display::Inline | Display::InlineBlock => BoxKind::Inline,
                 _ => BoxKind::Block,
             },
             rect: Rect::new(origin_x, origin_y, border_box_width, border_box_height),
+            text: None,
             margin,
             padding,
             border,

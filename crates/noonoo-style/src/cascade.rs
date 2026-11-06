@@ -8,11 +8,9 @@
 use std::collections::HashMap;
 
 use noonoo_css::value::Value;
-use noonoo_css::{
-    Declaration, Element, MatchContext, Property, SelectorList, Stylesheet, parse_declaration,
-    parse_declarations,
-};
+use noonoo_css::{Declaration, Property, Stylesheet, parse_declaration, parse_declarations};
 use noonoo_dom::{Document, NodeId};
+use noonoo_selectors::{Element, MatchContext, SelectorList};
 
 use crate::apply::{apply, resolve_font_size};
 use crate::computed::*;

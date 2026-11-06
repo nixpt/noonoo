@@ -15,6 +15,7 @@ COMMANDS:
     -h, --help          Show this help
     -V, --version       Show the version
     --tree <file|->     Parse HTML and print the DOM tree as JSON
+    --paint <file|->    Parse HTML, lay out, and print paint commands as JSON
     --caison <file|->   Parse CAISON and print its JSON projection
 ";
 
@@ -30,6 +31,7 @@ fn main() -> ExitCode {
         }
         Ok(Command::Tree { path }) => run_tree(&path),
         Ok(Command::Caison { path }) => run_caison(&path),
+        Ok(Command::Paint { path }) => run_paint(&path),
         Err(error) => {
             eprintln!("noonoo: {error}\n\n{USAGE}");
             ExitCode::from(2)
@@ -75,6 +77,24 @@ fn run_caison(path: &str) -> ExitCode {
     match noonoo::caison::Document::parse(&source).and_then(|doc| doc.to_json()) {
         Ok(json) => {
             println!("{json}");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("noonoo: {error}");
+            ExitCode::from(1)
+        }
+    }
+}
+
+fn run_paint(path: &str) -> ExitCode {
+    match read_source(path) {
+        Ok(html) => {
+            let engine = noonoo::engine::Engine::from_html(&html);
+            let list = engine.paint(
+                noonoo::geometry::Size::new(800.0, 600.0),
+                &noonoo::layout::MetricShaper,
+            );
+            println!("{}", list.to_json().to_string_pretty());
             ExitCode::SUCCESS
         }
         Err(error) => {

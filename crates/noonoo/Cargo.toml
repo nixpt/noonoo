@@ -25,6 +25,7 @@ noonoo-events.workspace = true
 noonoo-headless.workspace = true
 noonoo-html.workspace = true
 noonoo-css.workspace = true
+noonoo-selectors.workspace = true
 noonoo-caison.workspace = true
 noonoo-json.workspace = true
 noonoo-parse.workspace = true

@@ -25,7 +25,8 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | --- | --- |
 | [`noonoo-parse`](crates/noonoo-parse) | Shared parsing primitives: spans, positions, errors, cursor |
 | [`noonoo-json`](crates/noonoo-json) | JSON parser, value model, and writer |
-| [`noonoo-css`](crates/noonoo-css) | CSS syntax: tokenizer and rule splitter |
+| [`noonoo-css`](crates/noonoo-css) | CSS: tokenizer, rule splitter, value/property model |
+| [`noonoo-selectors`](crates/noonoo-selectors) | CSS selectors: parse, specificity, matching |
 | [`noonoo-caison`](crates/noonoo-caison) | CAISON parse and its JSON projection |
 | [`noonoo-html`](crates/noonoo-html) | HTML tokenizer and tree builder into `noonoo-dom` |
 | [`noonoo-dom`](crates/noonoo-dom) | The tree, stable `NodeId`s, checked mutation, queries |
@@ -74,6 +75,7 @@ The parser crates are wired into the engine, so the CLI works today:
 ```sh
 noonoo --tree page.html     # parse HTML (own tokenizer), print the DOM as JSON
 noonoo --tree -             # …or read from stdin
+noonoo --paint page.html    # parse → style → layout → paint, print commands as JSON
 noonoo --caison app.caison  # parse CAISON, print its JSON projection
 ```
 

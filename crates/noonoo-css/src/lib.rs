@@ -1,10 +1,10 @@
 //! # noonoo-css
 //!
-//! The CSS layer: a tokenizer following CSS Syntax Level 3, a rule splitter, the
-//! **selector** model (parsing, specificity, matching), and the **value &
-//! property** model (typed values and shorthand expansion).
+//! The CSS layer: a tokenizer following CSS Syntax Level 3, a top-level rule
+//! splitter, and the value & property model. The **selectors** live in
+//! [`noonoo_selectors`], and the cascade in [`noonoo_style`].
 //!
-//! Scope note: this owns *syntax*, *selectors*, and *value/property typing*. It
+//! Scope note: this owns *syntax* and *value/property typing*. It
 //! does not yet own the cascade (merging declarations by origin, specificity and
 //! order, then inheritance and computed values), which `noonoo-style` builds on
 //! top — see `docs/DEPENDENCY-EXIT.md` (Phase A).
@@ -15,15 +15,10 @@
 use noonoo_parse::ParseResult;
 
 pub mod property;
-pub mod selector;
 pub mod tokenizer;
 pub mod value;
 
 pub use property::{Declaration, Property, parse_declaration};
-pub use selector::{
-    AttrOp, AttrSelector, Combinator, ComplexSelector, CompoundSelector, Element, MatchContext,
-    Nth, PseudoClass, SelectorList, SimpleSelector, Specificity, TypeSelector,
-};
 pub use tokenizer::{Token, TokenKind, tokenize};
 pub use value::{Color, Length, LengthUnit, Value, parse_values};
 

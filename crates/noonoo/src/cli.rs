@@ -19,6 +19,11 @@ pub enum Command {
         /// The input path, or `-` for stdin.
         path: String,
     },
+    /// Parse, style, lay out, and paint an HTML file, printing the command JSON.
+    Paint {
+        /// The input path, or `-` for stdin.
+        path: String,
+    },
 }
 
 /// Parse an argument list (including the program name, as `std::env::args`
@@ -46,6 +51,9 @@ where
                 .ok_or_else(|| "`--caison` needs a file path (or `-`)".to_owned())?;
             Ok(Command::Caison { path })
         }
+        "--paint" => Ok(Command::Paint {
+            path: next_or_stdin(&mut args),
+        }),
         other => Err(format!("unexpected argument `{other}`")),
     }
 }
@@ -98,6 +106,20 @@ mod tests {
             })
         );
         assert!(parse(["noonoo", "--caison"]).is_err());
+    }
+
+    #[test]
+    fn paint_reads_a_path_or_stdin() {
+        assert_eq!(
+            parse(["noonoo", "--paint", "page.html"]),
+            Ok(Command::Paint {
+                path: "page.html".into()
+            })
+        );
+        assert_eq!(
+            parse(["noonoo", "--paint"]),
+            Ok(Command::Paint { path: "-".into() })
+        );
     }
 
     #[test]

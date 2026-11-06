@@ -4,7 +4,7 @@
 //! total and panic-free. The matcher here is a deliberately minimal compound
 //! subset (`tag`, `#id`, `.class`) with no dependencies. The full selector
 //! engine — combinators, attributes, pseudo-classes, specificity — lives in
-//! `noonoo-css` (`selector::SelectorList`); this keeps `noonoo-dom` a leaf.
+//! `noonoo-selectors` (`SelectorList`); this keeps `noonoo-dom` a leaf.
 
 use crate::node::ElementData;
 
