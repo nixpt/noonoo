@@ -1,0 +1,35 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/vaji-core",
+    "crates/vaji-paint",
+    "crates/vaji-shell",
+    "crates/vaji-net",
+    "crates/vaji",
+]
+
+# Vaji is a clean-room reimplementation. Nothing here depends on the code of
+# the engine it replaces (bliss-engine / upstream Blitz); the third-party
+# engines we *do* rely on (stylo, taffy, parley, anyrender/vello, winit) are
+# ordinary crates.io deps, pinned in one place and kept behind bounded modules.
+# See docs/DEPENDENCIES.md for the policy and docs/ARCHITECTURE.md for the map.
+
+[workspace.package]
+version = "0.0.1"
+license = "MIT OR Apache-2.0"
+homepage = "https://github.com/nixpt/vaji"
+repository = "https://github.com/nixpt/vaji"
+categories = ["gui", "rendering", "web-programming"]
+edition = "2024"
+rust-version = "1.89"
+
+[workspace.dependencies]
+vaji-core = { path = "crates/vaji-core", version = "0.0.1" }
+vaji-paint = { path = "crates/vaji-paint", version = "0.0.1" }
+vaji-shell = { path = "crates/vaji-shell", version = "0.0.1" }
+vaji-net = { path = "crates/vaji-net", version = "0.0.1" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

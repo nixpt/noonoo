@@ -1,0 +1,29 @@
+[package]
+name = "vaji"
+description = "Vaji: a modular HTML/CSS rendering engine, and the `vaji` command line."
+version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+default-run = "vaji"
+
+[features]
+default = ["std"]
+std = ["vaji-core/std", "vaji-paint/std", "vaji-net/std"]
+headless = ["vaji-core/headless"]
+window = ["vaji-shell/window"]
+gpu = ["vaji-shell/gpu"]
+http = ["vaji-net/http"]
+
+[dependencies]
+vaji-core.workspace = true
+vaji-paint.workspace = true
+vaji-shell.workspace = true
+vaji-net.workspace = true
+
+[[bin]]
+name = "vaji"
+path = "src/main.rs"

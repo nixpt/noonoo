@@ -1,0 +1,18 @@
+[package]
+name = "vaji-net"
+description = "Vaji net: fetching documents over http(s), file, and exo schemes."
+version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["std"]
+std = []
+http = [] # async HTTP(S) loading
+
+[dependencies]
+vaji-core.workspace = true

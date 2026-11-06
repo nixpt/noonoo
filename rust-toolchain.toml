@@ -1,0 +1,5 @@
+[toolchain]
+# Floor is the workspace MSRV (1.89); local development rides stable.
+# `cargo +1.89.0 check` is what CI's msrv job runs.
+channel = "stable"
+components = ["rustfmt", "clippy"]
