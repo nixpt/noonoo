@@ -6,15 +6,19 @@ version = 4
 name = "noonoo"
 version = "0.0.1"
 dependencies = [
+ "noonoo-caison",
+ "noonoo-css",
  "noonoo-dom",
  "noonoo-engine",
  "noonoo-events",
  "noonoo-headless",
  "noonoo-html",
+ "noonoo-json",
  "noonoo-layout",
  "noonoo-motion",
  "noonoo-net",
  "noonoo-paint",
+ "noonoo-parse",
  "noonoo-shell",
  "noonoo-style",
  "noonoo-text",
@@ -43,11 +47,10 @@ version = "0.0.1"
 name = "noonoo-engine"
 version = "0.0.1"
 dependencies = [
+ "noonoo-css",
  "noonoo-dom",
- "noonoo-events",
  "noonoo-html",
  "noonoo-layout",
- "noonoo-net",
  "noonoo-style",
 ]
 
@@ -64,6 +67,7 @@ version = "0.0.1"
 dependencies = [
  "noonoo-dom",
  "noonoo-events",
+ "noonoo-json",
 ]
 
 [[package]]

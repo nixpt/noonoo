@@ -76,6 +76,28 @@ impl Document {
         self.tree.insert_raw(NodeData::Comment(text.into()))
     }
 
+    /// The concatenated text of `id`'s subtree, in document order.
+    ///
+    /// For a text node this is its text; for an element or the root it walks
+    /// the descendants and joins their text.
+    pub fn text_content(&self, id: NodeId) -> String {
+        let mut out = String::new();
+        self.collect_text(id, &mut out);
+        out
+    }
+
+    fn collect_text(&self, id: NodeId, out: &mut String) {
+        match self.node(id) {
+            Some(NodeData::Text(text)) => out.push_str(text),
+            Some(_) => {
+                for &child in self.tree.children(id) {
+                    self.collect_text(child, out);
+                }
+            }
+            None => {}
+        }
+    }
+
     /// Every element in document order (the root's descendants).
     pub fn elements(&self) -> Vec<NodeId> {
         self.tree
@@ -156,6 +178,15 @@ mod tests {
         let list = doc.get_element_by_id("items").unwrap();
         assert_eq!(doc.element(list).unwrap().name, "ul");
         assert!(doc.get_element_by_id("missing").is_none());
+    }
+
+    #[test]
+    fn text_content_walks_the_subtree() {
+        let doc = sample();
+        let body = doc.get_elements_by_tag_name("body")[0];
+        assert_eq!(doc.text_content(body), "one");
+        let list = doc.get_element_by_id("items").unwrap();
+        assert_eq!(doc.text_content(list), "one");
     }
 
     #[test]

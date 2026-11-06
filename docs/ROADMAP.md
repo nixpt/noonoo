@@ -26,12 +26,15 @@ consumer-visible subset (`bliss-traits`, `bliss-dom`, `bliss-html`, `bliss-paint
 **Done when:** the snapshots are committed and `api-drift check` passes; the
 diff pipeline runs against a Noonoo shim (even an empty one).
 
-## Slice 2 — Ingest + tree dump
+## Slice 2 — Ingest + tree dump  ✅ shipped
 
-`noonoo-html` parses into `noonoo-dom`; `noonoo-headless` dumps the tree as JSON.
+`noonoo-html` parses into `noonoo-dom`; `noonoo-engine::from_html` collects and
+parses `<style>` blocks with `noonoo-css`; `noonoo-headless` dumps the tree as
+JSON (built on `noonoo-json`). The CLI is the end-to-end path:
+`noonoo --tree <file|->`.
 
 **Done when:** `noonoo --tree fixture.html` prints JSON and a test asserts on the
-structure with no screenshot.
+structure with no screenshot. *(met)*
 
 ## Slice 3 — Style
 

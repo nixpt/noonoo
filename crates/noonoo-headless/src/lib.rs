@@ -16,10 +16,9 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-use std::fmt::Write as _;
-
 use noonoo_dom::{Document, NodeData, NodeId};
 use noonoo_events::{Event, EventListener, dispatch};
+use noonoo_json::Json;
 
 /// Serialize a document's tree to JSON.
 ///
@@ -34,81 +33,64 @@ use noonoo_events::{Event, EventListener, dispatch};
 /// {"kind":"doctype","name":"html"}
 /// ```
 pub fn tree_json(doc: &Document) -> String {
-    let mut out = String::new();
-    write_node(doc, doc.root(), &mut out);
-    out
+    node_json(doc, doc.root()).to_string()
 }
 
-fn write_node(doc: &Document, id: NodeId, out: &mut String) {
+fn node_json(doc: &Document, id: NodeId) -> Json {
     match doc.node(id) {
-        None => out.push_str("null"),
-        Some(NodeData::Document) => {
-            out.push_str("{\"kind\":\"document\",\"children\":");
-            write_children(doc, id, out);
-            out.push('}');
-        }
-        Some(NodeData::Doctype { name }) => {
-            out.push_str("{\"kind\":\"doctype\",\"name\":");
-            write_string(name, out);
-            out.push('}');
-        }
-        Some(NodeData::Element(element)) => {
-            out.push_str("{\"kind\":\"element\",\"name\":");
-            write_string(&element.name, out);
-            out.push_str(",\"attrs\":{");
-            for (index, attr) in element.attrs.iter().enumerate() {
-                if index > 0 {
-                    out.push(',');
-                }
-                write_string(&attr.name, out);
-                out.push(':');
-                write_string(&attr.value, out);
-            }
-            out.push_str("},\"children\":");
-            write_children(doc, id, out);
-            out.push('}');
-        }
-        Some(NodeData::Text(text)) => {
-            out.push_str("{\"kind\":\"text\",\"text\":");
-            write_string(text, out);
-            out.push('}');
-        }
-        Some(NodeData::Comment(text)) => {
-            out.push_str("{\"kind\":\"comment\",\"text\":");
-            write_string(text, out);
-            out.push('}');
-        }
+        None => Json::Null,
+        Some(NodeData::Document) => object(vec![
+            ("kind", Json::String("document".into())),
+            ("children", children_json(doc, id)),
+        ]),
+        Some(NodeData::Doctype { name }) => object(vec![
+            ("kind", Json::String("doctype".into())),
+            ("name", Json::String(name.clone())),
+        ]),
+        Some(NodeData::Element(element)) => object(vec![
+            ("kind", Json::String("element".into())),
+            ("name", Json::String(element.name.clone())),
+            (
+                "attrs",
+                Json::Object(
+                    element
+                        .attrs
+                        .iter()
+                        .map(|attr| (attr.name.clone(), Json::String(attr.value.clone())))
+                        .collect(),
+                ),
+            ),
+            ("children", children_json(doc, id)),
+        ]),
+        Some(NodeData::Text(text)) => object(vec![
+            ("kind", Json::String("text".into())),
+            ("text", Json::String(text.clone())),
+        ]),
+        Some(NodeData::Comment(text)) => object(vec![
+            ("kind", Json::String("comment".into())),
+            ("text", Json::String(text.clone())),
+        ]),
     }
 }
 
-fn write_children(doc: &Document, id: NodeId, out: &mut String) {
-    out.push('[');
-    for (index, &child) in doc.tree().children(id).iter().enumerate() {
-        if index > 0 {
-            out.push(',');
-        }
-        write_node(doc, child, out);
-    }
-    out.push(']');
+fn children_json(doc: &Document, id: NodeId) -> Json {
+    Json::Array(
+        doc.tree()
+            .children(id)
+            .iter()
+            .map(|&child| node_json(doc, child))
+            .collect(),
+    )
 }
 
-/// Append `value` to `out` as a quoted, escaped JSON string.
-fn write_string(value: &str, out: &mut String) {
-    out.push('"');
-    for ch in value.chars() {
-        match ch {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            ch if (ch as u32) < 0x20 => {
-                let _ = write!(out, "\\u{:04x}", ch as u32);
-            }
-            ch => out.push(ch),
-        }
-    }
-    out.push('"');
+/// Build a JSON object from ordered key/value pairs.
+fn object(pairs: Vec<(&str, Json)>) -> Json {
+    Json::Object(
+        pairs
+            .into_iter()
+            .map(|(key, value)| (key.to_owned(), value))
+            .collect(),
+    )
 }
 
 /// A virtual clock. Time moves only when [`Clock::advance`] says so.

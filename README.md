@@ -66,6 +66,16 @@ cargo test --workspace
 cargo run -p noonoo -- --version
 ```
 
+## Try it
+
+The parser crates are wired into the engine, so the CLI works today:
+
+```sh
+noonoo --tree page.html     # parse HTML (own tokenizer), print the DOM as JSON
+noonoo --tree -             # …or read from stdin
+noonoo --caison app.caison  # parse CAISON, print its JSON projection
+```
+
 The workspace MSRV is **1.89**. CI checks it explicitly.
 
 ## Docs

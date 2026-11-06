@@ -16,3 +16,4 @@ std = []
 [dependencies]
 noonoo-dom.workspace = true
 noonoo-events.workspace = true
+noonoo-json.workspace = true

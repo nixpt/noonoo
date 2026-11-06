@@ -12,14 +12,13 @@ rust-version.workspace = true
 [features]
 default = ["std"]
 std = []
-# Pull in the borrowed-engine layers (style + layout + html). Without them the
-# engine is a bare DOM document; with them it resolves like a browser page.
-resolve = ["dep:noonoo-style", "dep:noonoo-layout", "dep:noonoo-html"]
+# Pull in the borrowed-engine layers (style + layout). Without them the engine
+# is a parsed DOM + stylesheets; with them it resolves like a browser page.
+resolve = ["dep:noonoo-style", "dep:noonoo-layout"]
 
 [dependencies]
 noonoo-dom.workspace = true
-noonoo-events = { workspace = true, optional = true }
-noonoo-net = { workspace = true, optional = true }
+noonoo-html.workspace = true
+noonoo-css.workspace = true
 noonoo-style = { workspace = true, optional = true }
 noonoo-layout = { workspace = true, optional = true }
-noonoo-html = { workspace = true, optional = true }

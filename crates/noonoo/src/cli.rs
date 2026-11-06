@@ -9,30 +9,55 @@ pub enum Command {
     Help,
     /// Print the version and exit.
     Version,
+    /// Parse an HTML file (or stdin for `-`) and print its DOM tree as JSON.
+    Tree {
+        /// The input path, or `-` for stdin.
+        path: String,
+    },
+    /// Parse a CAISON file (or stdin for `-`) and print its JSON projection.
+    Caison {
+        /// The input path, or `-` for stdin.
+        path: String,
+    },
 }
 
 /// Parse an argument list (including the program name, as `std::env::args`
 /// yields it) into a [`Command`].
-///
-/// The vocabulary is small today on purpose: the render/dump commands arrive
-/// with the slices that implement them (see `docs/ROADMAP.md`), and a parser
-/// that only knows what it can honour is more honest than one full of stubs.
 pub fn parse<I, S>(args: I) -> Result<Command, String>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
-    let mut args = args.into_iter();
-    let _program = args.next();
+    let mut args = args.into_iter().skip(1);
+    let Some(first) = args.next() else {
+        return Ok(Command::Help);
+    };
 
-    match args.next() {
-        None => Ok(Command::Help),
-        Some(arg) => match arg.as_ref() {
-            "-h" | "--help" => Ok(Command::Help),
-            "-V" | "--version" => Ok(Command::Version),
-            other => Err(format!("unexpected argument `{other}`")),
-        },
+    match first.as_ref() {
+        "-h" | "--help" => Ok(Command::Help),
+        "-V" | "--version" => Ok(Command::Version),
+        "--tree" => Ok(Command::Tree {
+            path: next_or_stdin(&mut args),
+        }),
+        "--caison" => {
+            let path = args
+                .next()
+                .map(|arg| arg.as_ref().to_owned())
+                .ok_or_else(|| "`--caison` needs a file path (or `-`)".to_owned())?;
+            Ok(Command::Caison { path })
+        }
+        other => Err(format!("unexpected argument `{other}`")),
     }
+}
+
+fn next_or_stdin<I, S>(args: &mut I) -> String
+where
+    I: Iterator<Item = S>,
+    S: AsRef<str>,
+{
+    args.next()
+        .map(|arg| arg.as_ref().to_owned())
+        .unwrap_or_else(|| "-".to_owned())
 }
 
 #[cfg(test)]
@@ -51,9 +76,28 @@ mod tests {
     }
 
     #[test]
-    fn help_flags() {
-        assert_eq!(parse(["noonoo", "--help"]), Ok(Command::Help));
-        assert_eq!(parse(["noonoo", "-h"]), Ok(Command::Help));
+    fn tree_reads_a_path_or_stdin() {
+        assert_eq!(
+            parse(["noonoo", "--tree", "page.html"]),
+            Ok(Command::Tree {
+                path: "page.html".into()
+            })
+        );
+        assert_eq!(
+            parse(["noonoo", "--tree"]),
+            Ok(Command::Tree { path: "-".into() })
+        );
+    }
+
+    #[test]
+    fn caison_needs_a_path() {
+        assert_eq!(
+            parse(["noonoo", "--caison", "app.caison"]),
+            Ok(Command::Caison {
+                path: "app.caison".into()
+            })
+        );
+        assert!(parse(["noonoo", "--caison"]).is_err());
     }
 
     #[test]
