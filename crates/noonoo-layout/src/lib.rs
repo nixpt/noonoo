@@ -16,8 +16,9 @@
 //!   the nearest positioned ancestor's padding box — the viewport for `fixed`).
 //!   `sticky` is treated as `relative`.
 //! - **Vertical margin collapsing** — adjacent siblings share the larger of
-//!   their facing margins, and a block collapses its top/bottom margin through
-//!   its first/last child when no border or padding separates them.
+//!   their facing margins; a block collapses its top/bottom margin through its
+//!   first/last child when no border or padding separates them; and an empty
+//!   block's two margins become one that joins the surrounding chain.
 //! - Width: `auto` / px / percentage (and stretch between `left`+`right`);
 //!   height: `auto` / px / percentage of the containing block.
 //! - `box-sizing`, margins, padding, and borders, resolved to absolute pixels.
@@ -25,11 +26,11 @@
 //! ## What it does not (yet)
 //!
 //! Floats, `grid`, `z-index` paint ordering (positioned boxes paint in tree
-//! order), `overflow` clipping, writing modes, and the collapse-through of
-//! *empty* blocks. Absolute boxes whose width or height is `auto` fall back to
-//! the containing block when only the trailing inset (`right`/`bottom`) is set.
-//! Text is measured through the [`Shaper`] seam — a heuristic stands in until
-//! `noonoo-text` brings real shaping (`docs/ROADMAP.md` Phase C).
+//! order), `overflow` clipping, and writing modes. Absolute boxes whose width or
+//! height is `auto` fall back to the containing block when only the trailing
+//! inset (`right`/`bottom`) is set. Text is measured through the [`Shaper`] seam
+//! — a heuristic stands in until `noonoo-text` brings real shaping
+//! (`docs/ROADMAP.md` Phase C).
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -202,7 +203,7 @@ pub fn layout(
     // container: it has no margins, so a leading child margin is not collapsed
     // away (the first child is simply pushed down by it).
     let root_children = child_nodes(document, document.root());
-    let (roots, _, _, _) = block::layout_block_children(
+    let (roots, _) = block::layout_block_children(
         &mut ctx,
         document.root(),
         &root_children,
@@ -259,10 +260,6 @@ impl Ctx<'_> {
             self.style(node).display,
             Display::Inline | Display::InlineBlock
         )
-    }
-
-    pub fn is_block_level(&self, node: NodeId) -> bool {
-        !self.is_inline_level(node) && self.style(node).display != Display::None
     }
 
     /// Whether `node` is `display: none`.
@@ -393,7 +390,7 @@ impl Ctx<'_> {
                 content_width,
             ),
             _ => {
-                let (indices, height, _leading, _trailing) = block::layout_block_children(
+                let (indices, height) = block::layout_block_children(
                     self,
                     node,
                     &children_nodes,
@@ -514,7 +511,7 @@ impl Ctx<'_> {
                 content_width,
             ),
             _ => {
-                let (indices, height, _leading, _trailing) = block::layout_block_children(
+                let (indices, height) = block::layout_block_children(
                     self,
                     node,
                     &children_nodes,

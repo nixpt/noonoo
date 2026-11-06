@@ -320,3 +320,48 @@ fn negative_margins_collapse_to_a_sum() {
     // 20 + (-8) = 12.
     assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.y, 22.0);
 }
+
+#[test]
+fn an_empty_block_collapses_through() {
+    let (doc, tree) = page(
+        r#"<div id="a"></div><div id="empty"></div><div id="b"></div>"#,
+        "#a, #b { height: 10px } \
+         #a { margin-bottom: 20px } \
+         #empty { margin-top: 30px; margin-bottom: 40px } \
+         #b { margin-top: 5px }",
+        400.0,
+    );
+    // The empty block contributes only its (collapsed) margin — the largest of
+    // 20, 30, 40, 5 — and no space of its own.
+    assert_eq!(tree.get(id(&doc, "empty")).unwrap().rect.height, 0.0);
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.y, 50.0);
+}
+
+#[test]
+fn nested_empty_blocks_collapse_through() {
+    let (doc, tree) = page(
+        r#"<div id="outer"><div id="empty"></div></div><div id="after"></div>"#,
+        "#empty { margin-top: 20px; margin-bottom: 30px } #after { height: 10px }",
+        400.0,
+    );
+    // `outer` has no content but a collapsed-through child, so it collapses
+    // through too.
+    assert_eq!(tree.get(id(&doc, "outer")).unwrap().rect.height, 0.0);
+    assert_eq!(tree.get(id(&doc, "after")).unwrap().rect.y, 30.0);
+}
+
+#[test]
+fn a_border_makes_an_empty_block_occupy_space() {
+    let (doc, tree) = page(
+        r#"<div id="a"></div><div id="e"></div><div id="b"></div>"#,
+        "#a, #b { height: 10px } \
+         #e { margin-top: 20px; margin-bottom: 20px; \
+              border-top-width: 1px; border-top-style: solid }",
+        400.0,
+    );
+    let e = tree.get(id(&doc, "e")).unwrap();
+    // The border pins the margins apart: the block is 1px tall and its two
+    // margins no longer collapse together.
+    assert_eq!(e.rect.height, 1.0);
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.y, 51.0);
+}

@@ -29,10 +29,10 @@ fn map_align(align: TextAlign) -> noonoo_text::Align {
 /// Lay out the block-and-inline children of `parent_node`, collapsing vertical
 /// margins.
 ///
-/// Returns `(child box indices, content height, leading margin, trailing
-/// margin)`. When `collapse_top` is set the first block child's top margin is
-/// *not* applied inside — it is returned as `leading` to collapse with the
-/// parent's own top margin. `trailing` is the same for the bottom.
+/// Returns `(child box indices, content height)`. Vertical margins are owned
+/// here: each child's border box is positioned from its collapsed leading
+/// margin, and a collapsed-through child contributes its margin to the chain
+/// without occupying space.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn layout_block_children(
     ctx: &mut Ctx<'_>,
@@ -44,11 +44,10 @@ pub(crate) fn layout_block_children(
     parent_style: &ComputedStyle,
     collapse_top: bool,
     collapse_bottom: bool,
-) -> (Vec<usize>, f32, f32, f32) {
+) -> (Vec<usize>, f32) {
     let mut indices = Vec::new();
     let mut cursor = content_y;
     let mut pending: Option<f32> = None;
-    let mut leading = 0.0;
     let mut has_content = false;
     let mut i = 0;
 
@@ -105,16 +104,30 @@ pub(crate) fn layout_block_children(
             continue;
         }
 
-        // A block-level child: collapse its leading margin with the pending
-        // margin from the previous sibling, then place its border box.
         let margin = margin::effective_margins(ctx, child, content_width);
+
+        if margin.through {
+            // A collapsed-through box adds its margin to the chain and occupies
+            // no space; it still gets a (zero-height) box for the tree.
+            pending = Some(match pending {
+                Some(previous) => margin::collapse(previous, margin.top),
+                None => margin.top,
+            });
+            ctx.layout_element(child, content_x + margin.left, cursor, content_width);
+            if let Some(index) = ctx.tree_index(child) {
+                indices.push(index);
+            }
+            i += 1;
+            continue;
+        }
+
         let gap = match pending {
             Some(previous) => margin::collapse(previous, margin.top),
             None => margin.top,
         };
         if !has_content && collapse_top {
-            // The leading margin collapses out of the container entirely.
-            leading = gap;
+            // The leading margin collapses out of the container entirely, so the
+            // first content sits at the container's content top.
         } else {
             cursor += gap;
         }
@@ -129,16 +142,15 @@ pub(crate) fn layout_block_children(
         i += 1;
     }
 
-    let trailing = match pending {
-        Some(margin) if collapse_bottom => margin,
-        Some(margin) => {
-            cursor += margin;
-            0.0
-        }
-        None => 0.0,
-    };
+    // A trailing margin collapses out of the container (and so out of its
+    // height) unless a bottom border or padding pins it inside.
+    if let Some(margin) = pending
+        && !collapse_bottom
+    {
+        cursor += margin;
+    }
 
-    (indices, cursor - content_y, leading, trailing)
+    (indices, cursor - content_y)
 }
 
 /// A word or atomic inline box, ready to be wrapped onto a line.
