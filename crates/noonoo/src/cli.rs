@@ -34,6 +34,16 @@ pub enum Command {
         /// The input path, or `-` for stdin.
         path: String,
     },
+    /// Convert a CSV/TSV file (or stdin for `-`) to an HTML table.
+    Csv {
+        /// The input path, or `-` for stdin.
+        path: String,
+    },
+    /// View a CSV/TSV file: convert to a table and print its paint commands.
+    CsvPaint {
+        /// The input path, or `-` for stdin.
+        path: String,
+    },
 }
 
 /// Parse an argument list (including the program name, as `std::env::args`
@@ -68,6 +78,12 @@ where
             path: next_or_stdin(&mut args),
         }),
         "--md-paint" => Ok(Command::MarkdownPaint {
+            path: next_or_stdin(&mut args),
+        }),
+        "--csv" => Ok(Command::Csv {
+            path: next_or_stdin(&mut args),
+        }),
+        "--csv-paint" => Ok(Command::CsvPaint {
             path: next_or_stdin(&mut args),
         }),
         other => Err(format!("unexpected argument `{other}`")),
@@ -150,6 +166,22 @@ mod tests {
             parse(["noonoo", "--md-paint", "README.md"]),
             Ok(Command::MarkdownPaint {
                 path: "README.md".into()
+            })
+        );
+    }
+
+    #[test]
+    fn csv_commands() {
+        assert_eq!(
+            parse(["noonoo", "--csv", "data.csv"]),
+            Ok(Command::Csv {
+                path: "data.csv".into()
+            })
+        );
+        assert_eq!(
+            parse(["noonoo", "--csv-paint", "data.tsv"]),
+            Ok(Command::CsvPaint {
+                path: "data.tsv".into()
             })
         );
     }

@@ -8,6 +8,7 @@ version = "0.2.0"
 dependencies = [
  "noonoo-caison",
  "noonoo-css",
+ "noonoo-csv",
  "noonoo-dom",
  "noonoo-engine",
  "noonoo-events",
@@ -42,6 +43,10 @@ dependencies = [
  "noonoo-dom",
  "noonoo-parse",
 ]
+
+[[package]]
+name = "noonoo-csv"
+version = "0.2.0"
 
 [[package]]
 name = "noonoo-dom"

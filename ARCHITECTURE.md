@@ -73,6 +73,7 @@ Seventeen crates in five tiers. Arrows point *downward only*.
 | `noonoo-layout` | box layout: block, inline, flex | — (owned; replaces `taffy`) |
 | `noonoo-geometry` | `Point` / `Size` / `Rect` | — |
 | `noonoo-markdown` | Markdown (subset) → HTML | — (owned) |
+| `noonoo-csv` | CSV/TSV → HTML table | — (owned) |
 | `noonoo-net` | loading: `file:` + `data:` owned; `http` behind a feature | TLS (borrowed, not wired) |
 | `noonoo-engine` | the working document (parse→style→layout) | — (orchestrates) |
 | `noonoo-headless` | tree dump, virtual clock, synthetic input | — |
