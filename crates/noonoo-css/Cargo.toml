@@ -15,3 +15,6 @@ std = []
 
 [dependencies]
 noonoo-parse.workspace = true
+
+[dev-dependencies]
+noonoo-dom.workspace = true

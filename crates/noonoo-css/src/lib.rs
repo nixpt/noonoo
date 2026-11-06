@@ -1,19 +1,23 @@
 //! # noonoo-css
 //!
-//! The CSS **syntax** layer: a tokenizer following CSS Syntax Level 3, and a
-//! top-level rule splitter that turns tokens into a stylesheet of qualified
-//! rules (selector + declarations) and at-rules.
+//! The CSS layer: a tokenizer following CSS Syntax Level 3, a top-level rule
+//! splitter, and the **selector** model — parsing, specificity, and matching.
 //!
-//! Scope note: this owns *syntax* — how a stylesheet is spelled. It does **not**
-//! yet own selector matching or the cascade (the "style resolution" stage), which
-//! remains the borrowed engine's job for now (see `noonoo-style` and
-//! `docs/DEPENDENCIES.md`). Owning the syntax layer is what makes a Noonoo-shaped
-//! CSSOM possible without a foreign token type leaking upward.
+//! Scope note: this owns *syntax* and *selector matching*. It does not yet own
+//! the cascade (declaration merging, inheritance, computed values), which
+//! `noonoo-style` builds on top — see `docs/DEPENDENCY-EXIT.md` (Phase A).
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 use noonoo_parse::ParseResult;
+
+pub mod selector;
+
+pub use selector::{
+    AttrOp, AttrSelector, Combinator, ComplexSelector, CompoundSelector, Element, MatchContext,
+    Nth, PseudoClass, SelectorList, SimpleSelector, Specificity, TypeSelector,
+};
 
 /// A CSS token kind (CSS Syntax Level 3, abridged).
 #[derive(Clone, PartialEq, Debug)]

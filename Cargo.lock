@@ -36,6 +36,7 @@ dependencies = [
 name = "noonoo-css"
 version = "0.0.1"
 dependencies = [
+ "noonoo-dom",
  "noonoo-parse",
 ]
 
