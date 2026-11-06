@@ -5,7 +5,7 @@ use noonoo_caps::{Action, Authorizer, Gate, GatedDocument, Scope, Subject};
 use noonoo_dom::Document;
 use noonoo_xip::XipAuthorizer;
 use xip_core::CapabilityToken;
-use xip_core::capability::{CapabilityScope, CapabilityTokenBuilder};
+use xip_core::capability::{CapabilityScope, CapabilityTokenBuilder, TokenDelegation};
 use xip_core::identity::XipIdentity;
 
 const CAP: &str = "noonoo.dom";
@@ -14,6 +14,19 @@ const CAP: &str = "noonoo.dom";
 fn token(issuer: &XipIdentity, aud: &str, scope: CapabilityScope) -> CapabilityToken {
     CapabilityTokenBuilder::new(aud.to_string(), issuer.did().to_string(), CAP, scope)
         .expires_at(Utc::now() + Duration::minutes(5))
+        .build(issuer.signing_key())
+        .unwrap()
+}
+
+/// A token valid for `minutes` — used to script delegation expiry ordering.
+fn expiring(
+    issuer: &XipIdentity,
+    aud: &str,
+    scope: CapabilityScope,
+    minutes: i64,
+) -> CapabilityToken {
+    CapabilityTokenBuilder::new(aud.to_string(), issuer.did().to_string(), CAP, scope)
+        .expires_at(Utc::now() + Duration::minutes(minutes))
         .build(issuer.signing_key())
         .unwrap()
 }
@@ -208,4 +221,227 @@ fn a_verified_token_gates_a_document_end_to_end() {
     let other = Subject::new(XipIdentity::generate().did());
     let view = GatedDocument::new(&document, &gate, &authorizer, &other);
     assert!(!view.visible(secret));
+}
+
+#[test]
+fn a_valid_delegation_admits_the_delegate() {
+    let issuer = XipIdentity::generate();
+    let alice = XipIdentity::generate();
+    let bob = XipIdentity::generate();
+
+    // The issuer grants alice Path("#secret"); alice re-issues a *narrower*
+    // slice to bob.
+    let original = expiring(
+        &issuer,
+        alice.did(),
+        CapabilityScope::Path("#secret".to_string()),
+        10,
+    );
+    let delegated = expiring(
+        &alice,
+        bob.did(),
+        CapabilityScope::Path("#secret/ref".to_string()),
+        5,
+    );
+    let link = TokenDelegation::new(original, delegated, 1);
+
+    let mut authorizer = XipAuthorizer::new();
+    authorizer.admit_delegation(&link).unwrap();
+
+    let bob_subject = Subject::new(bob.did());
+    assert!(
+        authorizer
+            .authorize(&bob_subject, Action::Read, &Scope::path(CAP, "#secret/ref"))
+            .is_allowed()
+    );
+    // Outside the narrowed scope: denied.
+    assert!(
+        authorizer
+            .authorize(&bob_subject, Action::Read, &Scope::path(CAP, "#secret"))
+            .is_denied()
+    );
+    // The delegator is not a grant holder by virtue of delegating.
+    let alice_subject = Subject::new(alice.did());
+    assert!(
+        authorizer
+            .authorize(
+                &alice_subject,
+                Action::Read,
+                &Scope::path(CAP, "#secret/ref")
+            )
+            .is_denied()
+    );
+}
+
+#[test]
+fn a_delegation_that_widens_scope_is_rejected() {
+    let issuer = XipIdentity::generate();
+    let alice = XipIdentity::generate();
+    let bob = XipIdentity::generate();
+
+    let original = expiring(
+        &issuer,
+        alice.did(),
+        CapabilityScope::Path("#secret".to_string()),
+        10,
+    );
+    // Broader than the original: the chain check must refuse it.
+    let delegated = expiring(&alice, bob.did(), CapabilityScope::Path("#".to_string()), 5);
+    let link = TokenDelegation::new(original, delegated, 1);
+
+    let mut authorizer = XipAuthorizer::new();
+    assert!(authorizer.admit_delegation(&link).is_err());
+    assert!(authorizer.is_empty());
+}
+
+#[test]
+fn a_delegation_signed_by_a_forger_is_rejected() {
+    let issuer = XipIdentity::generate();
+    let alice = XipIdentity::generate();
+    let forger = XipIdentity::generate();
+    let bob = XipIdentity::generate();
+
+    let original = expiring(
+        &issuer,
+        alice.did(),
+        CapabilityScope::Path("#secret".to_string()),
+        10,
+    );
+    // Claims to be issued by alice, but signed by the forger.
+    let delegated = CapabilityTokenBuilder::new(
+        bob.did().to_string(),
+        alice.did().to_string(),
+        CAP,
+        CapabilityScope::Path("#secret".to_string()),
+    )
+    .expires_at(Utc::now() + Duration::minutes(5))
+    .build(forger.signing_key())
+    .unwrap();
+    let link = TokenDelegation::new(original, delegated, 1);
+
+    let mut authorizer = XipAuthorizer::new();
+    assert!(authorizer.admit_delegation(&link).is_err());
+}
+
+#[test]
+fn a_delegation_that_outlives_the_original_is_rejected() {
+    let issuer = XipIdentity::generate();
+    let alice = XipIdentity::generate();
+    let bob = XipIdentity::generate();
+
+    let original = expiring(
+        &issuer,
+        alice.did(),
+        CapabilityScope::Path("#secret".to_string()),
+        3,
+    );
+    // Delegated must not outlive the original.
+    let delegated = expiring(
+        &alice,
+        bob.did(),
+        CapabilityScope::Path("#secret".to_string()),
+        10,
+    );
+    let link = TokenDelegation::new(original, delegated, 1);
+
+    let mut authorizer = XipAuthorizer::new();
+    assert!(authorizer.admit_delegation(&link).is_err());
+}
+
+#[test]
+fn a_two_hop_chain_admits_only_the_final_delegate() {
+    let issuer = XipIdentity::generate();
+    let alice = XipIdentity::generate();
+    let bob = XipIdentity::generate();
+    let carol = XipIdentity::generate();
+
+    let original = expiring(
+        &issuer,
+        alice.did(),
+        CapabilityScope::Path("#secret".to_string()),
+        10,
+    );
+    let middle = expiring(
+        &alice,
+        bob.did(),
+        CapabilityScope::Path("#secret/sub".to_string()),
+        8,
+    );
+    let final_token = expiring(
+        &bob,
+        carol.did(),
+        CapabilityScope::Path("#secret/sub".to_string()),
+        6,
+    );
+
+    let link1 = TokenDelegation::new(original, middle, 1);
+    let link2 = TokenDelegation::new(link1.delegated_token.clone(), final_token, 2);
+
+    let mut authorizer = XipAuthorizer::new();
+    authorizer.admit_chain(&[link1, link2]).unwrap();
+
+    let carol_subject = Subject::new(carol.did());
+    assert!(
+        authorizer
+            .authorize(
+                &carol_subject,
+                Action::Read,
+                &Scope::path(CAP, "#secret/sub")
+            )
+            .is_allowed()
+    );
+    assert!(
+        authorizer
+            .authorize(&carol_subject, Action::Read, &Scope::path(CAP, "#secret"))
+            .is_denied()
+    );
+
+    // The intermediate holder is not authorized by the final grant.
+    let bob_subject = Subject::new(bob.did());
+    assert!(
+        authorizer
+            .authorize(&bob_subject, Action::Read, &Scope::path(CAP, "#secret/sub"))
+            .is_denied()
+    );
+}
+
+#[test]
+fn a_non_contiguous_chain_is_rejected() {
+    let issuer = XipIdentity::generate();
+    let alice = XipIdentity::generate();
+    let bob = XipIdentity::generate();
+    let carol = XipIdentity::generate();
+
+    let original = expiring(
+        &issuer,
+        alice.did(),
+        CapabilityScope::Path("#secret".to_string()),
+        10,
+    );
+    let middle = expiring(
+        &alice,
+        bob.did(),
+        CapabilityScope::Path("#secret".to_string()),
+        8,
+    );
+    let link1 = TokenDelegation::new(original, middle, 1);
+
+    // A second link whose original is an unrelated token, not link1's delegate.
+    let unrelated = expiring(
+        &carol,
+        bob.did(),
+        CapabilityScope::Path("#secret".to_string()),
+        8,
+    );
+    let dangling = expiring(
+        &alice,
+        carol.did(),
+        CapabilityScope::Path("#secret".to_string()),
+        4,
+    );
+    let link2 = TokenDelegation::new(unrelated, dangling, 2);
+
+    let mut authorizer = XipAuthorizer::new();
+    assert!(authorizer.admit_chain(&[link1, link2]).is_err());
+    assert!(authorizer.is_empty());
 }

@@ -102,9 +102,27 @@ makes no stronger claim.
   Its `xip-core` path dependency is local wiring: the crate is unpublished and
   private, so a real checkout would pin it by git or a vendored version.
 
+## Delegation
+
+A capability can be **re-issued narrower**. `XipAuthorizer::admit_delegation`
+validates a single `TokenDelegation` link; `XipAuthorizer::admit_chain` validates
+a contiguous chain of links and admits **only the final delegate** — the
+intermediate holders are not grants. Each link is checked for:
+
+- both signatures (the original against its issuer, the delegated token against
+  the delegator),
+- the delegator being the original's audience — the check `validate_chain`
+  leaves to its caller,
+- the delegated scope being no broader, and not outliving the original,
+- both tokens' `nbf`/`exp` windows being valid now.
+
+```rust
+let link = TokenDelegation::new(original, delegated, 1); // issuer -> alice -> bob
+authorizer.admit_delegation(&link)?;                     // bob is authorized, alice is not
+authorizer.admit_chain(&[link1, link2])?;                // only the final delegate
+```
+
 ## Out of scope for now
 
-Matching `xip-core`'s own scope discipline: **revocation, delegation chains,
-and freshness windows** are not implemented here. Delegation would be the next
-step — `xip-core` already carries `TokenDelegation` and `validate_chain`, so a
-future slice could fold a validated chain into the same `Grant` list.
+Matching `xip-core`'s own scope discipline: **revocation**, and freshness
+windows beyond a token's own `nbf`/`exp`, are not implemented here.
