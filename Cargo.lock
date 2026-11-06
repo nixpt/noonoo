@@ -29,6 +29,8 @@ dependencies = [
  "noonoo-style",
  "noonoo-svg",
  "noonoo-text",
+ "noonoo-toml",
+ "noonoo-xml",
 ]
 
 [[package]]
@@ -206,3 +208,19 @@ dependencies = [
 [[package]]
 name = "noonoo-text"
 version = "0.4.0"
+
+[[package]]
+name = "noonoo-toml"
+version = "0.4.0"
+dependencies = [
+ "noonoo-json",
+ "noonoo-parse",
+]
+
+[[package]]
+name = "noonoo-xml"
+version = "0.4.0"
+dependencies = [
+ "noonoo-dom",
+ "noonoo-parse",
+]

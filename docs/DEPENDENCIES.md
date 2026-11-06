@@ -50,10 +50,12 @@ because the standard library or an already-present dependency covers them:
 
 ## Owned syntax (the parser crates)
 
-One class of dependency Noonoo *does* write itself: **format parsers**. The four
-parser crates — `noonoo-parse`, `noonoo-json`, `noonoo-css`, `noonoo-caison`,
-`noonoo-html` — are dependency-free and exist because a parser is a *syntax*
-layer: small, spec-defined, and load-bearing for the engine's own formats.
+One class of dependency Noonoo *does* write itself: **format parsers**. The
+parser crates — `noonoo-parse`, `noonoo-json`, `noonoo-css`, `noonoo-selectors`,
+`noonoo-caison`, `noonoo-html`, `noonoo-markdown`, `noonoo-csv`, `noonoo-ini`,
+`noonoo-toml`, `noonoo-xml`, and `noonoo-svg` — are dependency-free and exist
+because a parser is a *syntax* layer: small, spec-defined, and load-bearing for
+the engine's own formats.
 
 - **JSON** (`noonoo-json`) is needed to *project* other formats into a
   machine-readable shape (CAISON does this), so owning it removes a ubiquitous
@@ -63,6 +65,10 @@ layer: small, spec-defined, and load-bearing for the engine's own formats.
 - **HTML** (`noonoo-html`) parses into `noonoo-dom` directly — parsing must never be
   a silent no-op (the replaced engine let consumers forget to install a parser
   provider).
+- **XML** (`noonoo-xml`) also parses into `noonoo-dom` (strict nesting, entities,
+  CDATA, comments); it is the honest base the SVG layer should sit on.
+- **TOML** (`noonoo-toml`) projects into the JSON value model like INI and
+  CAISON, so configuration has an owned parser with no incidental dependency.
 - **CSS** (`noonoo-css` + `noonoo-style`) is **owned end to end** — tokens, selectors,
   the value/property model, and the cascade (`docs/DEPENDENCY-EXIT.md` Phase A).
   No `stylo`, no `cssparser`.

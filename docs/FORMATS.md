@@ -8,9 +8,9 @@ things, and this note records which — and the pattern for adding more.
 1. **Into the DOM.** Markup and documents that should be rendered (HTML,
    Markdown, and later an SVG subset) are parsed into `noonoo-dom`, then flow
    through the normal **parse → style → layout → paint** pipeline.
-2. **Into a value model.** Configuration and data (JSON, CAISON, and future
-   TOML/INI) become a typed value tree. They are *not* rendered as pages;
-   they configure the engine or feed a host.
+2. **Into a value model.** Configuration and data (JSON, CAISON, TOML, INI)
+   become a typed value tree. They are *not* rendered as pages; they configure
+   the engine or feed a host.
 
 The rule of thumb: **if it has a visual form, parse it to the DOM; if it is
 settings or data, parse it to a value model.**
@@ -20,11 +20,13 @@ settings or data, parse it to a value model.**
 | Format | Crate | Destination |
 |---|---|---|
 | HTML | `noonoo-html` | DOM |
+| XML | `noonoo-xml` | DOM (strict nesting; entities, CDATA, comments) |
 | SVG (subset) | `noonoo-svg` | paint commands |
 | Markdown | `noonoo-markdown` | DOM (via HTML) |
 | CSV / TSV | `noonoo-csv` | DOM (via `<table>`) |
 | Plain text | `noonoo-html` (`plain_text_to_html`) | DOM (`<pre>`) |
 | INI | `noonoo-ini` | value model |
+| TOML (subset) | `noonoo-toml` | value model |
 | JSON | `noonoo-json` | value model (`noonoo_json::Json`) |
 | CAISON | `noonoo-caison` | value model + JSON projection |
 | CSS | `noonoo-css` (+ `noonoo-selectors`) | stylesheets for `noonoo-style` |
@@ -51,7 +53,7 @@ footnotes, reference links) is ordinary work inside `noonoo-markdown`.
 | **CSV / TSV** | DOM | ✅ `noonoo-csv`: parses and emits a `<table>` the engine lays out |
 | **INI / TOML-lite** | value model | ✅ `noonoo-ini`: sections + pairs → JSON |
 | **Front matter** (`---` YAML-ish in `.md`) | value model | ✅ `noonoo_markdown::split_front_matter` — metadata before the body |
-| **SVG** (subset) | DOM / draw commands | ✅ `noonoo-svg`: shapes → `noonoo-paint` commands (rect/circle/ellipse/line/polygon/polyline/path) |
+| **SVG** (subset) | DOM / draw commands | ✅ `noonoo-svg`: shapes → `noonoo-paint` commands (rect/circle/ellipse/line/polygon/polyline/path); parses via the HTML tokenizer today — `noonoo-xml` is the honest base |
 
 Each new format is its **own `noonoo-<format>` crate** (the same rule that keeps
 `noonoo-css` and `noonoo-selectors` separate): one focused parser, no

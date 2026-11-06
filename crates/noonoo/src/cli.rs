@@ -59,6 +59,16 @@ pub enum Command {
         /// The input path, or `-` for stdin.
         path: String,
     },
+    /// Parse an XML file (or stdin for `-`) and print its DOM tree as JSON.
+    Xml {
+        /// The input path, or `-` for stdin.
+        path: String,
+    },
+    /// Parse a TOML file (or stdin for `-`) and print its JSON projection.
+    Toml {
+        /// The input path, or `-` for stdin.
+        path: String,
+    },
     /// Render an SVG file (or stdin for `-`) to paint commands.
     Svg {
         /// The input path, or `-` for stdin.
@@ -113,6 +123,12 @@ where
             path: next_or_stdin(&mut args),
         }),
         "--ini" => Ok(Command::Ini {
+            path: next_or_stdin(&mut args),
+        }),
+        "--xml" => Ok(Command::Xml {
+            path: next_or_stdin(&mut args),
+        }),
+        "--toml" => Ok(Command::Toml {
             path: next_or_stdin(&mut args),
         }),
         "--svg" => Ok(Command::Svg {
@@ -231,6 +247,26 @@ mod tests {
             Ok(Command::Ini {
                 path: "app.ini".into()
             })
+        );
+    }
+
+    #[test]
+    fn xml_and_toml_commands() {
+        assert_eq!(
+            parse(["noonoo", "--xml", "feed.xml"]),
+            Ok(Command::Xml {
+                path: "feed.xml".into()
+            })
+        );
+        assert_eq!(
+            parse(["noonoo", "--toml", "Cargo.toml"]),
+            Ok(Command::Toml {
+                path: "Cargo.toml".into()
+            })
+        );
+        assert_eq!(
+            parse(["noonoo", "--toml"]),
+            Ok(Command::Toml { path: "-".into() })
         );
     }
 
