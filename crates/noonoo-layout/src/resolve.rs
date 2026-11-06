@@ -18,9 +18,16 @@ fn length(value: Length, reference: f32) -> f32 {
     }
 }
 
-/// Resolve margins against the containing block's width (`auto` → `0`).
+/// Resolve margins against the containing block's width.
+///
+/// Unlike [`dimension`], margins may be negative, so no clamp is applied;
+/// `auto` resolves to zero.
 pub fn margins(edges: &Edges<LengthOrAuto>, reference: f32) -> Edges<f32> {
-    let resolve = |value| dimension(value, reference).unwrap_or(0.0);
+    let resolve = |value: Dimension| match value {
+        Dimension::Auto => 0.0,
+        Dimension::Px(px) => px,
+        Dimension::Percent(percent) => reference * percent / 100.0,
+    };
     Edges {
         top: resolve(edges.top),
         right: resolve(edges.right),

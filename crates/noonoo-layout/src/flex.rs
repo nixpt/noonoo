@@ -54,11 +54,13 @@ fn layout_column(
     let mut indices = Vec::new();
     let mut y = content_y;
     for &item in items {
-        let height = ctx.layout_element(item, content_x, y, content_width);
+        let margin = resolve::margins(&ctx.style(item).margin, content_width);
+        let height =
+            ctx.layout_element(item, content_x + margin.left, y + margin.top, content_width);
         if let Some(index) = ctx.tree_index(item) {
             indices.push(index);
         }
-        y += height + style.row_gap;
+        y += margin.top + height + margin.bottom + style.row_gap;
     }
     (indices, (y - content_y).max(0.0))
 }
@@ -151,7 +153,13 @@ fn layout_row(
         let mut x = content_x + start;
         let mut line_height = 0.0_f32;
         for (k, &i) in line.iter().enumerate() {
-            ctx.layout_element(items[i], x, cursor_y, line_bases[k]);
+            let margin = resolve::margins(&ctx.style(items[i]).margin, content_width);
+            ctx.layout_element(
+                items[i],
+                x + margin.left,
+                cursor_y + margin.top,
+                line_bases[k],
+            );
             if let Some(index) = ctx.tree_index(items[i]) {
                 line_height = line_height.max(ctx.box_height(index));
                 indices.push(index);

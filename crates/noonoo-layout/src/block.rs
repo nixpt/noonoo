@@ -4,6 +4,7 @@ use noonoo_dom::{NodeData, NodeId};
 use noonoo_geometry::Rect;
 use noonoo_style::{ComputedStyle, Display, Edges, TextAlign, WhiteSpace};
 
+use crate::margin;
 use crate::{BoxKind, Ctx, LayoutBox};
 
 fn no_edges() -> Edges<f32> {
@@ -25,7 +26,14 @@ fn map_align(align: TextAlign) -> noonoo_text::Align {
     }
 }
 
-/// Lay out the block-and-inline children of `parent_node`.
+/// Lay out the block-and-inline children of `parent_node`, collapsing vertical
+/// margins.
+///
+/// Returns `(child box indices, content height, leading margin, trailing
+/// margin)`. When `collapse_top` is set the first block child's top margin is
+/// *not* applied inside — it is returned as `leading` to collapse with the
+/// parent's own top margin. `trailing` is the same for the bottom.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn layout_block_children(
     ctx: &mut Ctx<'_>,
     parent_node: NodeId,
@@ -34,9 +42,14 @@ pub(crate) fn layout_block_children(
     content_y: f32,
     content_width: f32,
     parent_style: &ComputedStyle,
-) -> (Vec<usize>, f32) {
+    collapse_top: bool,
+    collapse_bottom: bool,
+) -> (Vec<usize>, f32, f32, f32) {
     let mut indices = Vec::new();
-    let mut y = content_y;
+    let mut cursor = content_y;
+    let mut pending: Option<f32> = None;
+    let mut leading = 0.0;
+    let mut has_content = false;
     let mut i = 0;
 
     while i < children.len() {
@@ -70,30 +83,62 @@ pub(crate) fn layout_block_children(
                 run.push(candidate);
                 i += 1;
             }
+            // Inline content is a line box between the blocks: it stops
+            // collapsing, so any pending margin applies in full first.
+            if let Some(margin) = pending.take() {
+                cursor += margin;
+            }
             if !run.is_empty() {
                 let (mut placed, height) = layout_inline_run(
                     ctx,
                     parent_node,
                     &run,
                     content_x,
-                    y,
+                    cursor,
                     content_width,
                     parent_style,
                 );
                 indices.append(&mut placed);
-                y += height;
+                cursor += height;
             }
-        } else {
-            let margin_height = ctx.layout_element(child, content_x, y, content_width);
-            if let Some(index) = ctx.tree_index(child) {
-                indices.push(index);
-            }
-            y += margin_height;
-            i += 1;
+            has_content = true;
+            continue;
         }
+
+        // A block-level child: collapse its leading margin with the pending
+        // margin from the previous sibling, then place its border box.
+        let margin = margin::effective_margins(ctx, child, content_width);
+        let gap = match pending {
+            Some(previous) => margin::collapse(previous, margin.top),
+            None => margin.top,
+        };
+        if !has_content && collapse_top {
+            // The leading margin collapses out of the container entirely.
+            leading = gap;
+        } else {
+            cursor += gap;
+        }
+
+        let height = ctx.layout_element(child, content_x + margin.left, cursor, content_width);
+        if let Some(index) = ctx.tree_index(child) {
+            indices.push(index);
+        }
+        cursor += height;
+        pending = Some(margin.bottom);
+        has_content = true;
+        i += 1;
     }
 
-    (indices, y - content_y)
+    let trailing = match pending {
+        Some(margin) if collapse_bottom => margin,
+        Some(margin) => {
+            cursor += margin;
+            0.0
+        }
+        None => 0.0,
+    };
+
+    (indices, cursor - content_y, leading, trailing)
 }
 
 /// A word or atomic inline box, ready to be wrapped onto a line.

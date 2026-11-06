@@ -253,3 +253,70 @@ fn a_positioned_child_is_hit_outside_its_parent() {
         Some(id(&doc, "badge"))
     );
 }
+
+#[test]
+fn adjacent_sibling_margins_collapse_to_the_larger() {
+    let (doc, tree) = page(
+        r#"<div id="a"></div><div id="b"></div>"#,
+        "div { height: 10px } #a { margin-bottom: 20px } #b { margin-top: 30px }",
+        400.0,
+    );
+    // 10 (a) + max(20, 30) — not 10 + 50.
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.y, 40.0);
+}
+
+#[test]
+fn parent_and_first_child_top_margins_collapse() {
+    let (doc, tree) = page(
+        r#"<div id="outer"><div id="inner"></div></div>"#,
+        "#outer { margin-top: 10px } #inner { margin-top: 20px; height: 30px }",
+        400.0,
+    );
+    let outer = tree.get(id(&doc, "outer")).unwrap();
+    let inner = tree.get(id(&doc, "inner")).unwrap();
+    // max(10, 20): the child's margin collapses through the parent.
+    assert_eq!(outer.rect.y, 20.0);
+    assert_eq!(inner.rect.y, 20.0);
+    assert_eq!(outer.rect.height, 30.0);
+}
+
+#[test]
+fn a_top_border_stops_parent_child_collapse() {
+    let (doc, tree) = page(
+        r#"<div id="outer"><div id="inner"></div></div>"#,
+        "#outer { border-top-width: 2px; border-top-style: solid } \
+         #inner { margin-top: 20px; height: 30px }",
+        400.0,
+    );
+    let outer = tree.get(id(&doc, "outer")).unwrap();
+    let inner = tree.get(id(&doc, "inner")).unwrap();
+    assert_eq!(outer.rect.y, 0.0);
+    // The border separates them: 2px border + 20px margin.
+    assert_eq!(inner.rect.y, 22.0);
+    assert_eq!(outer.rect.height, 52.0);
+}
+
+#[test]
+fn parent_and_last_child_bottom_margins_collapse() {
+    let (doc, tree) = page(
+        r#"<div id="outer"><div id="inner"></div></div><div id="after"></div>"#,
+        "#inner { height: 10px; margin-bottom: 25px } #after { height: 10px }",
+        400.0,
+    );
+    let outer = tree.get(id(&doc, "outer")).unwrap();
+    // The child's bottom margin collapses out of the parent's height...
+    assert_eq!(outer.rect.height, 10.0);
+    // ...and reappears between the parent and the next sibling.
+    assert_eq!(tree.get(id(&doc, "after")).unwrap().rect.y, 35.0);
+}
+
+#[test]
+fn negative_margins_collapse_to_a_sum() {
+    let (doc, tree) = page(
+        r#"<div id="a"></div><div id="b"></div>"#,
+        "div { height: 10px } #a { margin-bottom: 20px } #b { margin-top: -8px }",
+        400.0,
+    );
+    // 20 + (-8) = 12.
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.y, 22.0);
+}

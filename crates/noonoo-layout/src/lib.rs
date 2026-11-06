@@ -15,31 +15,35 @@
 //!   siblings) and `position: absolute` / `fixed` (out of flow, placed against
 //!   the nearest positioned ancestor's padding box — the viewport for `fixed`).
 //!   `sticky` is treated as `relative`.
+//! - **Vertical margin collapsing** — adjacent siblings share the larger of
+//!   their facing margins, and a block collapses its top/bottom margin through
+//!   its first/last child when no border or padding separates them.
 //! - Width: `auto` / px / percentage (and stretch between `left`+`right`);
 //!   height: `auto` / px / percentage of the containing block.
 //! - `box-sizing`, margins, padding, and borders, resolved to absolute pixels.
 //!
 //! ## What it does not (yet)
 //!
-//! Margin collapsing, floats, `grid`, `z-index` paint ordering (positioned boxes
-//! paint in tree order), `overflow` clipping, writing modes. Absolute boxes whose
-//! width or height is `auto` fall back to the containing block when only the
-//! trailing inset (`right`/`bottom`) is set. Text is measured through the
-//! [`Shaper`] seam — a heuristic stands in until `noonoo-text` brings real
-//! shaping (`docs/ROADMAP.md` Phase C).
+//! Floats, `grid`, `z-index` paint ordering (positioned boxes paint in tree
+//! order), `overflow` clipping, writing modes, and the collapse-through of
+//! *empty* blocks. Absolute boxes whose width or height is `auto` fall back to
+//! the containing block when only the trailing inset (`right`/`bottom`) is set.
+//! Text is measured through the [`Shaper`] seam — a heuristic stands in until
+//! `noonoo-text` brings real shaping (`docs/ROADMAP.md` Phase C).
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 mod block;
 mod flex;
+mod margin;
 mod resolve;
 
 use std::collections::HashMap;
 
 use noonoo_dom::{Document, NodeData, NodeId};
 use noonoo_geometry::{Point, Rect, Size};
-use noonoo_style::{BoxSizing, ComputedStyle, Display, Edges, Position, Styles};
+use noonoo_style::{BoxSizing, ComputedStyle, Dimension, Display, Edges, Position, Styles};
 
 pub use noonoo_text::{Align, MetricShaper, Shaper};
 
@@ -194,36 +198,22 @@ pub fn layout(
         tree: LayoutTree::default(),
     };
 
-    // Pass 1 — normal flow. Out-of-flow boxes are queued, not placed: they do
-    // not contribute to their siblings' positions or the parent's height.
-    let mut y = 0.0;
-    for child in child_nodes(document, document.root()) {
-        if ctx.is_hidden(child) {
-            continue;
-        }
-        if ctx.is_out_of_flow(child) {
-            ctx.pending.push(child);
-            continue;
-        }
-        if ctx.is_block_level(child) {
-            y += ctx.layout_element(child, 0.0, y, viewport.width);
-            if let Some(index) = ctx.tree_index(child) {
-                ctx.tree.roots.push(index);
-            }
-        } else {
-            let (indices, height) = block::layout_inline_run(
-                &mut ctx,
-                child,
-                &[child],
-                0.0,
-                y,
-                viewport.width,
-                &ComputedStyle::default(),
-            );
-            ctx.tree.roots.extend(indices);
-            y += height;
-        }
-    }
+    // Pass 1 — normal flow, collapsing vertical margins. The viewport is the
+    // container: it has no margins, so a leading child margin is not collapsed
+    // away (the first child is simply pushed down by it).
+    let root_children = child_nodes(document, document.root());
+    let (roots, _, _, _) = block::layout_block_children(
+        &mut ctx,
+        document.root(),
+        &root_children,
+        0.0,
+        0.0,
+        viewport.width,
+        &ComputedStyle::default(),
+        false,
+        false,
+    );
+    ctx.tree.roots = roots;
 
     // Pass 2 — out-of-flow boxes, against their now-laid-out containing block.
     // Laying one out may enqueue nested out-of-flow descendants, so this is a
@@ -330,8 +320,18 @@ impl Ctx<'_> {
         index
     }
 
-    /// Lay out one element and return its box index and outer height.
-    pub fn layout_element(&mut self, node: NodeId, x: f32, y: f32, available_width: f32) -> f32 {
+    /// Lay out one element's border box at `(border_x, border_y)` and return its
+    /// border-box height.
+    ///
+    /// The vertical margins are *not* applied here: the caller has already
+    /// collapsed them and positioned the border box (see [`crate::margin`]).
+    pub fn layout_element(
+        &mut self,
+        node: NodeId,
+        border_x: f32,
+        border_y: f32,
+        available_width: f32,
+    ) -> f32 {
         let style = self.style(node).clone();
         if style.display == Display::None {
             return 0.0;
@@ -354,28 +354,34 @@ impl Ctx<'_> {
             }
         };
 
-        let mut origin_x = x + margin.left;
-        let mut origin_y = y + margin.top;
+        let (mut border_x, mut border_y) = (border_x, border_y);
 
         // `relative` (and `sticky`, unsupported as such) shifts the box and its
         // whole subtree, but leaves the box's flow position — and thus its
         // siblings — untouched.
         if matches!(style.position, Position::Relative | Position::Sticky) {
             let inset = resolve::insets(&style.inset, available_width);
-            origin_x += inset
+            border_x += inset
                 .left
                 .or(inset.right.map(|right| -right))
                 .unwrap_or(0.0);
-            origin_y += inset
+            border_y += inset
                 .top
                 .or(inset.bottom.map(|bottom| -bottom))
                 .unwrap_or(0.0);
         }
 
-        let content_x = origin_x + border.left + padding.left;
-        let content_y = origin_y + border.top + padding.top;
+        let content_x = border_x + border.left + padding.left;
+        let content_y = border_y + border.top + padding.top;
 
         let children_nodes = child_nodes(self.document, node);
+
+        // A block collapses its top/bottom margin through its first/last child
+        // only when nothing separates them.
+        let collapse_top = border.top == 0.0 && padding.top == 0.0;
+        let collapse_bottom = border.bottom == 0.0
+            && padding.bottom == 0.0
+            && matches!(style.height, Dimension::Auto);
 
         let (child_indices, content_height) = match style.display {
             Display::Flex | Display::InlineFlex => flex::layout_flex_children(
@@ -386,19 +392,24 @@ impl Ctx<'_> {
                 content_y,
                 content_width,
             ),
-            _ => block::layout_block_children(
-                self,
-                node,
-                &children_nodes,
-                content_x,
-                content_y,
-                content_width,
-                &style,
-            ),
+            _ => {
+                let (indices, height, _leading, _trailing) = block::layout_block_children(
+                    self,
+                    node,
+                    &children_nodes,
+                    content_x,
+                    content_y,
+                    content_width,
+                    &style,
+                    collapse_top,
+                    collapse_bottom,
+                );
+                (indices, height)
+            }
         };
 
         let border_box_height = match resolve::dimension(style.height, f32::INFINITY) {
-            Some(h) => h + vertical,
+            Some(height) => height + vertical,
             None => content_height + vertical,
         };
 
@@ -410,16 +421,16 @@ impl Ctx<'_> {
                 Display::Inline | Display::InlineBlock => BoxKind::Inline,
                 _ => BoxKind::Block,
             },
-            rect: Rect::new(origin_x, origin_y, border_box_width, border_box_height),
+            rect: Rect::new(border_x, border_y, border_box_width, border_box_height),
             text: None,
             margin,
             padding,
             border,
             children: child_indices,
         });
-
         let _ = index;
-        margin.top + border_box_height + margin.bottom
+
+        border_box_height
     }
 
     /// Lay out an out-of-flow box (`position: absolute`/`fixed`) against its
@@ -502,15 +513,20 @@ impl Ctx<'_> {
                 content_y,
                 content_width,
             ),
-            _ => block::layout_block_children(
-                self,
-                node,
-                &children_nodes,
-                content_x,
-                content_y,
-                content_width,
-                &style,
-            ),
+            _ => {
+                let (indices, height, _leading, _trailing) = block::layout_block_children(
+                    self,
+                    node,
+                    &children_nodes,
+                    content_x,
+                    content_y,
+                    content_width,
+                    &style,
+                    false,
+                    false,
+                );
+                (indices, height)
+            }
         };
 
         let border_width = match definite_width {
