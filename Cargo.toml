@@ -12,7 +12,7 @@ members = [
     "crates/vaji-html",
     "crates/vaji-net",
     # orchestration
-    "crates/vaji-document",
+    "crates/vaji-engine",
     "crates/vaji-headless",
     # output
     "crates/vaji-paint",
@@ -48,7 +48,7 @@ vaji-style = { path = "crates/vaji-style", version = "0.0.1" }
 vaji-layout = { path = "crates/vaji-layout", version = "0.0.1" }
 vaji-html = { path = "crates/vaji-html", version = "0.0.1" }
 vaji-net = { path = "crates/vaji-net", version = "0.0.1" }
-vaji-document = { path = "crates/vaji-document", version = "0.0.1" }
+vaji-engine = { path = "crates/vaji-engine", version = "0.0.1" }
 vaji-headless = { path = "crates/vaji-headless", version = "0.0.1" }
 vaji-paint = { path = "crates/vaji-paint", version = "0.0.1" }
 vaji-shell = { path = "crates/vaji-shell", version = "0.0.1" }

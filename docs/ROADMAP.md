@@ -7,11 +7,11 @@ API snapshots are captured early, and the port is measured against them.
 
 ## Slice 0 — Scaffold *(this slice)*
 
-Fourteen-crate workspace, decomposed along the boundaries in
+Thirteen-crate workspace, decomposed along the boundaries in
 [`ARCHITECTURE.md`](ARCHITECTURE.md), design docs, CI, and a compiling,
 dependency-free skeleton. Working primitives with tests: the `vaji-dom` arena +
 checked mutation, `vaji-events` dispatch path, `vaji-motion` spring, `vaji-paint`
-command list, `vaji-document` root.
+command list, `vaji-engine` (the `Engine` type).
 
 **Done when:** `cargo check/test/clippy` pass with an empty dependency graph;
 `vaji --version` works.
@@ -51,7 +51,7 @@ numerically.
 
 ## Slice 5 — Document + events
 
-`vaji-document` ties parse→style→layout into a working `Document`;
+`vaji-engine` ties parse→style→layout into a working `Engine`;
 `vaji-events` dispatches with bubbling into a `Document`.
 
 **Done when:** a click on a nested node reaches an ancestor handler.

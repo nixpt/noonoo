@@ -24,7 +24,7 @@
 
 ## The crates
 
-Fourteen crates in four tiers. Arrows point *downward only*.
+Thirteen crates in four tiers. Arrows point *downward only*.
 
 ```
 ┌─ facade ──────────────────────────────────────────────────────────────────┐
@@ -38,7 +38,7 @@ Fourteen crates in four tiers. Arrows point *downward only*.
 └───────┬─────────────────┴────────────┬─────────────┴───────────┬───────────┘
         │                              │                         │
 ┌─ orchestration ──────────────────────▼─────────────────────────▼───────────┐
-│  vaji-document     the working document: root + tree + resolve caches       │
+│  vaji-engine     the working document: root + tree + resolve caches         │
 └───┬──────────┬───────────┬──────────┬───────────┬──────────┬───────────────┘
     │          │           │          │           │          │
 ┌───▼────┐ ┌───▼────┐ ┌────▼─────┐ ┌──▼──────┐ ┌──▼────┐ ┌───▼────┐
@@ -67,7 +67,7 @@ Fourteen crates in four tiers. Arrows point *downward only*.
 | `vaji-layout` | boxes and geometry | `taffy` |
 | `vaji-html` | markup → tree | an HTML parser |
 | `vaji-net` | loading: http/file/data/exo | `reqwest` (feature-gated) |
-| `vaji-document` | the working document (parse→style→layout) | — (orchestrates) |
+| `vaji-engine` | the working document (parse→style→layout) | — (orchestrates) |
 | `vaji-headless` | tree dump, virtual clock, synthetic input | — |
 | `vaji-paint` | render command stream, scene effects, overlays | `anyrender`/`vello` (feature-gated) |
 | `vaji-shell` | window, event loop, a11y, GPU surface | `winit`, `wgpu`, `accesskit` |
@@ -79,9 +79,9 @@ Fourteen crates in four tiers. Arrows point *downward only*.
  bytes ─▶ vaji-html ─▶ vaji-dom ─▶ vaji-style ─▶ vaji-layout ─▶ vaji-paint ─▶ backend
                        (tree)      (stylo)       (taffy+vaji-text)  (commands)
                                    ▲                                     │
-                        vaji-document orchestrates all of the above      │
+                        vaji-engine orchestrates all of the above      │
                                                                           ▼
- OS input ─▶ vaji-shell ─▶ vaji-events ─▶ vaji-document ─────────────▶ frame
+ OS input ─▶ vaji-shell ─▶ vaji-events ─▶ vaji-engine ─────────────▶ frame
 ```
 
 Each arrow is a small, typed value crossing a crate boundary. Nothing downstream

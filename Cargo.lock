@@ -6,8 +6,8 @@ version = 4
 name = "vaji"
 version = "0.0.1"
 dependencies = [
- "vaji-document",
  "vaji-dom",
+ "vaji-engine",
  "vaji-events",
  "vaji-headless",
  "vaji-html",
@@ -21,7 +21,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "vaji-document"
+name = "vaji-dom"
+version = "0.0.1"
+
+[[package]]
+name = "vaji-engine"
 version = "0.0.1"
 dependencies = [
  "vaji-dom",
@@ -31,10 +35,6 @@ dependencies = [
  "vaji-net",
  "vaji-style",
 ]
-
-[[package]]
-name = "vaji-dom"
-version = "0.0.1"
 
 [[package]]
 name = "vaji-events"
@@ -47,7 +47,7 @@ dependencies = [
 name = "vaji-headless"
 version = "0.0.1"
 dependencies = [
- "vaji-document",
+ "vaji-engine",
  "vaji-events",
 ]
 
@@ -87,7 +87,7 @@ dependencies = [
 name = "vaji-shell"
 version = "0.0.1"
 dependencies = [
- "vaji-document",
+ "vaji-engine",
  "vaji-events",
  "vaji-net",
  "vaji-paint",

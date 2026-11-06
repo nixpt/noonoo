@@ -19,7 +19,7 @@ gpu = ["vaji-shell/gpu"]
 http = ["vaji-net/http"]
 
 [dependencies]
-vaji-document.workspace = true
+vaji-engine.workspace = true
 vaji-dom.workspace = true
 vaji-events.workspace = true
 vaji-headless = { workspace = true, optional = true }

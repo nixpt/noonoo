@@ -60,15 +60,18 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vaji_dom::Document;
 
     #[test]
     fn path_goes_down_then_up() {
-        let mut tree = Tree::new();
-        let root = tree.insert(None, "root");
-        let mid = tree.insert(Some(root), "mid");
-        let leaf = tree.insert(Some(mid), "leaf");
+        let mut doc = Document::new();
+        let root = doc.root();
+        let mid = doc.create_element("div");
+        let leaf = doc.create_element("span");
+        doc.mutate().append_child(root, mid).unwrap();
+        doc.mutate().append_child(mid, leaf).unwrap();
 
-        let path = dispatch_path(&tree, leaf);
+        let path = dispatch_path(doc.tree(), leaf);
         assert_eq!(
             path,
             vec![

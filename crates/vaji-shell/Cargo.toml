@@ -18,7 +18,7 @@ gpu = [] # GPU surface (wgpu + vello)
 a11y = [] # accessibility tree (accesskit)
 
 [dependencies]
-vaji-document.workspace = true
+vaji-engine.workspace = true
 vaji-events.workspace = true
 vaji-net.workspace = true
 vaji-paint.workspace = true

@@ -31,7 +31,7 @@ crates. Depend on the one you need; reach for `vaji` only when you want all of i
 | [`vaji-layout`](crates/vaji-layout) | Box layout: computed style → boxes |
 | [`vaji-html`](crates/vaji-html) | Markup ingestion into the tree |
 | [`vaji-net`](crates/vaji-net) | Document loading: `http(s)`/`file`/`data`/`exo` |
-| [`vaji-document`](crates/vaji-document) | Orchestration: a working document |
+| [`vaji-engine`](crates/vaji-engine) | Orchestration: a working document |
 | [`vaji-headless`](crates/vaji-headless) | Tree dump, virtual clock, synthetic input |
 | [`vaji-paint`](crates/vaji-paint) | Layout → render commands, scene effects, overlays |
 | [`vaji-shell`](crates/vaji-shell) | Window, event loop, a11y, GPU surface (feature-gated) |

@@ -4,6 +4,10 @@
 //! That choice keeps the crate free of `unsafe`, makes `Send`-ing a tree for
 //! off-thread work a matter of the payload type rather than a hand-written
 //! `Sync` promise, and gives every layer a cheap, stable, `Copy` handle.
+//!
+//! The `Tree` holds structure only. The checked, public mutation API lives in
+//! [`crate::mutate`]; the primitives here are `pub(crate)` and assume their
+//! arguments have already been validated.
 
 use core::fmt;
 
@@ -23,6 +27,13 @@ impl NodeId {
     pub const fn index(self) -> usize {
         self.0 as usize
     }
+
+    /// Build an id from a raw index.
+    #[cfg(test)]
+    #[inline]
+    pub(crate) const fn from_index(index: u32) -> Self {
+        Self(index)
+    }
 }
 
 impl fmt::Debug for NodeId {
@@ -34,11 +45,11 @@ impl fmt::Debug for NodeId {
 /// A single node: a payload plus its structural neighbours.
 #[derive(Debug)]
 pub struct Node<T> {
-    /// The parent, or `None` for a node that was inserted as a root.
+    /// The parent, or `None` for a detached node.
     pub parent: Option<NodeId>,
     /// Children, in document order.
     pub children: Vec<NodeId>,
-    /// The caller's payload (an element, a text run, ...).
+    /// The caller's payload.
     pub data: T,
 }
 
@@ -60,33 +71,80 @@ impl<T> Tree<T> {
         Self::default()
     }
 
-    /// Insert `data` as a child of `parent`, or as a root when `parent` is
-    /// `None`, and return its handle.
-    pub fn insert(&mut self, parent: Option<NodeId>, data: T) -> NodeId {
+    /// Insert `data` (detached) and return its handle.
+    pub fn insert_raw(&mut self, data: T) -> NodeId {
         let id = NodeId(self.nodes.len() as u32);
         self.nodes.push(Some(Node {
-            parent,
+            parent: None,
             children: Vec::new(),
             data,
         }));
-        if let Some(p) = parent {
-            self.nodes[p.index()]
-                .as_mut()
-                .expect("insert: parent id is out of range")
-                .children
-                .push(id);
-        }
         id
+    }
+
+    fn slot(&self, id: NodeId) -> Option<&Node<T>> {
+        self.nodes.get(id.index()).and_then(Option::as_ref)
+    }
+
+    fn slot_mut(&mut self, id: NodeId) -> Option<&mut Node<T>> {
+        self.nodes.get_mut(id.index()).and_then(Option::as_mut)
     }
 
     /// Borrow the node behind `id`, if any.
     pub fn get(&self, id: NodeId) -> Option<&Node<T>> {
-        self.nodes.get(id.index()).and_then(Option::as_ref)
+        self.slot(id)
     }
 
     /// Mutably borrow the node behind `id`, if any.
     pub fn get_mut(&mut self, id: NodeId) -> Option<&mut Node<T>> {
-        self.nodes.get_mut(id.index()).and_then(Option::as_mut)
+        self.slot_mut(id)
+    }
+
+    /// Whether `id` is in this tree.
+    pub fn contains(&self, id: NodeId) -> bool {
+        self.slot(id).is_some()
+    }
+
+    /// The children of `id` (`&[]` if `id` is absent).
+    pub fn children(&self, id: NodeId) -> &[NodeId] {
+        match self.slot(id) {
+            Some(node) => &node.children,
+            None => &[],
+        }
+    }
+
+    /// The parent of `id`, if any.
+    pub fn parent(&self, id: NodeId) -> Option<NodeId> {
+        self.slot(id).and_then(|node| node.parent)
+    }
+
+    /// Ancestors of `id`, nearest first.
+    pub fn ancestors(&self, id: NodeId) -> Vec<NodeId> {
+        let mut out = Vec::new();
+        let mut cursor = self.parent(id);
+        while let Some(parent) = cursor {
+            out.push(parent);
+            cursor = self.parent(parent);
+        }
+        out
+    }
+
+    /// Descendants of `id` in document (pre-order), `id` excluded.
+    pub fn descendants(&self, id: NodeId) -> Vec<NodeId> {
+        let mut out = Vec::new();
+        let mut stack: Vec<NodeId> = self.children(id).iter().rev().copied().collect();
+        while let Some(node) = stack.pop() {
+            out.push(node);
+            for &child in self.children(node).iter().rev() {
+                stack.push(child);
+            }
+        }
+        out
+    }
+
+    /// Whether `ancestor` is `node` or above it.
+    pub fn is_ancestor_of(&self, ancestor: NodeId, node: NodeId) -> bool {
+        ancestor == node || self.ancestors(node).contains(&ancestor)
     }
 
     /// The number of live nodes.
@@ -99,20 +157,51 @@ impl<T> Tree<T> {
         self.len() == 0
     }
 
-    /// Detach `id` from its parent, if it has one.
-    ///
-    /// The node itself remains in the arena; only its parent's child list is
-    /// updated. Removal-and-reuse is deliberately not offered, so an id can
-    /// never come to mean a different node.
-    pub(crate) fn detach_from_parent(&mut self, id: NodeId) {
-        let Some(parent) = self.get(id).and_then(|node| node.parent) else {
-            return;
-        };
-        let siblings = &mut self.nodes[parent.index()]
-            .as_mut()
-            .expect("detach: parent id is out of range")
-            .children;
-        siblings.retain(|&child| child != id);
+    // --- structural primitives (validated by the caller) -------------------
+
+    pub(crate) fn push_child(&mut self, parent: NodeId, child: NodeId) {
+        if let Some(p) = self.slot_mut(parent) {
+            p.children.push(child);
+        }
+        if let Some(c) = self.slot_mut(child) {
+            c.parent = Some(parent);
+        }
+    }
+
+    pub(crate) fn insert_child(&mut self, parent: NodeId, index: usize, child: NodeId) {
+        if let Some(p) = self.slot_mut(parent) {
+            let index = index.min(p.children.len());
+            p.children.insert(index, child);
+        }
+        if let Some(c) = self.slot_mut(child) {
+            c.parent = Some(parent);
+        }
+    }
+
+    /// Detach `id` from its parent, clearing both sides of the link.
+    pub(crate) fn detach(&mut self, id: NodeId) {
+        if let Some(parent) = self.parent(id)
+            && let Some(p) = self.slot_mut(parent)
+        {
+            p.children.retain(|&child| child != id);
+        }
+        if let Some(c) = self.slot_mut(id) {
+            c.parent = None;
+        }
+    }
+
+    /// Detach every child of `parent`, returning them in document order.
+    pub(crate) fn take_children(&mut self, parent: NodeId) -> Vec<NodeId> {
+        let removed = self.children(parent).to_vec();
+        for &child in &removed {
+            if let Some(c) = self.slot_mut(child) {
+                c.parent = None;
+            }
+        }
+        if let Some(p) = self.slot_mut(parent) {
+            p.children.clear();
+        }
+        removed
     }
 }
 
@@ -121,32 +210,39 @@ mod tests {
     use super::*;
 
     #[test]
-    fn insert_links_parent_and_child() {
+    fn insert_and_traverse() {
         let mut tree = Tree::new();
-        let root = tree.insert(None, "root");
-        let a = tree.insert(Some(root), "a");
-        let b = tree.insert(Some(root), "b");
+        let root = tree.insert_raw("root");
+        let a = tree.insert_raw("a");
+        let b = tree.insert_raw("b");
+        let leaf = tree.insert_raw("leaf");
+        tree.push_child(root, a);
+        tree.push_child(root, b);
+        tree.push_child(a, leaf);
 
-        assert_eq!(root, NodeId::ROOT);
-        assert_eq!(tree.get(root).unwrap().children, vec![a, b]);
-        assert_eq!(tree.get(a).unwrap().parent, Some(root));
-        assert_eq!(tree.get(root).unwrap().parent, None);
-        assert_eq!(tree.len(), 3);
-        assert!(!tree.is_empty());
+        assert_eq!(tree.children(root), &[a, b]);
+        assert_eq!(tree.descendants(root), vec![a, leaf, b]);
+        assert_eq!(tree.ancestors(leaf), vec![a, root]);
+        assert!(tree.is_ancestor_of(root, leaf));
+        assert!(!tree.is_ancestor_of(b, leaf));
     }
 
     #[test]
-    fn empty_tree_reports_empty() {
-        let tree: Tree<()> = Tree::new();
-        assert!(tree.is_empty());
-        assert_eq!(tree.len(), 0);
+    fn detach_clears_both_sides() {
+        let mut tree = Tree::new();
+        let root = tree.insert_raw("root");
+        let child = tree.insert_raw("child");
+        tree.push_child(root, child);
+        tree.detach(child);
+        assert!(tree.children(root).is_empty());
+        assert_eq!(tree.parent(child), None);
     }
 
     #[test]
     fn ids_are_never_reused() {
         let mut tree = Tree::new();
-        let first = tree.insert(None, 1);
-        let second = tree.insert(None, 2);
+        let first = tree.insert_raw(1);
+        let second = tree.insert_raw(2);
         assert_ne!(first, second);
     }
 }

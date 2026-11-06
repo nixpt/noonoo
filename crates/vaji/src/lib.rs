@@ -11,8 +11,8 @@
 
 pub mod cli;
 
-pub use vaji_document as document;
 pub use vaji_dom as dom;
+pub use vaji_engine as engine;
 pub use vaji_events as events;
 pub use vaji_html as html;
 pub use vaji_layout as layout;
@@ -31,5 +31,5 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// The usual way in: the engine, as a set of modules.
 pub mod prelude {
-    pub use crate::{document, dom, events, html, layout, motion, net, paint, style, text};
+    pub use crate::{dom, engine, events, html, layout, motion, net, paint, style, text};
 }
