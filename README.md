@@ -75,7 +75,14 @@ cargo run -p noonoo -- --version
 
 ## Try it
 
-The parser crates are wired into the engine, so the CLI works today:
+The parser crates are wired into the engine, so the CLI works today. First, an
+end-to-end walk-through of the stack (htmx-like swap + multi-document host):
+
+```sh
+cargo run -p noonoo --example demo
+```
+
+Then the CLI:
 
 ```sh
 noonoo --tree page.html     # parse HTML (own tokenizer), print the DOM as JSON
