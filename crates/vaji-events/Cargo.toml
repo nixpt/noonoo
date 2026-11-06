@@ -1,0 +1,17 @@
+[package]
+name = "vaji-events"
+description = "Vaji's input event model and DOM event dispatch."
+version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+vaji-dom.workspace = true

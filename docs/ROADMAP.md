@@ -1,67 +1,101 @@
 # Vaji — Roadmap
 
-Slices are ordered so that each one ends in something observable and testable.
-Nothing lands behind a stub that pretends to work.
+Slices are ordered so each ends in something observable and testable. Nothing
+lands behind a stub that pretends to work. The compatibility track
+([`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md)) runs alongside: the reference
+API snapshots are captured early, and the port is measured against them.
 
 ## Slice 0 — Scaffold *(this slice)*
 
-Workspace, crate split, design docs, CI, and a compiling, dependency-free
-skeleton. The DOM arena is the one working primitive, with tests.
+Fourteen-crate workspace, decomposed along the boundaries in
+[`ARCHITECTURE.md`](ARCHITECTURE.md), design docs, CI, and a compiling,
+dependency-free skeleton. Working primitives with tests: the `vaji-dom` arena +
+checked mutation, `vaji-events` dispatch path, `vaji-motion` spring, `vaji-paint`
+command list, `vaji-document` root.
 
 **Done when:** `cargo check/test/clippy` pass with an empty dependency graph;
-the `vaji` CLI reports its version.
+`vaji --version` works.
 
-## Slice 1 — Ingest + tree dump
+## Slice 1 — Compatibility baseline
 
-HTML parsing into `dom::Tree` (behind the `html` boundary), and the headless
-tree dump as JSON. First observable artifact.
+Capture `api-drift` reference snapshots of the released engine for the
+consumer-visible subset (`bliss-traits`, `bliss-dom`, `bliss-html`, `bliss-paint`,
+`bliss-shell`, `bliss-net`), under `api-drift/bliss/`. Stand up the
+`tools/api-snapshot` helper and the diff gate.
 
-**Done when:** `vaji --tree fixture.html` prints the parsed tree as JSON, and a
-test asserts on the structure without a screenshot.
+**Done when:** the snapshots are committed and `api-drift check` passes; the
+diff pipeline runs against a Vaji shim (even an empty one).
 
-## Slice 2 — Style
+## Slice 2 — Ingest + tree dump
 
-Wire `stylo` behind `vaji-core::style`: parse a stylesheet, cascade against the
-tree, expose Vaji-shaped computed values.
+`vaji-html` parses into `vaji-dom`; `vaji-headless` dumps the tree as JSON.
 
-**Done when:** a fixture's computed `color`/`display` are asserted from a test.
+**Done when:** `vaji --tree fixture.html` prints JSON and a test asserts on the
+structure with no screenshot.
 
-## Slice 3 — Layout
+## Slice 3 — Style
 
-Wire `taffy` and `parley` behind `vaji-core::layout`: boxes and geometry, text
-shaped and broken into lines.
+Wire `stylo` behind `vaji-style`: parse a stylesheet, cascade, expose Vaji-shaped
+computed values. Incremental restyle is the default.
 
-**Done when:** a fixture yields expected box rectangles, asserted numerically.
+**Done when:** a fixture's computed `color`/`display` are asserted from a test,
+and a second edit restyles incrementally.
 
-## Slice 4 — Paint
+## Slice 4 — Text + layout
 
-`vaji-paint` turns the layout output into render commands; a recording backend
-makes them diff-able.
+Wire `parley` behind `vaji-text`; wire `taffy` behind `vaji-layout`, consuming
+`vaji-style` + `vaji-text`.
+
+**Done when:** a fixture yields expected box rectangles and line boxes, asserted
+numerically.
+
+## Slice 5 — Document + events
+
+`vaji-document` ties parse→style→layout into a working `Document`;
+`vaji-events` dispatches with bubbling into a `Document`.
+
+**Done when:** a click on a nested node reaches an ancestor handler.
+
+## Slice 6 — Paint
+
+`vaji-paint` turns layout into commands; a recording backend makes them
+diff-able; scene effects + dirty regions are exposed.
 
 **Done when:** a fixture's command stream matches a golden file.
 
-## Slice 5 — Shell
+## Slice 7 — Shell
 
-Feature-gated window: `winit` event loop + `wgpu`/`vello` surface. Headless is
-still the default path.
+Feature-gated window (`winit` + `wgpu`/`vello`); accessibility on by default;
+real `resumed`/suspend hooks. Headless stays the default path.
 
-**Done when:** `cargo run -p vaji --features window,gpu` opens a window.
+**Done when:** `cargo run -p vaji --features window,gpu` opens a window and the
+a11y tree reaches AT-SPI on Linux without consumer re-enabling.
 
-## Slice 6 — Input + events
+## Slice 8 — Sub-documents
 
-The event surface, fed identically by a real device and by synthetic input.
-Virtual clock for deterministic frames.
+Host a `Document` inside another as a first-class sub-document, worker-ownable
+because the tree is `Send`. Replace the texture-overlay pattern.
 
-**Done when:** a scripted click produces the same result as a recorded one.
+**Done when:** an embedded document scrolls, chains wheel scroll to its parent,
+and receives input through the document's own paths.
 
-## Slice 7 — Motion
+## Slice 9 — Motion
 
-Spring timing with velocity-preserving retarget for transitions. Owned, not
-borrowed.
+Spring transitions with velocity-preserving retarget, wired to style animations.
 
 **Done when:** an interrupted animation does not jump.
 
+## Slice 10 — Compat shims + the switch
+
+Publish the `compat/` shim crates (lib names matching the `bliss-*` crates),
+re-exporting Vaji. Prove the switch on a consumer fork behind a transient
+`[patch.crates-io]`.
+
+**Done when:** a consumer compiles against Vaji shims with a manifest-only
+change and the `api-drift` diff for the consumer-visible subset shows no
+unrecorded `Breaking` item.
+
 ## Later
 
-Accessibility tree, SVG, sub-documents, networking, networking capabilities.
-Each enters behind its feature and its own module boundary.
+SVG, networking capabilities (`exo://`), rendering capsules, a11y-complete tree.
+Each enters behind its feature and its own crate boundary.

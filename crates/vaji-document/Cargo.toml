@@ -1,0 +1,25 @@
+[package]
+name = "vaji-document"
+description = "Vaji's orchestration: a parsed, styleable, layable document."
+version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["std"]
+std = []
+# Pull in the borrowed-engine layers (style + layout + html). Without them the
+# document is a pure tree; with them it resolves like a browser page.
+resolve = ["dep:vaji-style", "dep:vaji-layout", "dep:vaji-html"]
+
+[dependencies]
+vaji-dom.workspace = true
+vaji-events = { workspace = true, optional = true }
+vaji-net = { workspace = true, optional = true }
+vaji-style = { workspace = true, optional = true }
+vaji-layout = { workspace = true, optional = true }
+vaji-html = { workspace = true, optional = true }

@@ -1,0 +1,636 @@
+{
+  "format": "api-drift/snapshot/v1",
+  "surface": "arniko-bliss-rust-public",
+  "version": "arniko-bliss 0.3.0",
+  "items": [
+    {
+      "path": "bliss::Color",
+      "kind": "Enum",
+      "sig": "{\"generics\":{\"params\":[],\"where_predicates\":[]},\"has_stripped_variants\":false,\"impls\":[\"impl:Any for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:Borrow for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:BorrowMut for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:Clone for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:CloneToUninit for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:Copy for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:Debug for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:Downcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:DowncastSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:DowncastSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:ErasedDestructor for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:Freeze for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:From for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:Instrument for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:Into for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:IntoEither for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:MaybeBoxed for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:PartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:Pointable for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:PolicyExt for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:RefUnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:Send for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:StructuralPartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:Sync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:ToOwned for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:TryFrom for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:TryInto for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:Unpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:UnsafeUnpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:UnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:Upcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:WasmNotSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:WasmNotSendSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:WasmNotSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:WithSubscriber for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\",\"impl:inherent for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Color\\\"}}\"],\"variants\":[\"bliss::Color::Rgb\",\"bliss::Color::Rgba\"]}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::Element",
+      "kind": "Struct",
+      "sig": "{\"generics\":{\"params\":[],\"where_predicates\":[]},\"impls\":[\"impl:Any for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Borrow for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:BorrowMut for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Clone for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:CloneToUninit for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Debug for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Downcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:DowncastSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:DowncastSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:ErasedDestructor for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Freeze for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:From for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Instrument for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Into for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:IntoEither for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:MaybeBoxed for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Pointable for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:PolicyExt for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:RefUnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Send for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Sync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:ToOwned for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:TryFrom for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:TryInto for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Unpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:UnsafeUnpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:UnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Upcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:WasmNotSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:WasmNotSendSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:WasmNotSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:WithSubscriber for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:inherent for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\"],\"kind\":{\"plain\":{\"fields\":[],\"has_stripped_fields\":true}}}",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::Key",
+      "kind": "Enum",
+      "sig": "re-export of keyboard_types::key::Key",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::Modifiers",
+      "kind": "Struct",
+      "sig": "re-export of keyboard_types::modifiers::Modifiers",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::Window",
+      "kind": "Struct",
+      "sig": "{\"generics\":{\"params\":[{\"kind\":{\"lifetime\":{\"outlives\":[]}},\"name\":\"'a\"}],\"where_predicates\":[]},\"impls\":[\"impl:Any for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:Borrow for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:BorrowMut for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:Downcast for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:ErasedDestructor for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:Freeze for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:From for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:Instrument for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:Into for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:IntoEither for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:MaybeBoxed for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:Pointable for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:PolicyExt for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:RefUnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:Send for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:Sync for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:TryFrom for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:TryInto for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:Unpin for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:UnsafeUnpin for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:UnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:Upcast for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:WithSubscriber for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:inherent for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\"],\"kind\":{\"plain\":{\"fields\":[],\"has_stripped_fields\":true}}}",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::config::DocumentConfig",
+      "kind": "Struct",
+      "sig": "re-export of bliss_dom::config::DocumentConfig",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::document::BaseDocument",
+      "kind": "Struct",
+      "sig": "re-export of bliss_dom::document::BaseDocument",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::document::BaseDocument::process_style_element",
+      "kind": "Function",
+      "sig": "re-export of bliss_dom::document::BaseDocument::process_style_element",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::document::BaseDocument::query_selector_all",
+      "kind": "Function",
+      "sig": "re-export of bliss_dom::document::BaseDocument::query_selector_all",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::document::BaseDocument::root_element",
+      "kind": "Function",
+      "sig": "re-export of bliss_dom::document::BaseDocument::root_element",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::document::BoundingRect",
+      "kind": "Struct",
+      "sig": "re-export of bliss_dom::document::BoundingRect",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::document::DocGuard",
+      "kind": "Enum",
+      "sig": "re-export of bliss_dom::document::DocGuard",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::document::DocGuardMut",
+      "kind": "Enum",
+      "sig": "re-export of bliss_dom::document::DocGuardMut",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::document::Document",
+      "kind": "Trait",
+      "sig": "re-export of bliss_dom::document::Document",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::document::DocumentEvent",
+      "kind": "Enum",
+      "sig": "re-export of bliss_dom::document::DocumentEvent",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::html::HtmlParserProvider",
+      "kind": "Trait",
+      "sig": "re-export of bliss_dom::html::HtmlParserProvider",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::layout::RefCellChildIter",
+      "kind": "Struct",
+      "sig": "re-export of bliss_dom::layout::RefCellChildIter",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::layout::table::RangeIter",
+      "kind": "Struct",
+      "sig": "re-export of bliss_dom::layout::table::RangeIter",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::mutator::DocumentMutator",
+      "kind": "Struct",
+      "sig": "re-export of bliss_dom::mutator::DocumentMutator",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::mutator::ViewportMut",
+      "kind": "Struct",
+      "sig": "re-export of bliss_dom::mutator::ViewportMut",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::net::ResourceLoadResponse",
+      "kind": "Struct",
+      "sig": "re-export of bliss_dom::net::ResourceLoadResponse",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::node::attributes::Attribute",
+      "kind": "Struct",
+      "sig": "re-export of bliss_dom::node::attributes::Attribute",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::node::attributes::Attributes",
+      "kind": "Struct",
+      "sig": "re-export of bliss_dom::node::attributes::Attributes",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::node::element::ElementData",
+      "kind": "Struct",
+      "sig": "re-export of bliss_dom::node::element::ElementData",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::node::element::TextBrush",
+      "kind": "Struct",
+      "sig": "re-export of bliss_dom::node::element::TextBrush",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::node::node::Node",
+      "kind": "Struct",
+      "sig": "re-export of bliss_dom::node::node::Node",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::node::node::NodeData",
+      "kind": "Enum",
+      "sig": "re-export of bliss_dom::node::node::NodeData",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::script::EventHandled",
+      "kind": "Enum",
+      "sig": "re-export of bliss_dom::script::EventHandled",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::script::ExecutionContext",
+      "kind": "Struct",
+      "sig": "re-export of bliss_dom::script::ExecutionContext",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::script::ScriptEngine",
+      "kind": "Trait",
+      "sig": "re-export of bliss_dom::script::ScriptEngine",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::script::ScriptError",
+      "kind": "Enum",
+      "sig": "re-export of bliss_dom::script::ScriptError",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::script::ScriptLanguage",
+      "kind": "Enum",
+      "sig": "re-export of bliss_dom::script::ScriptLanguage",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::script::ScriptValue",
+      "kind": "Enum",
+      "sig": "re-export of bliss_dom::script::ScriptValue",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::stylo::Traverser",
+      "kind": "Struct",
+      "sig": "re-export of bliss_dom::stylo::Traverser",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::traversal::AncestorTraverser",
+      "kind": "Struct",
+      "sig": "re-export of bliss_dom::traversal::AncestorTraverser",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::traversal::TreeTraverser",
+      "kind": "Struct",
+      "sig": "re-export of bliss_dom::traversal::TreeTraverser",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::url::DocumentUrl",
+      "kind": "Struct",
+      "sig": "re-export of bliss_dom::url::DocumentUrl",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::dom::util::Point",
+      "kind": "Struct",
+      "sig": "re-export of bliss_dom::util::Point",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::element::Element",
+      "kind": "Struct",
+      "sig": "{\"generics\":{\"params\":[],\"where_predicates\":[]},\"impls\":[\"impl:Any for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Borrow for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:BorrowMut for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Clone for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:CloneToUninit for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Debug for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Downcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:DowncastSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:DowncastSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:ErasedDestructor for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Freeze for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:From for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Instrument for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Into for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:IntoEither for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:MaybeBoxed for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Pointable for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:PolicyExt for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:RefUnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Send for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Sync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:ToOwned for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:TryFrom for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:TryInto for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Unpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:UnsafeUnpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:UnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:Upcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:WasmNotSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:WasmNotSendSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:WasmNotSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:WithSubscriber for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\",\"impl:inherent for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::Element\\\"}}\"],\"kind\":{\"plain\":{\"fields\":[],\"has_stripped_fields\":true}}}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::element::Window",
+      "kind": "Struct",
+      "sig": "{\"generics\":{\"params\":[{\"kind\":{\"lifetime\":{\"outlives\":[]}},\"name\":\"'a\"}],\"where_predicates\":[]},\"impls\":[\"impl:Any for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:Borrow for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:BorrowMut for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:Downcast for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:ErasedDestructor for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:Freeze for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:From for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:Instrument for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:Into for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:IntoEither for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:MaybeBoxed for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:Pointable for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:PolicyExt for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:RefUnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:Send for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:Sync for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:TryFrom for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:TryInto for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:Unpin for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:UnsafeUnpin for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:UnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:Upcast for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:WithSubscriber for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\",\"impl:inherent for {\\\"resolved_path\\\":{\\\"args\\\":{\\\"angle_bracketed\\\":{\\\"args\\\":[{\\\"lifetime\\\":\\\"'a\\\"}],\\\"constraints\\\":[]}},\\\"path\\\":\\\"bliss::Window\\\"}}\"],\"kind\":{\"plain\":{\"fields\":[],\"has_stripped_fields\":true}}}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::element::Window::mount",
+      "kind": "Function",
+      "sig": "{\"default_unstable\":null,\"generics\":{\"params\":[],\"where_predicates\":[]},\"has_body\":true,\"header\":{\"abi\":\"Rust\",\"is_async\":false,\"is_const\":false,\"is_unsafe\":false},\"sig\":{\"inputs\":[[\"self\",{\"borrowed_ref\":{\"is_mutable\":true,\"lifetime\":null,\"type\":{\"generic\":\"Self\"}}}],[\"root\",{\"resolved_path\":{\"args\":null,\"path\":\"bliss::Element\"}}]],\"is_c_variadic\":false,\"output\":null}}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::html::html_document::HtmlDocument",
+      "kind": "Struct",
+      "sig": "re-export of bliss_html::html_document::HtmlDocument",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::launch_static_html",
+      "kind": "Function",
+      "sig": "{\"default_unstable\":null,\"generics\":{\"params\":[],\"where_predicates\":[]},\"has_body\":true,\"header\":{\"abi\":\"Rust\",\"is_async\":false,\"is_const\":false,\"is_unsafe\":false},\"sig\":{\"inputs\":[[\"html\",{\"borrowed_ref\":{\"is_mutable\":false,\"lifetime\":null,\"type\":{\"primitive\":\"str\"}}}]],\"is_c_variadic\":false,\"output\":null}}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::launch_static_html_cfg",
+      "kind": "Function",
+      "sig": "{\"default_unstable\":null,\"generics\":{\"params\":[],\"where_predicates\":[]},\"has_body\":true,\"header\":{\"abi\":\"Rust\",\"is_async\":false,\"is_const\":false,\"is_unsafe\":false},\"sig\":{\"inputs\":[[\"html\",{\"borrowed_ref\":{\"is_mutable\":false,\"lifetime\":null,\"type\":{\"primitive\":\"str\"}}}],[\"cfg\",{\"resolved_path\":{\"args\":null,\"path\":\"bliss::shell::Config\"}}]],\"is_c_variadic\":false,\"output\":null}}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::launch_url",
+      "kind": "Function",
+      "sig": "{\"default_unstable\":null,\"generics\":{\"params\":[],\"where_predicates\":[]},\"has_body\":true,\"header\":{\"abi\":\"Rust\",\"is_async\":false,\"is_const\":false,\"is_unsafe\":false},\"sig\":{\"inputs\":[[\"url\",{\"borrowed_ref\":{\"is_mutable\":false,\"lifetime\":null,\"type\":{\"primitive\":\"str\"}}}]],\"is_c_variadic\":false,\"output\":null}}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::net::AbortFetch",
+      "kind": "Struct",
+      "sig": "re-export of bliss_net::AbortFetch",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::net::Provider",
+      "kind": "Struct",
+      "sig": "re-export of bliss_net::Provider",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::net::ProviderError",
+      "kind": "Enum",
+      "sig": "re-export of bliss_net::ProviderError",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::paint::render::ElementCx",
+      "kind": "Struct",
+      "sig": "re-export of bliss_paint::render::ElementCx",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::shell::Config",
+      "kind": "Struct",
+      "sig": "re-export of bliss_shell::Config",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::shell::application::BlissApplication",
+      "kind": "Struct",
+      "sig": "re-export of bliss_shell::application::BlissApplication",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::shell::create_default_event_loop",
+      "kind": "Function",
+      "sig": "re-export of bliss_shell::create_default_event_loop",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::shell::event::BlissShellProxy",
+      "kind": "Struct",
+      "sig": "re-export of bliss_shell::event::BlissShellProxy",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::shell::window::View",
+      "kind": "Struct",
+      "sig": "re-export of bliss_shell::window::View",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::shell::window::WindowConfig",
+      "kind": "Struct",
+      "sig": "re-export of bliss_shell::window::WindowConfig",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::style::AlignItems",
+      "kind": "Enum",
+      "sig": "{\"generics\":{\"params\":[],\"where_predicates\":[]},\"has_stripped_variants\":false,\"impls\":[\"impl:Any for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:Borrow for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:BorrowMut for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:Clone for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:CloneToUninit for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:Copy for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:Debug for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:Downcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:DowncastSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:DowncastSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:ErasedDestructor for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:Freeze for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:From for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:Instrument for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:Into for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:IntoEither for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:MaybeBoxed for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:PartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:Pointable for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:PolicyExt for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:RefUnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:Send for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:StructuralPartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:Sync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:ToOwned for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:TryFrom for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:TryInto for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:Unpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:UnsafeUnpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:UnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:Upcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:WasmNotSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:WasmNotSendSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:WasmNotSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:WithSubscriber for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\",\"impl:inherent for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::AlignItems\\\"}}\"],\"variants\":[\"bliss::style::AlignItems::Stretch\",\"bliss::style::AlignItems::Center\",\"bliss::style::AlignItems::FlexStart\",\"bliss::style::AlignItems::FlexEnd\",\"bliss::style::AlignItems::Baseline\"]}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::style::Border",
+      "kind": "Struct",
+      "sig": "{\"generics\":{\"params\":[],\"where_predicates\":[]},\"impls\":[\"impl:Any for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:Borrow for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:BorrowMut for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:Brush for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:Clone for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:CloneToUninit for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:Copy for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:Debug for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:Default for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:Downcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:DowncastSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:DowncastSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:ErasedDestructor for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:Freeze for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:From for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:Instrument for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:Into for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:IntoEither for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:MaybeBoxed for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:PartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:Pointable for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:PolicyExt for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:RefUnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:Send for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:StructuralPartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:Sync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:ToOwned for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:TryFrom for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:TryInto for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:Unpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:UnsafeUnpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:UnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:Upcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:WasmNotSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:WasmNotSendSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:WasmNotSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:WithSubscriber for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\",\"impl:inherent for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Border\\\"}}\"],\"kind\":{\"plain\":{\"fields\":[\"local:width\",\"local:color\"],\"has_stripped_fields\":false}}}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::style::BorderStyle",
+      "kind": "Enum",
+      "sig": "{\"generics\":{\"params\":[],\"where_predicates\":[]},\"has_stripped_variants\":false,\"impls\":[\"impl:Any for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:Borrow for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:BorrowMut for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:Brush for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:Clone for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:CloneToUninit for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:Copy for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:Debug for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:Default for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:Downcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:DowncastSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:DowncastSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:ErasedDestructor for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:Freeze for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:From for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:Instrument for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:Into for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:IntoEither for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:MaybeBoxed for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:PartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:Pointable for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:PolicyExt for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:RefUnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:Send for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:StructuralPartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:Sync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:ToOwned for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:TryFrom for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:TryInto for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:Unpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:UnsafeUnpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:UnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:Upcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:WasmNotSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:WasmNotSendSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:WasmNotSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:WithSubscriber for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\",\"impl:inherent for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::BorderStyle\\\"}}\"],\"variants\":[\"bliss::style::BorderStyle::Solid\",\"bliss::style::BorderStyle::Dashed\",\"bliss::style::BorderStyle::Dotted\",\"bliss::style::BorderStyle::None\"]}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::style::Cursor",
+      "kind": "Enum",
+      "sig": "{\"generics\":{\"params\":[],\"where_predicates\":[]},\"has_stripped_variants\":false,\"impls\":[\"impl:Any for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:Borrow for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:BorrowMut for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:Clone for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:CloneToUninit for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:Copy for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:Debug for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:Downcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:DowncastSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:DowncastSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:ErasedDestructor for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:Freeze for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:From for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:Instrument for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:Into for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:IntoEither for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:MaybeBoxed for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:PartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:Pointable for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:PolicyExt for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:RefUnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:Send for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:StructuralPartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:Sync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:ToOwned for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:TryFrom for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:TryInto for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:Unpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:UnsafeUnpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:UnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:Upcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:WasmNotSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:WasmNotSendSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:WasmNotSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:WithSubscriber for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\",\"impl:inherent for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Cursor\\\"}}\"],\"variants\":[\"bliss::style::Cursor::Default\",\"bliss::style::Cursor::Pointer\",\"bliss::style::Cursor::Text\"]}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::style::Dimension",
+      "kind": "Enum",
+      "sig": "{\"generics\":{\"params\":[],\"where_predicates\":[]},\"has_stripped_variants\":false,\"impls\":[\"impl:Any for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:Borrow for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:BorrowMut for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:Brush for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:Clone for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:CloneToUninit for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:Copy for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:Debug for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:Default for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:Downcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:DowncastSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:DowncastSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:ErasedDestructor for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:Freeze for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:From for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:Instrument for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:Into for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:IntoEither for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:MaybeBoxed for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:PartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:Pointable for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:PolicyExt for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:RefUnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:Send for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:StructuralPartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:Sync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:ToOwned for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:TryFrom for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:TryInto for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:Unpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:UnsafeUnpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:UnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:Upcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:WasmNotSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:WasmNotSendSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:WasmNotSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:WithSubscriber for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\",\"impl:inherent for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Dimension\\\"}}\"],\"variants\":[\"bliss::style::Dimension::Percent\",\"bliss::style::Dimension::Px\",\"bliss::style::Dimension::Auto\"]}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::style::Display",
+      "kind": "Enum",
+      "sig": "{\"generics\":{\"params\":[],\"where_predicates\":[]},\"has_stripped_variants\":false,\"impls\":[\"impl:Any for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:Borrow for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:BorrowMut for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:Clone for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:CloneToUninit for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:Copy for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:Debug for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:Downcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:DowncastSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:DowncastSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:ErasedDestructor for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:Freeze for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:From for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:Instrument for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:Into for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:IntoEither for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:MaybeBoxed for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:PartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:Pointable for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:PolicyExt for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:RefUnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:Send for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:StructuralPartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:Sync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:ToOwned for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:TryFrom for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:TryInto for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:Unpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:UnsafeUnpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:UnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:Upcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:WasmNotSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:WasmNotSendSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:WasmNotSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:WithSubscriber for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\",\"impl:inherent for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Display\\\"}}\"],\"variants\":[\"bliss::style::Display::Block\",\"bliss::style::Display::Flex\",\"bliss::style::Display::Inline\",\"bliss::style::Display::InlineBlock\",\"bliss::style::Display::None\"]}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::style::FlexDirection",
+      "kind": "Enum",
+      "sig": "{\"generics\":{\"params\":[],\"where_predicates\":[]},\"has_stripped_variants\":false,\"impls\":[\"impl:Any for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:Borrow for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:BorrowMut for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:Clone for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:CloneToUninit for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:Copy for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:Debug for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:Downcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:DowncastSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:DowncastSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:ErasedDestructor for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:Freeze for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:From for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:Instrument for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:Into for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:IntoEither for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:MaybeBoxed for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:PartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:Pointable for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:PolicyExt for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:RefUnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:Send for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:StructuralPartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:Sync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:ToOwned for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:TryFrom for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:TryInto for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:Unpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:UnsafeUnpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:UnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:Upcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:WasmNotSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:WasmNotSendSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:WasmNotSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:WithSubscriber for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\",\"impl:inherent for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FlexDirection\\\"}}\"],\"variants\":[\"bliss::style::FlexDirection::Row\",\"bliss::style::FlexDirection::RowReverse\",\"bliss::style::FlexDirection::Column\",\"bliss::style::FlexDirection::ColumnReverse\"]}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::style::FontStyle",
+      "kind": "Enum",
+      "sig": "{\"generics\":{\"params\":[],\"where_predicates\":[]},\"has_stripped_variants\":false,\"impls\":[\"impl:Any for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:Borrow for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:BorrowMut for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:Clone for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:CloneToUninit for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:Copy for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:Debug for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:Downcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:DowncastSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:DowncastSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:ErasedDestructor for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:Freeze for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:From for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:Instrument for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:Into for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:IntoEither for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:MaybeBoxed for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:PartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:Pointable for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:PolicyExt for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:RefUnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:Send for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:StructuralPartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:Sync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:ToOwned for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:TryFrom for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:TryInto for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:Unpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:UnsafeUnpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:UnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:Upcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:WasmNotSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:WasmNotSendSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:WasmNotSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:WithSubscriber for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\",\"impl:inherent for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontStyle\\\"}}\"],\"variants\":[\"bliss::style::FontStyle::Normal\",\"bliss::style::FontStyle::Italic\",\"bliss::style::FontStyle::Oblique\"]}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::style::FontWeight",
+      "kind": "Enum",
+      "sig": "{\"generics\":{\"params\":[],\"where_predicates\":[]},\"has_stripped_variants\":false,\"impls\":[\"impl:Any for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:Borrow for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:BorrowMut for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:Clone for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:CloneToUninit for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:Copy for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:Debug for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:Downcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:DowncastSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:DowncastSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:ErasedDestructor for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:Freeze for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:From for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:Instrument for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:Into for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:IntoEither for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:MaybeBoxed for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:PartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:Pointable for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:PolicyExt for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:RefUnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:Send for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:StructuralPartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:Sync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:ToOwned for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:TryFrom for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:TryInto for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:Unpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:UnsafeUnpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:UnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:Upcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:WasmNotSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:WasmNotSendSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:WasmNotSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:WithSubscriber for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\",\"impl:inherent for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::FontWeight\\\"}}\"],\"variants\":[\"bliss::style::FontWeight::Normal\",\"bliss::style::FontWeight::Bold\",\"bliss::style::FontWeight::Light\"]}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::style::JustifyContent",
+      "kind": "Enum",
+      "sig": "{\"generics\":{\"params\":[],\"where_predicates\":[]},\"has_stripped_variants\":false,\"impls\":[\"impl:Any for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:Borrow for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:BorrowMut for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:Clone for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:CloneToUninit for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:Copy for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:Debug for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:Downcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:DowncastSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:DowncastSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:ErasedDestructor for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:Freeze for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:From for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:Instrument for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:Into for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:IntoEither for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:MaybeBoxed for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:PartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:Pointable for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:PolicyExt for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:RefUnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:Send for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:StructuralPartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:Sync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:ToOwned for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:TryFrom for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:TryInto for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:Unpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:UnsafeUnpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:UnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:Upcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:WasmNotSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:WasmNotSendSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:WasmNotSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:WithSubscriber for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\",\"impl:inherent for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::JustifyContent\\\"}}\"],\"variants\":[\"bliss::style::JustifyContent::Center\",\"bliss::style::JustifyContent::FlexStart\",\"bliss::style::JustifyContent::FlexEnd\",\"bliss::style::JustifyContent::SpaceBetween\",\"bliss::style::JustifyContent::SpaceAround\",\"bliss::style::JustifyContent::SpaceEvenly\"]}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::style::Overflow",
+      "kind": "Enum",
+      "sig": "{\"generics\":{\"params\":[],\"where_predicates\":[]},\"has_stripped_variants\":false,\"impls\":[\"impl:Any for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:Borrow for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:BorrowMut for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:Clone for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:CloneToUninit for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:Copy for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:Debug for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:Downcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:DowncastSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:DowncastSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:ErasedDestructor for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:Freeze for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:From for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:Instrument for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:Into for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:IntoEither for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:MaybeBoxed for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:PartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:Pointable for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:PolicyExt for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:RefUnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:Send for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:StructuralPartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:Sync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:ToOwned for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:TryFrom for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:TryInto for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:Unpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:UnsafeUnpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:UnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:Upcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:WasmNotSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:WasmNotSendSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:WasmNotSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:WithSubscriber for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\",\"impl:inherent for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Overflow\\\"}}\"],\"variants\":[\"bliss::style::Overflow::Auto\",\"bliss::style::Overflow::Hidden\",\"bliss::style::Overflow::Visible\",\"bliss::style::Overflow::Scroll\"]}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::style::Rect",
+      "kind": "Struct",
+      "sig": "{\"generics\":{\"params\":[],\"where_predicates\":[]},\"impls\":[\"impl:Any for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:Borrow for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:BorrowMut for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:Brush for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:Clone for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:CloneToUninit for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:Copy for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:Debug for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:Default for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:Downcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:DowncastSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:DowncastSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:ErasedDestructor for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:Freeze for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:From for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:Instrument for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:Into for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:IntoEither for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:MaybeBoxed for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:PartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:Pointable for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:PolicyExt for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:RefUnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:Send for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:StructuralPartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:Sync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:ToOwned for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:TryFrom for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:TryInto for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:Unpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:UnsafeUnpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:UnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:Upcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:WasmNotSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:WasmNotSendSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:WasmNotSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:WithSubscriber for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\",\"impl:inherent for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Rect\\\"}}\"],\"kind\":{\"plain\":{\"fields\":[\"local:top\",\"local:right\",\"local:bottom\",\"local:left\"],\"has_stripped_fields\":false}}}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::style::Style",
+      "kind": "Struct",
+      "sig": "{\"generics\":{\"params\":[],\"where_predicates\":[]},\"impls\":[\"impl:Any for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:Borrow for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:BorrowMut for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:Brush for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:Clone for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:CloneToUninit for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:Debug for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:Default for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:Downcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:DowncastSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:DowncastSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:ErasedDestructor for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:Freeze for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:From for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:Instrument for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:Into for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:IntoEither for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:MaybeBoxed for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:PartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:Pointable for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:PolicyExt for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:RefUnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:Send for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:StructuralPartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:Sync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:ToOwned for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:TryFrom for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:TryInto for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:Unpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:UnsafeUnpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:UnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:Upcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:WasmNotSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:WasmNotSendSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:WasmNotSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:WithSubscriber for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\",\"impl:inherent for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::Style\\\"}}\"],\"kind\":{\"plain\":{\"fields\":[\"local:display\",\"local:flex_direction\",\"local:flex_grow\",\"local:align_items\",\"local:justify_content\",\"local:width\",\"local:height\",\"local:min_width\",\"local:min_height\",\"local:padding\",\"local:padding_left\",\"local:margin_left\",\"local:margin_right\",\"local:margin_bottom\",\"local:border\",\"local:border_top\",\"local:border_bottom\",\"local:border_left\",\"local:border_right\",\"local:color\",\"local:background_color\",\"local:font_size\",\"local:font_family\",\"local:line_height\",\"local:font_weight\",\"local:font_style\",\"local:text_transform\",\"local:overflow\",\"local:white_space\",\"local:cursor\",\"local:gap\"],\"has_stripped_fields\":false}}}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::style::TextTransform",
+      "kind": "Enum",
+      "sig": "{\"generics\":{\"params\":[],\"where_predicates\":[]},\"has_stripped_variants\":false,\"impls\":[\"impl:Any for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:Borrow for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:BorrowMut for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:Clone for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:CloneToUninit for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:Copy for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:Debug for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:Downcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:DowncastSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:DowncastSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:ErasedDestructor for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:Freeze for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:From for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:Instrument for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:Into for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:IntoEither for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:MaybeBoxed for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:PartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:Pointable for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:PolicyExt for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:RefUnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:Send for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:StructuralPartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:Sync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:ToOwned for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:TryFrom for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:TryInto for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:Unpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:UnsafeUnpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:UnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:Upcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:WasmNotSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:WasmNotSendSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:WasmNotSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:WithSubscriber for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\",\"impl:inherent for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::TextTransform\\\"}}\"],\"variants\":[\"bliss::style::TextTransform::Uppercase\",\"bliss::style::TextTransform::Lowercase\",\"bliss::style::TextTransform::Capitalize\"]}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::style::WhiteSpace",
+      "kind": "Enum",
+      "sig": "{\"generics\":{\"params\":[],\"where_predicates\":[]},\"has_stripped_variants\":false,\"impls\":[\"impl:Any for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:Borrow for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:BorrowMut for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:Clone for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:CloneToUninit for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:Copy for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:Debug for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:Downcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:DowncastSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:DowncastSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:ErasedDestructor for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:Freeze for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:From for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:Instrument for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:Into for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:IntoEither for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:MaybeBoxed for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:PartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:Pointable for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:PolicyExt for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:RefUnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:Send for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:StructuralPartialEq for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:Sync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:ToOwned for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:TryFrom for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:TryInto for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:Unpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:UnsafeUnpin for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:UnwindSafe for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:Upcast for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:WasmNotSend for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:WasmNotSendSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:WasmNotSync for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:WithSubscriber for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\",\"impl:inherent for {\\\"resolved_path\\\":{\\\"args\\\":null,\\\"path\\\":\\\"bliss::style::WhiteSpace\\\"}}\"],\"variants\":[\"bliss::style::WhiteSpace::Normal\",\"bliss::style::WhiteSpace::PreWrap\",\"bliss::style::WhiteSpace::Nowrap\",\"bliss::style::WhiteSpace::Pre\"]}",
+      "attrs": []
+    },
+    {
+      "path": "bliss::traits::devtools::DevtoolSettings",
+      "kind": "Struct",
+      "sig": "re-export of bliss_traits::devtools::DevtoolSettings",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::traits::events::BlissKeyEvent",
+      "kind": "Struct",
+      "sig": "re-export of bliss_traits::events::BlissKeyEvent",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::traits::events::DomEvent",
+      "kind": "Struct",
+      "sig": "re-export of bliss_traits::events::DomEvent",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::traits::events::EventSink",
+      "kind": "Trait",
+      "sig": "re-export of bliss_traits::events::EventSink",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::traits::events::HitResult",
+      "kind": "Struct",
+      "sig": "re-export of bliss_traits::events::HitResult",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::traits::navigation::NavigationProvider",
+      "kind": "Trait",
+      "sig": "re-export of bliss_traits::navigation::NavigationProvider",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::traits::net::Entry",
+      "kind": "Struct",
+      "sig": "re-export of bliss_traits::net::Entry",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::traits::net::FormData",
+      "kind": "Struct",
+      "sig": "re-export of bliss_traits::net::FormData",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::traits::net::NetHandler",
+      "kind": "Trait",
+      "sig": "re-export of bliss_traits::net::NetHandler",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::traits::net::NetProvider",
+      "kind": "Trait",
+      "sig": "re-export of bliss_traits::net::NetProvider",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::traits::net::NetWaker",
+      "kind": "Trait",
+      "sig": "re-export of bliss_traits::net::NetWaker",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::traits::net::Request",
+      "kind": "Struct",
+      "sig": "re-export of bliss_traits::net::Request",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::traits::shell::ShellProvider",
+      "kind": "Trait",
+      "sig": "re-export of bliss_traits::shell::ShellProvider",
+      "attrs": [
+        "re_export"
+      ]
+    },
+    {
+      "path": "bliss::traits::shell::Viewport",
+      "kind": "Struct",
+      "sig": "re-export of bliss_traits::shell::Viewport",
+      "attrs": [
+        "re_export"
+      ]
+    }
+  ],
+  "content_hash": "sha256:d51fa3a03c8572ca6cea8143408cb2eeeffcc5562114f50d34620486bf0e1737"
+}

@@ -1,6 +1,6 @@
 [package]
 name = "vaji-paint"
-description = "Vaji paint: layout boxes into a backend-agnostic render command stream."
+description = "Vaji's paint: layout boxes into a backend-neutral render command stream."
 version.workspace = true
 license.workspace = true
 homepage.workspace = true
@@ -12,11 +12,11 @@ rust-version.workspace = true
 [features]
 default = ["std"]
 std = []
-
-# Rendering backends. The command stream is backend-neutral; these select what
-# consumes it.
-render = [] # GPU/CPU rasterizer (anyrender)
-svg = []    # SVG rendering
+# GPU/CPU rasterizer (anyrender).
+render = []
+# SVG rendering (usvg).
+svg = []
 
 [dependencies]
-vaji-core.workspace = true
+vaji-dom.workspace = true
+vaji-layout.workspace = true

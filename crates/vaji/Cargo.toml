@@ -12,17 +12,25 @@ default-run = "vaji"
 
 [features]
 default = ["std"]
-std = ["vaji-core/std", "vaji-paint/std", "vaji-net/std"]
-headless = ["vaji-core/headless"]
+std = ["vaji-dom/std", "vaji-paint/std", "vaji-net/std"]
+headless = ["dep:vaji-headless"]
 window = ["vaji-shell/window"]
 gpu = ["vaji-shell/gpu"]
 http = ["vaji-net/http"]
 
 [dependencies]
-vaji-core.workspace = true
+vaji-document.workspace = true
+vaji-dom.workspace = true
+vaji-events.workspace = true
+vaji-headless = { workspace = true, optional = true }
+vaji-html.workspace = true
+vaji-layout.workspace = true
+vaji-motion.workspace = true
+vaji-net.workspace = true
 vaji-paint.workspace = true
 vaji-shell.workspace = true
-vaji-net.workspace = true
+vaji-style.workspace = true
+vaji-text.workspace = true
 
 [[bin]]
 name = "vaji"

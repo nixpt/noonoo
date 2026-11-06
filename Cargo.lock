@@ -6,34 +6,100 @@ version = 4
 name = "vaji"
 version = "0.0.1"
 dependencies = [
- "vaji-core",
+ "vaji-document",
+ "vaji-dom",
+ "vaji-events",
+ "vaji-headless",
+ "vaji-html",
+ "vaji-layout",
+ "vaji-motion",
  "vaji-net",
  "vaji-paint",
  "vaji-shell",
+ "vaji-style",
+ "vaji-text",
 ]
 
 [[package]]
-name = "vaji-core"
+name = "vaji-document"
+version = "0.0.1"
+dependencies = [
+ "vaji-dom",
+ "vaji-events",
+ "vaji-html",
+ "vaji-layout",
+ "vaji-net",
+ "vaji-style",
+]
+
+[[package]]
+name = "vaji-dom"
+version = "0.0.1"
+
+[[package]]
+name = "vaji-events"
+version = "0.0.1"
+dependencies = [
+ "vaji-dom",
+]
+
+[[package]]
+name = "vaji-headless"
+version = "0.0.1"
+dependencies = [
+ "vaji-document",
+ "vaji-events",
+]
+
+[[package]]
+name = "vaji-html"
+version = "0.0.1"
+dependencies = [
+ "vaji-dom",
+]
+
+[[package]]
+name = "vaji-layout"
+version = "0.0.1"
+dependencies = [
+ "vaji-dom",
+ "vaji-style",
+ "vaji-text",
+]
+
+[[package]]
+name = "vaji-motion"
 version = "0.0.1"
 
 [[package]]
 name = "vaji-net"
 version = "0.0.1"
-dependencies = [
- "vaji-core",
-]
 
 [[package]]
 name = "vaji-paint"
 version = "0.0.1"
 dependencies = [
- "vaji-core",
+ "vaji-dom",
+ "vaji-layout",
 ]
 
 [[package]]
 name = "vaji-shell"
 version = "0.0.1"
 dependencies = [
- "vaji-core",
+ "vaji-document",
+ "vaji-events",
+ "vaji-net",
  "vaji-paint",
 ]
+
+[[package]]
+name = "vaji-style"
+version = "0.0.1"
+dependencies = [
+ "vaji-dom",
+]
+
+[[package]]
+name = "vaji-text"
+version = "0.0.1"

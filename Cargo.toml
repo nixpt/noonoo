@@ -1,18 +1,34 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/vaji-core",
+    # foundation — no borrowed engines
+    "crates/vaji-dom",
+    "crates/vaji-events",
+    "crates/vaji-text",
+    "crates/vaji-motion",
+    # engine — one borrowed engine per crate, one module per boundary
+    "crates/vaji-style",
+    "crates/vaji-layout",
+    "crates/vaji-html",
+    "crates/vaji-net",
+    # orchestration
+    "crates/vaji-document",
+    "crates/vaji-headless",
+    # output
     "crates/vaji-paint",
     "crates/vaji-shell",
-    "crates/vaji-net",
+    # facade
     "crates/vaji",
 ]
+# tools/ is deliberately outside the workspace: the api-snapshot helper pulls
+# serde_json and the api-drift path dep, which the engine build must not pay for.
+exclude = ["tools/api-snapshot"]
 
 # Vaji is a clean-room reimplementation. Nothing here depends on the code of
 # the engine it replaces (bliss-engine / upstream Blitz); the third-party
 # engines we *do* rely on (stylo, taffy, parley, anyrender/vello, winit) are
 # ordinary crates.io deps, pinned in one place and kept behind bounded modules.
-# See docs/DEPENDENCIES.md for the policy and docs/ARCHITECTURE.md for the map.
+# See docs/DEPENDENCIES.md, ARCHITECTURE.md, and docs/CONSUMERS.md.
 
 [workspace.package]
 version = "0.0.1"
@@ -24,10 +40,18 @@ edition = "2024"
 rust-version = "1.89"
 
 [workspace.dependencies]
-vaji-core = { path = "crates/vaji-core", version = "0.0.1" }
+vaji-dom = { path = "crates/vaji-dom", version = "0.0.1" }
+vaji-events = { path = "crates/vaji-events", version = "0.0.1" }
+vaji-text = { path = "crates/vaji-text", version = "0.0.1" }
+vaji-motion = { path = "crates/vaji-motion", version = "0.0.1" }
+vaji-style = { path = "crates/vaji-style", version = "0.0.1" }
+vaji-layout = { path = "crates/vaji-layout", version = "0.0.1" }
+vaji-html = { path = "crates/vaji-html", version = "0.0.1" }
+vaji-net = { path = "crates/vaji-net", version = "0.0.1" }
+vaji-document = { path = "crates/vaji-document", version = "0.0.1" }
+vaji-headless = { path = "crates/vaji-headless", version = "0.0.1" }
 vaji-paint = { path = "crates/vaji-paint", version = "0.0.1" }
 vaji-shell = { path = "crates/vaji-shell", version = "0.0.1" }
-vaji-net = { path = "crates/vaji-net", version = "0.0.1" }
 
 [profile.release]
 lto = true

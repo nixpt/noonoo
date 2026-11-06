@@ -1,6 +1,6 @@
 [package]
 name = "vaji-shell"
-description = "Vaji shell: windowing, the native event loop, and the interactive driver."
+description = "Vaji's interactive driver: windowing, event loop, native surface."
 version.workspace = true
 license.workspace = true
 homepage.workspace = true
@@ -10,13 +10,15 @@ edition.workspace = true
 rust-version.workspace = true
 
 [features]
-# The shell is opt-in: a build that only needs the engine (headless, server-side
-# tests, a custom host) does not pay for a window, a GPU, or a screen reader.
+# The shell is opt-in: a build that only needs the engine does not pay for a
+# window, a GPU, or a screen reader.
 default = []
 window = [] # native window + event loop (winit)
-gpu = []    # GPU surface (wgpu + vello)
-a11y = []   # accessibility tree (accesskit)
+gpu = [] # GPU surface (wgpu + vello)
+a11y = [] # accessibility tree (accesskit)
 
 [dependencies]
-vaji-core.workspace = true
+vaji-document.workspace = true
+vaji-events.workspace = true
+vaji-net.workspace = true
 vaji-paint.workspace = true
