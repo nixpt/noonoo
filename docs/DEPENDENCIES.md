@@ -70,6 +70,19 @@ layer: small, spec-defined, and load-bearing for the engine's own formats.
 The line is deliberate: we own the small, spec-shaped syntax; we buy the
 multi-year engines.
 
+## Dropping a borrowed engine
+
+"Buy don't build" is the default, not a law. Each borrowed engine was scored on
+what it costs and what owning it would take — measured, not guessed — in
+[`DEPENDENCY-EXIT.md`](DEPENDENCY-EXIT.md). The short version:
+
+- **Own (subset):** the **CSS engine** — `stylo` is the single biggest lever
+  (108 crates) and a UI-grade subset is a few thousand lines.
+- **Own:** **layout** (`taffy`, tiny in crates, moderate in code).
+- **Own part of:** **text** — line-breaking yes, shaping no.
+- **Keep:** font shaping, GPU rasterization, windowing, TLS, image codecs — the
+  buy-line.
+
 ## How we measure
 
 - **Locked package count** (`grep -c '^\[\[package\]\]' Cargo.lock`) — reported

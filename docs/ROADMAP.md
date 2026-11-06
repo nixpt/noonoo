@@ -98,6 +98,21 @@ re-exporting Noonoo. Prove the switch on a consumer fork behind a transient
 change and the `api-drift` diff for the consumer-visible subset shows no
 unrecorded `Breaking` item.
 
+## Track — owning the engines (see [`DEPENDENCY-EXIT.md`](DEPENDENCY-EXIT.md))
+
+The borrowed engines are scored in `DEPENDENCY-EXIT.md`. The path to dropping
+`stylo` and friends, in order:
+
+- **Phase A — CSS engine (drops `stylo`, ~108 crates).** `noonoo-css` grows a
+  selector model + specificity and a property/value model; `noonoo-style` owns
+  the cascade, inheritance, computed values, and a UA stylesheet. Done when our
+  engine computes `color`/`display`/`margin` for a fixture with stylo absent.
+- **Phase B — layout (drops `taffy`).** block + inline + flex over our values.
+- **Phase C — text (trims `parley`).** line-breaking + `text-align`; shaping
+  stays borrowed.
+- **Phase D — paint.** the command stream + a recording backend (keep the GPU).
+- **Phase E — net / SVG.** thin HTTP client; SVG subset.
+
 ## Later
 
 SVG, networking capabilities (`exo://`), rendering capsules, a11y-complete tree.
