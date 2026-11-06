@@ -87,6 +87,7 @@ pub struct Layer {
     styles: Styles,
     layout: LayoutTree,
     commands: CommandList,
+    scroll: Point,
 }
 
 impl Layer {
@@ -113,6 +114,17 @@ impl Layer {
     /// The sub-document anchor, if this layer is a sub-document.
     pub fn anchor(&self) -> Option<Anchor> {
         self.anchor
+    }
+
+    /// The layer's current scroll offset.
+    pub fn scroll(&self) -> Point {
+        self.scroll
+    }
+
+    /// The maximum vertical scroll for this layer (content height minus the
+    /// viewport height, floored at zero).
+    pub fn max_scroll_y(&self) -> f32 {
+        (self.layout.content_height() - self.rect.height).max(0.0)
     }
 }
 
@@ -155,6 +167,7 @@ impl Host {
             styles: Styles::default(),
             layout: LayoutTree::default(),
             commands: CommandList::default(),
+            scroll: Point::ZERO,
         });
         index
     }
@@ -176,6 +189,7 @@ impl Host {
             styles: Styles::default(),
             layout: LayoutTree::default(),
             commands: CommandList::default(),
+            scroll: Point::ZERO,
         });
         index
     }
@@ -281,6 +295,41 @@ impl Host {
         let layer = &self.layers[index];
         dispatch(layer.engine().dom().tree(), node, event, listener);
         true
+    }
+
+    /// Apply a wheel (scroll) delta at `point`, chaining to the parent when a
+    /// sub-document cannot consume it all.
+    ///
+    /// Returns `(layer, consumed)` pairs along the chain, innermost first. A
+    /// sub-document that reaches its edge passes the leftover to its parent,
+    /// which scrolls instead — so a wheel gesture never stops dead at a nested
+    /// boundary.
+    pub fn wheel(&mut self, point: Point, delta_y: f32) -> Vec<(usize, f32)> {
+        let mut chain = Vec::new();
+        let Some(mut index) = self.route(point) else {
+            return chain;
+        };
+        let mut leftover = delta_y;
+        loop {
+            let layer = &mut self.layers[index];
+            let max = layer.max_scroll_y();
+            let before = layer.scroll.y;
+            let after = (before + leftover).clamp(0.0, max);
+            let consumed = after - before;
+            layer.scroll.y = after;
+            if consumed != 0.0 {
+                chain.push((index, consumed));
+            }
+            leftover -= consumed;
+            if leftover.abs() < 1e-4 {
+                break;
+            }
+            match layer.anchor {
+                Some(anchor) => index = anchor.parent,
+                None => break,
+            }
+        }
+        chain
     }
 }
 
@@ -433,6 +482,64 @@ mod tests {
         );
         // It composed its own command stream.
         assert!(!host.layer(sub_index).unwrap().commands().is_empty());
+    }
+
+    #[test]
+    fn wheel_chains_from_a_sub_document_to_its_parent() {
+        let mut host = Host::new(Size::new(400.0, 200.0));
+        let parent = host.add_chrome(
+            engine(
+                r#"<div id="slot"></div><div id="tail"></div>"#,
+                "#slot { width: 200px; height: 100px } #tail { height: 400px }",
+            ),
+            Rect::new(0.0, 0.0, 400.0, 200.0),
+        );
+        let slot = host
+            .layer(parent)
+            .unwrap()
+            .engine()
+            .dom()
+            .get_element_by_id("slot")
+            .unwrap();
+        let sub = engine(r#"<div id="long"></div>"#, "#long { height: 300px }");
+        let sub_index = host.add_sub_document(parent, slot, sub);
+        host.layout(&MetricShaper);
+
+        // Sub viewport 100 over 300 content → 200; parent 200 over 500 → 300.
+        assert_eq!(host.layer(sub_index).unwrap().max_scroll_y(), 200.0);
+        assert_eq!(host.layer(parent).unwrap().max_scroll_y(), 300.0);
+
+        // 250 down: the sub-document takes 200, the parent takes the rest.
+        let chain = host.wheel(Point::new(10.0, 10.0), 250.0);
+        assert_eq!(chain, vec![(sub_index, 200.0), (parent, 50.0)]);
+        assert_eq!(host.layer(sub_index).unwrap().scroll().y, 200.0);
+        assert_eq!(host.layer(parent).unwrap().scroll().y, 50.0);
+    }
+
+    #[test]
+    fn wheel_does_not_chain_while_the_sub_document_can_scroll() {
+        let mut host = Host::new(Size::new(400.0, 200.0));
+        let parent = host.add_chrome(
+            engine(
+                r#"<div id="slot"></div>"#,
+                "#slot { width: 200px; height: 100px }",
+            ),
+            Rect::new(0.0, 0.0, 400.0, 200.0),
+        );
+        let slot = host
+            .layer(parent)
+            .unwrap()
+            .engine()
+            .dom()
+            .get_element_by_id("slot")
+            .unwrap();
+        let sub = engine(r#"<div id="long"></div>"#, "#long { height: 300px }");
+        let sub_index = host.add_sub_document(parent, slot, sub);
+        host.layout(&MetricShaper);
+
+        let chain = host.wheel(Point::new(10.0, 10.0), 50.0);
+        assert_eq!(chain, vec![(sub_index, 50.0)]);
+        assert_eq!(host.layer(parent).unwrap().scroll().y, 0.0);
     }
 
     #[test]

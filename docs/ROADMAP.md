@@ -78,15 +78,16 @@ and the a11y tree are the remainder of this slice.
 **Done when:** `cargo run -p noonoo --features window,gpu` opens a window and the
 a11y tree reaches AT-SPI on Linux without consumer re-enabling.
 
-## Slice 8 — Sub-documents  ◑ anchored layers shipped
+## Slice 8 — Sub-documents  ◑ anchored layers + scroll chaining shipped
 
 Host a document inside another as a first-class sub-document. Realized as an
 **anchored layer**: `Host::add_sub_document(parent, host_node, engine)` attaches
 a `Send` document to a host node; the parent **sizes** it from that node's
 content box, and routing, hit-testing, and input reach it through its own
-document — no blitted bitmap. Delivered.
+document — no blitted bitmap.
 
-**Remaining:** wheel-scroll chaining from a sub-document to its parent.
+**Wheel-scroll chaining** is in: `Host::wheel(point, delta)` scrolls the layer
+under the pointer and passes leftover to the parent when it hits its edge.
 
 ## Slice 9 — Motion
 

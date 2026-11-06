@@ -147,5 +147,6 @@ attached to a host node in a parent layer (`Host::add_sub_document`), the parent
 through its own document — the texture-overlay pattern is gone.
 
 The real window/GPU backend (`window`/`gpu` features) and the a11y tree remain
-borrowed and unwired; wheel-scroll chaining from a sub-document to its parent is
-not yet implemented.
+borrowed and unwired. **Wheel-scroll chaining is implemented** — `Host::wheel`
+scrolls the innermost layer under the pointer and passes any leftover to its
+parent, so a gesture never stops dead at a nested boundary.

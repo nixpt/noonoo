@@ -123,6 +123,15 @@ impl LayoutTree {
         &self.roots
     }
 
+    /// The total height of the laid-out content (the bottom of the lowest root
+    /// box). The scroll range is this minus the viewport height.
+    pub fn content_height(&self) -> f32 {
+        self.roots
+            .iter()
+            .map(|&index| self.boxes[index].rect.bottom())
+            .fold(0.0, f32::max)
+    }
+
     /// The deepest node whose border-box contains `point`.
     ///
     /// Later siblings (painted on top) win over earlier ones at equal depth, so
