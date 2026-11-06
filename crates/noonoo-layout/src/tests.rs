@@ -1,5 +1,5 @@
 use super::*;
-use noonoo_geometry::Size;
+use noonoo_geometry::{Point, Rect, Size};
 
 fn page(html: &str, css: &str, width: f32) -> (Document, LayoutTree) {
     let doc = noonoo_html::parse(html);
@@ -120,4 +120,136 @@ fn text_align_centers_the_text() {
         text_box.rect.x
     );
     let _ = doc;
+}
+
+#[test]
+fn relative_offsets_shift_only_the_box() {
+    let (doc, tree) = page(
+        r#"<div id="a"></div><div id="b"></div><div id="c"></div>"#,
+        "div { height: 50px } #b { position: relative; top: 10px; left: 5px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.y, 0.0);
+    // The box moved...
+    let b = tree.get(id(&doc, "b")).unwrap();
+    assert_eq!(b.rect.x, 5.0);
+    assert_eq!(b.rect.y, 60.0);
+    // ...but the flow did not: `c` still follows at the normal spot.
+    assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.y, 100.0);
+}
+
+#[test]
+fn absolute_is_out_of_flow_and_placed_by_its_insets() {
+    let (doc, tree) = page(
+        r#"<div id="cb"><div id="abs"></div><div id="after"></div></div>"#,
+        "#cb { position: relative; width: 200px; height: 200px } \
+         #abs { position: absolute; top: 20px; left: 30px; width: 50px; height: 10px } \
+         #after { height: 40px }",
+        400.0,
+    );
+    let abs = tree.get(id(&doc, "abs")).unwrap();
+    assert_eq!(abs.rect, Rect::new(30.0, 20.0, 50.0, 10.0));
+    // The in-flow sibling starts at the parent's content origin: the absolute
+    // box pushed nothing.
+    assert_eq!(tree.get(id(&doc, "after")).unwrap().rect.y, 0.0);
+}
+
+#[test]
+fn absolute_does_not_extend_its_parent() {
+    let (doc, tree) = page(
+        r#"<div id="cb"><div id="abs"></div></div>"#,
+        "#cb { position: relative; width: 100px } \
+         #abs { position: absolute; top: 0; left: 0; width: 50px; height: 500px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "cb")).unwrap().rect.height, 0.0);
+}
+
+#[test]
+fn absolute_without_a_positioned_ancestor_uses_the_viewport() {
+    let (doc, tree) = page(
+        r#"<div id="abs"></div>"#,
+        "#abs { position: absolute; top: 5px; right: 10px; width: 40px; height: 10px }",
+        400.0,
+    );
+    let abs = tree.get(id(&doc, "abs")).unwrap();
+    // right: 10 in a 400-wide viewport, width 40 → x = 400 - 10 - 40.
+    assert_eq!(abs.rect.x, 350.0);
+    assert_eq!(abs.rect.y, 5.0);
+}
+
+#[test]
+fn absolute_stretches_between_left_and_right() {
+    let (doc, tree) = page(
+        r#"<div id="cb"><div id="abs"></div></div>"#,
+        "#cb { position: relative; width: 200px; height: 100px } \
+         #abs { position: absolute; left: 10px; right: 10px; top: 0; height: 20px }",
+        400.0,
+    );
+    let abs = tree.get(id(&doc, "abs")).unwrap();
+    assert_eq!(abs.rect.x, 10.0);
+    assert_eq!(abs.rect.width, 180.0);
+    assert_eq!(abs.rect.height, 20.0);
+}
+
+#[test]
+fn absolute_shrinks_to_fit_its_text() {
+    let (doc, tree) = page(
+        r#"<div id="cb"><span id="tip">hi</span></div>"#,
+        "#cb { position: relative; width: 300px; height: 100px } \
+         #tip { position: absolute; top: 0; left: 0 }",
+        400.0,
+    );
+    let tip = tree.get(id(&doc, "tip")).unwrap();
+    assert!(tip.rect.width > 0.0, "width = {}", tip.rect.width);
+    assert!(
+        tip.rect.width < 300.0,
+        "should shrink, width = {}",
+        tip.rect.width
+    );
+}
+
+#[test]
+fn fixed_positions_against_the_viewport_not_the_ancestor() {
+    let (doc, tree) = page(
+        r#"<div id="cb"><div id="fix"></div></div>"#,
+        "#cb { position: relative; margin-left: 50px; width: 100px; height: 100px } \
+         #fix { position: fixed; top: 0; left: 0; width: 10px; height: 10px }",
+        400.0,
+    );
+    let fix = tree.get(id(&doc, "fix")).unwrap();
+    assert_eq!(fix.rect.x, 0.0);
+    assert_eq!(fix.rect.y, 0.0);
+}
+
+#[test]
+fn absolute_uses_the_nearest_positioned_ancestors_padding_box() {
+    let (doc, tree) = page(
+        r#"<div id="outer"><div id="inner"><div id="abs"></div></div></div>"#,
+        "#outer { position: relative; margin-left: 40px; width: 200px; height: 200px; \
+                  border: 5px solid black } \
+         #inner { margin-top: 20px; height: 50px } \
+         #abs { position: absolute; left: 0; top: 0; width: 10px; height: 10px }",
+        400.0,
+    );
+    let abs = tree.get(id(&doc, "abs")).unwrap();
+    // #outer's padding box origin: margin 40 + border 5.
+    assert_eq!(abs.rect.x, 45.0);
+    assert_eq!(abs.rect.y, 5.0);
+}
+
+#[test]
+fn a_positioned_child_is_hit_outside_its_parent() {
+    let (doc, tree) = page(
+        r#"<div id="cb"><div id="badge"></div></div>"#,
+        "#cb { position: relative; width: 100px; height: 100px } \
+         #badge { position: absolute; left: 90px; top: 90px; width: 30px; height: 30px }",
+        400.0,
+    );
+    // The badge spans (90,90)-(120,120); (110,110) is inside it but outside the
+    // 100×100 containing block.
+    assert_eq!(
+        tree.hit_test(Point::new(110.0, 110.0)),
+        Some(id(&doc, "badge"))
+    );
 }

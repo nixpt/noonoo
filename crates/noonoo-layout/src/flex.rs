@@ -5,7 +5,7 @@
 //! yet); column flex stacks natural heights.
 
 use noonoo_dom::NodeId;
-use noonoo_style::{ComputedStyle, Dimension, Display, FlexDirection, FlexWrap, JustifyContent};
+use noonoo_style::{ComputedStyle, Dimension, FlexDirection, FlexWrap, JustifyContent};
 
 use crate::{Ctx, resolve};
 
@@ -17,15 +17,17 @@ pub(crate) fn layout_flex_children(
     content_y: f32,
     content_width: f32,
 ) -> (Vec<usize>, f32) {
-    let items: Vec<NodeId> = children
-        .iter()
-        .copied()
-        .filter(|&child| {
-            ctx.styles
-                .get(child)
-                .is_some_and(|s| s.display != Display::None)
-        })
-        .collect();
+    let mut items: Vec<NodeId> = Vec::new();
+    for &child in children {
+        if ctx.is_hidden(child) {
+            continue;
+        }
+        if ctx.is_out_of_flow(child) {
+            ctx.pending.push(child);
+            continue;
+        }
+        items.push(child);
+    }
 
     if items.is_empty() {
         return (Vec::new(), 0.0);

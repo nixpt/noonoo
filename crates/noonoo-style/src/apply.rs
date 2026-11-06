@@ -163,6 +163,10 @@ pub(crate) fn apply(
         }
         Property::Width => set_first(&mut style.width, dimension(values, font_size, root)),
         Property::Height => set_first(&mut style.height, dimension(values, font_size, root)),
+        Property::Top => set_first(&mut style.inset.top, dimension(values, font_size, root)),
+        Property::Right => set_first(&mut style.inset.right, dimension(values, font_size, root)),
+        Property::Bottom => set_first(&mut style.inset.bottom, dimension(values, font_size, root)),
+        Property::Left => set_first(&mut style.inset.left, dimension(values, font_size, root)),
         Property::MarginTop => set_first(&mut style.margin.top, dimension(values, font_size, root)),
         Property::MarginRight => {
             set_first(&mut style.margin.right, dimension(values, font_size, root))
@@ -472,6 +476,10 @@ fn copy_property(dst: &mut ComputedStyle, src: &ComputedStyle, property: &Proper
         Property::Position => dst.position = src.position,
         Property::Width => dst.width = src.width,
         Property::Height => dst.height = src.height,
+        Property::Top => dst.inset.top = src.inset.top,
+        Property::Right => dst.inset.right = src.inset.right,
+        Property::Bottom => dst.inset.bottom = src.inset.bottom,
+        Property::Left => dst.inset.left = src.inset.left,
         Property::MarginTop => dst.margin.top = src.margin.top,
         Property::MarginRight => dst.margin.right = src.margin.right,
         Property::MarginBottom => dst.margin.bottom = src.margin.bottom,

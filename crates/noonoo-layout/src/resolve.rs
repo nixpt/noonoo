@@ -58,3 +58,22 @@ pub fn borders(style: &ComputedStyle) -> Edges<f32> {
         ),
     }
 }
+
+/// Resolve inset offsets (`top`/`right`/`bottom`/`left`); `auto` is `None`.
+///
+/// Percentages resolve against `reference` — the containing block's width for
+/// both axes, a documented approximation (CSS resolves the vertical pair
+/// against the containing block's height).
+pub fn insets(edges: &Edges<Dimension>, reference: f32) -> Edges<Option<f32>> {
+    let resolve = |value: Dimension| match value {
+        Dimension::Auto => None,
+        Dimension::Px(px) => Some(px),
+        Dimension::Percent(percent) => Some(reference * percent / 100.0),
+    };
+    Edges {
+        top: resolve(edges.top),
+        right: resolve(edges.right),
+        bottom: resolve(edges.bottom),
+        left: resolve(edges.left),
+    }
+}

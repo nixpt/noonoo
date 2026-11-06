@@ -45,12 +45,22 @@ pub(crate) fn layout_block_children(
             i += 1;
             continue;
         }
+        if ctx.is_out_of_flow(child) {
+            ctx.pending.push(child);
+            i += 1;
+            continue;
+        }
 
         if ctx.is_inline_level(child) {
             let mut run = Vec::new();
             while i < children.len() {
                 let candidate = children[i];
                 if is_display_none(ctx, candidate) {
+                    i += 1;
+                    continue;
+                }
+                if ctx.is_out_of_flow(candidate) {
+                    ctx.pending.push(candidate);
                     i += 1;
                     continue;
                 }

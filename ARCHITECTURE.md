@@ -70,7 +70,7 @@ Seventeen crates in five tiers. Arrows point *downward only*.
 | `noonoo-text` | line breaking + alignment (shaping behind `Shaper`) | `parley` (via the seam, not yet wired) |
 | `noonoo-motion` | springs, velocity-preserving retarget | — (owned) |
 | `noonoo-style` | the cascade: matching → inheritance → computed values | — (owned; replaces `stylo`) |
-| `noonoo-layout` | box layout: block, inline, flex | — (owned; replaces `taffy`) |
+| `noonoo-layout` | box layout: block, inline, flex, positioning | — (owned; replaces `taffy`) |
 | `noonoo-geometry` | `Point` / `Size` / `Rect` | — |
 | `noonoo-markdown` | Markdown (subset) → HTML | — (owned) |
 | `noonoo-csv` | CSV/TSV → HTML table | — (owned) |

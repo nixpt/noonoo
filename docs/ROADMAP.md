@@ -116,7 +116,8 @@ The borrowed engines are scored in `DEPENDENCY-EXIT.md`. The path to dropping
   engine computes `color`/`display`/`margin` for a fixture with stylo absent.
   *(A1 selectors ✅, A2 value/property model ✅, A3 cascade ✅ — done; `stylo` was never added)*
 - **Phase B — layout (drops `taffy`).** block + inline + flex over our values.
-  *✅ (v1: block, inline, and flex — row/column, grow/shrink, justify, gaps)*
+  *✅ (v1: block, inline, flex — row/column, grow/shrink, justify, gaps — plus
+  `position: relative`/`absolute`/`fixed`)*
 - **Phase C — text (trims `parley`).** line-breaking + `text-align`; shaping
   stays borrowed.
   *✅ (line breaking, wrapping, and alignment owned; shaping behind the `Shaper` seam)*

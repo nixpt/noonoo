@@ -139,4 +139,19 @@ mod tests {
         let span = doc.get_elements_by_tag_name("span")[0];
         assert_eq!(styles.get(span).unwrap().color, Color::BLACK);
     }
+
+    #[test]
+    fn position_and_offsets_parse() {
+        let (doc, styles) = styled(
+            r#"<div id="a">x</div>"#,
+            "#a { position: absolute; top: 5px; right: 10%; left: auto }",
+        );
+        let a = doc.get_element_by_id("a").unwrap();
+        let s = styles.get(a).unwrap();
+        assert_eq!(s.position, Position::Absolute);
+        assert_eq!(s.inset.top, Dimension::Px(5.0));
+        assert_eq!(s.inset.right, Dimension::Percent(10.0));
+        assert_eq!(s.inset.left, Dimension::Auto);
+        assert_eq!(s.inset.bottom, Dimension::Auto);
+    }
 }
