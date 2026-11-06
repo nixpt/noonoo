@@ -77,6 +77,16 @@ impl Engine {
         noonoo_style::compute(&self.dom, &self.stylesheets)
     }
 
+    /// Lay the document out for a viewport, using the given text measurer.
+    pub fn layout(
+        &self,
+        viewport: noonoo_geometry::Size,
+        measurer: &dyn noonoo_layout::TextMeasurer,
+    ) -> noonoo_layout::LayoutTree {
+        let styles = self.compute_styles();
+        noonoo_layout::layout(&self.dom, &styles, viewport, measurer)
+    }
+
     /// Consume the engine and return its document.
     pub fn into_dom(self) -> Document {
         self.dom
@@ -150,5 +160,18 @@ mod tests {
         assert_eq!(style.display, noonoo_style::Display::Flex);
         assert_eq!(style.color, noonoo_css::Color::rgb(255, 0, 0));
         assert_eq!(style.margin.top, noonoo_style::Dimension::Px(5.0));
+    }
+
+    #[test]
+    fn lays_out_a_page() {
+        let engine = Engine::from_html("<style>#a { height: 40px }</style><div id=\"a\"></div>");
+        let tree = engine.layout(
+            noonoo_geometry::Size::new(300.0, 200.0),
+            &noonoo_layout::HeuristicMeasurer,
+        );
+        let a = engine.dom().get_element_by_id("a").unwrap();
+        let box_ = tree.get(a).unwrap();
+        assert_eq!(box_.rect.width, 300.0);
+        assert_eq!(box_.rect.height, 40.0);
     }
 }

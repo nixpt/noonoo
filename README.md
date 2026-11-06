@@ -29,11 +29,12 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | [`noonoo-caison`](crates/noonoo-caison) | CAISON parse and its JSON projection |
 | [`noonoo-html`](crates/noonoo-html) | HTML tokenizer and tree builder into `noonoo-dom` |
 | [`noonoo-dom`](crates/noonoo-dom) | The tree, stable `NodeId`s, checked mutation, queries |
+| [`noonoo-geometry`](crates/noonoo-geometry) | Points, sizes, and rectangles |
 | [`noonoo-events`](crates/noonoo-events) | Input model and DOM dispatch with bubbling |
 | [`noonoo-text`](crates/noonoo-text) | Text shaping, fonts, line breaking |
 | [`noonoo-motion`](crates/noonoo-motion) | Springs, velocity-preserving retarget |
 | [`noonoo-style`](crates/noonoo-style) | Style ingestion and the cascade |
-| [`noonoo-layout`](crates/noonoo-layout) | Box layout: computed style → boxes |
+| [`noonoo-layout`](crates/noonoo-layout) | Box layout: computed style → boxes (block / inline / flex) |
 | [`noonoo-net`](crates/noonoo-net) | Document loading: `http(s)`/`file`/`data`/`exo` |
 | [`noonoo-engine`](crates/noonoo-engine) | Orchestration: a working document |
 | [`noonoo-headless`](crates/noonoo-headless) | Tree dump, virtual clock, synthetic input |

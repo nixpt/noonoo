@@ -6,6 +6,7 @@ members = [
     "crates/noonoo-events",
     "crates/noonoo-text",
     "crates/noonoo-motion",
+    "crates/noonoo-geometry",
     # parsers — owned syntax layers, dependency-free
     "crates/noonoo-parse",
     "crates/noonoo-json",
@@ -56,6 +57,7 @@ noonoo-dom = { path = "crates/noonoo-dom", version = "0.1.0" }
 noonoo-events = { path = "crates/noonoo-events", version = "0.1.0" }
 noonoo-text = { path = "crates/noonoo-text", version = "0.1.0" }
 noonoo-motion = { path = "crates/noonoo-motion", version = "0.1.0" }
+noonoo-geometry = { path = "crates/noonoo-geometry", version = "0.1.0" }
 noonoo-style = { path = "crates/noonoo-style", version = "0.1.0" }
 noonoo-layout = { path = "crates/noonoo-layout", version = "0.1.0" }
 noonoo-html = { path = "crates/noonoo-html", version = "0.1.0" }

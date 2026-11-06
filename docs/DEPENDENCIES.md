@@ -13,7 +13,7 @@ them and **own** the integration.
 | Engine | Reached from | Verdict |
 | --- | --- | --- |
 | `stylo` (+ `selectors`, `cssparser`) | — | **Owned.** Phase A replaced it with a documented CSS subset (`noonoo-css` + `noonoo-style`); `stylo` is not a dependency. See [`DEPENDENCY-EXIT.md`](DEPENDENCY-EXIT.md). |
-| `taffy` | `noonoo-layout` | **Keep** (next to own). Flexbox + grid, a solved problem. |
+| `taffy` | — | **Owned.** Phase B replaced it with `noonoo-layout` (block / inline / flex); `taffy` is not a dependency. |
 | `parley` (+ `fontique`/`swash`/`skrifa`) | `noonoo-text` | **Keep.** Shaping, line breaking, font management. |
 | `anyrender` / `vello` / `wgpu` | `noonoo-paint`, `noonoo-shell` | **Keep.** GPU 2D, behind a feature. |
 | `winit`, `accesskit` | `noonoo-shell` | **Keep.** Windowing + a11y, behind features. |

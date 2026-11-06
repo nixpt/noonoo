@@ -20,6 +20,7 @@ http = ["noonoo-net/http"]
 [dependencies]
 noonoo-engine.workspace = true
 noonoo-dom.workspace = true
+noonoo-geometry.workspace = true
 noonoo-events.workspace = true
 noonoo-headless.workspace = true
 noonoo-html.workspace = true

@@ -11,6 +11,7 @@ dependencies = [
  "noonoo-dom",
  "noonoo-engine",
  "noonoo-events",
+ "noonoo-geometry",
  "noonoo-headless",
  "noonoo-html",
  "noonoo-json",
@@ -50,6 +51,7 @@ version = "0.1.0"
 dependencies = [
  "noonoo-css",
  "noonoo-dom",
+ "noonoo-geometry",
  "noonoo-html",
  "noonoo-layout",
  "noonoo-style",
@@ -61,6 +63,10 @@ version = "0.1.0"
 dependencies = [
  "noonoo-dom",
 ]
+
+[[package]]
+name = "noonoo-geometry"
+version = "0.1.0"
 
 [[package]]
 name = "noonoo-headless"
@@ -90,9 +96,11 @@ dependencies = [
 name = "noonoo-layout"
 version = "0.1.0"
 dependencies = [
+ "noonoo-css",
  "noonoo-dom",
+ "noonoo-geometry",
+ "noonoo-html",
  "noonoo-style",
- "noonoo-text",
 ]
 
 [[package]]

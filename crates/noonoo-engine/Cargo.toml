@@ -1,6 +1,6 @@
 [package]
 name = "noonoo-engine"
-description = "Noonoo's orchestration: a parsed, styled, layable engine over a DOM document."
+description = "Noonoo's orchestration: a parsed, styled, laid-out engine over a DOM document."
 version.workspace = true
 license.workspace = true
 homepage.workspace = true
@@ -12,12 +12,11 @@ rust-version.workspace = true
 [features]
 default = ["std"]
 std = []
-# Pull in the layout layer. Style is always on (we own it); layout lands next.
-resolve = ["dep:noonoo-layout"]
 
 [dependencies]
 noonoo-dom.workspace = true
 noonoo-html.workspace = true
 noonoo-css.workspace = true
 noonoo-style.workspace = true
-noonoo-layout = { workspace = true, optional = true }
+noonoo-layout.workspace = true
+noonoo-geometry.workspace = true

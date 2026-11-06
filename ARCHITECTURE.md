@@ -69,7 +69,8 @@ Seventeen crates in five tiers. Arrows point *downward only*.
 | `noonoo-text` | shaping, fonts, line breaking | `parley` (+ fontique/swash/skrifa) |
 | `noonoo-motion` | springs, velocity-preserving retarget | — (owned) |
 | `noonoo-style` | the cascade: matching → inheritance → computed values | — (owned; replaces `stylo`) |
-| `noonoo-layout` | boxes and geometry | `taffy` |
+| `noonoo-layout` | box layout: block, inline, flex | — (owned; replaces `taffy`) |
+| `noonoo-geometry` | `Point` / `Size` / `Rect` | — |
 | `noonoo-net` | loading: http/file/data/exo | `reqwest` (feature-gated) |
 | `noonoo-engine` | the working document (parse→style→layout) | — (orchestrates) |
 | `noonoo-headless` | tree dump, virtual clock, synthetic input | — |
@@ -87,7 +88,7 @@ and `noonoo-style` runs the cascade itself (`docs/DEPENDENCY-EXIT.md` Phase A) �
 
 ```
  bytes ─▶ noonoo-html ─▶ noonoo-dom ─▶ noonoo-style ─▶ noonoo-layout ─▶ noonoo-paint ─▶ backend
-                       (tree)      (owned cascade)  (taffy+noonoo-text)  (commands)
+                       (tree)      (owned cascade)  (noonoo + text)      (commands)
                                    ▲                                     │
                         noonoo-engine orchestrates all of the above      │
                                                                           ▼
@@ -101,7 +102,7 @@ how a selector is spelled.
 ## Invariants to keep true
 
 - **Identity is defined once.** `noonoo_dom::NodeId` is the only node handle.
-- **Borrowed engines stay behind their crate.** `grep -r taffy crates` lands in
+- **Borrowed engines stay behind their crate.** `grep -r parley crates` lands in
   `noonoo-layout` alone; `parley` in `noonoo-text`. `stylo` appears nowhere —
   the cascade is ours.
 - **`forbid(unsafe_code)` stays on every crate except `noonoo-shell`.**
