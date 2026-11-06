@@ -30,10 +30,13 @@ members = [
 exclude = ["tools/api-snapshot"]
 
 # Noonoo is a clean-room reimplementation. Nothing here depends on the code of
-# the engine it replaces (bliss-engine / upstream Blitz); the third-party
-# engines we *do* rely on (stylo, taffy, parley, anyrender/vello, winit) are
-# ordinary crates.io deps, pinned in one place and kept behind bounded modules.
-# See docs/DEPENDENCIES.md, ARCHITECTURE.md, and docs/CONSUMERS.md.
+# the engine it replaces (bliss-engine / upstream Blitz). Today the workspace
+# has **zero third-party dependencies**; the CSS layer (tokenizer, selectors,
+# value/property model, the cascade) is owned end to end. When the borrowed
+# engines arrive they are ordinary crates.io deps, pinned in one place and kept
+# behind bounded modules: `taffy` (layout), `parley` (text shaping), and — behind
+# features — an `anyrender`/`vello`/`wgpu` paint backend and `winit`. `stylo` is
+# deliberately *not* used. See ARCHITECTURE.md and docs/DEPENDENCIES.md.
 
 [workspace.package]
 version = "0.0.1"
