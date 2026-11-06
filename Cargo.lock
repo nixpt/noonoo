@@ -7,6 +7,7 @@ name = "noonoo"
 version = "0.4.0"
 dependencies = [
  "noonoo-caison",
+ "noonoo-caps",
  "noonoo-css",
  "noonoo-csv",
  "noonoo-dom",
@@ -39,6 +40,14 @@ version = "0.4.0"
 dependencies = [
  "noonoo-json",
  "noonoo-parse",
+]
+
+[[package]]
+name = "noonoo-caps"
+version = "0.4.0"
+dependencies = [
+ "noonoo-dom",
+ "noonoo-html",
 ]
 
 [[package]]

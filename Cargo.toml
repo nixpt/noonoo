@@ -29,6 +29,8 @@ members = [
     "crates/noonoo-headless",
     # higher layers
     "crates/noonoo-hx",
+    # policy — capability gating
+    "crates/noonoo-caps",
     # output
     "crates/noonoo-paint",
     "crates/noonoo-shell",
@@ -37,7 +39,7 @@ members = [
 ]
 # tools/ is deliberately outside the workspace: the api-snapshot helper pulls
 # serde_json and the api-drift path dep, which the engine build must not pay for.
-exclude = ["tools/api-snapshot"]
+exclude = ["tools/api-snapshot", "integrations/noonoo-xip"]
 
 # Noonoo is a clean-room reimplementation. Nothing here depends on the code of
 # the engine it replaces (bliss-engine / upstream Blitz). Today the workspace
@@ -81,6 +83,7 @@ noonoo-net = { path = "crates/noonoo-net", version = "0.4.0" }
 noonoo-engine = { path = "crates/noonoo-engine", version = "0.4.0" }
 noonoo-headless = { path = "crates/noonoo-headless", version = "0.4.0" }
 noonoo-hx = { path = "crates/noonoo-hx", version = "0.4.0" }
+noonoo-caps = { path = "crates/noonoo-caps", version = "0.4.0" }
 noonoo-paint = { path = "crates/noonoo-paint", version = "0.4.0" }
 noonoo-shell = { path = "crates/noonoo-shell", version = "0.4.0" }
 

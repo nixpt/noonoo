@@ -1,0 +1,23 @@
+[package]
+name = "noonoo-xip"
+version = "0.4.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+description = "Opt-in adapter: verify Exosphere Identity Protocol capability tokens and gate the DOM."
+
+# Deliberately OUTSIDE the noonoo workspace (see the workspace `exclude`): it
+# pulls the XIP crypto stack (ed25519, sha2, chrono, bs58), which the engine
+# build must not pay for. The owned policy lives in `noonoo-caps`; only the
+# signature verification is borrowed, and only here.
+#
+# `xip-core` is unpublished and private, so this path dep is local wiring; a
+# real checkout would pin it by git or a vendored version instead.
+[dependencies]
+noonoo-caps = { path = "../../crates/noonoo-caps" }
+xip-core = { path = "../../../../exo-workspace/xip-core" }
+chrono = "0.4"
+serde_json = "1"
+
+[dev-dependencies]
+noonoo-dom = { path = "../../crates/noonoo-dom" }

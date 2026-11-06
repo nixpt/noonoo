@@ -79,6 +79,7 @@ Seventeen crates in five tiers. Arrows point *downward only*.
 | `noonoo-xml` | XML → DOM (strict nesting, entities, CDATA) | — (owned) |
 | `noonoo-svg` | SVG subset → paint commands | — (owned) |
 | `noonoo-hx` | htmx-like `hx-*` attributes → fetch + DOM swap | — (owned) |
+| `noonoo-caps` | capability gating: scopes, policy seam, gated DOM | — (owned); XIP via the opt-in `noonoo-xip` |
 | `noonoo-net` | loading: `file:` + `data:` owned; `http` behind a feature | TLS (borrowed, not wired) |
 | `noonoo-engine` | the working document (parse→style→layout) | — (orchestrates) |
 | `noonoo-headless` | tree dump, virtual clock, synthetic input | — |

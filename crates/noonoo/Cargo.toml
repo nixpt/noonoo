@@ -31,6 +31,7 @@ noonoo-toml.workspace = true
 noonoo-hx.workspace = true
 noonoo-svg.workspace = true
 noonoo-xml.workspace = true
+noonoo-caps.workspace = true
 noonoo-css.workspace = true
 noonoo-selectors.workspace = true
 noonoo-caison.workspace = true

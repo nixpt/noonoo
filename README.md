@@ -43,6 +43,7 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | [`noonoo-xml`](crates/noonoo-xml) | XML → DOM (strict nesting, entities, CDATA) |
 | [`noonoo-svg`](crates/noonoo-svg) | SVG subset → paint commands |
 | [`noonoo-hx`](crates/noonoo-hx) | htmx-like declarative attributes → fetch + DOM swap |
+| [`noonoo-caps`](crates/noonoo-caps) | Capability gating: scopes, the policy seam, a gated DOM |
 | [`noonoo-net`](crates/noonoo-net) | Loading: `file:` + `data:` owned; `http` behind a feature |
 | [`noonoo-engine`](crates/noonoo-engine) | Orchestration: a working document |
 | [`noonoo-headless`](crates/noonoo-headless) | Tree dump, virtual clock, synthetic input |
@@ -56,7 +57,8 @@ Two consumers — **arniko** (a reactive UI framework) and **surfer-browser** �
 build on the engine Noonoo replaces, and both carry workarounds for it. Noonoo is
 built to be what they'd rather build on: a decomposed substrate with correct
 events, stable node ids, checked mutation, a working `set_inner_html`, real
-accessibility, and first-class sub-documents and headless tooling. See
+accessibility, and first-class sub-documents, headless tooling, and
+capability-gated DOM. See
 [`docs/CONSUMERS.md`](docs/CONSUMERS.md) and
 [`docs/FEATURE-OWNERSHIP.md`](docs/FEATURE-OWNERSHIP.md).
 
@@ -113,6 +115,7 @@ The workspace MSRV is **1.89**. CI checks it explicitly.
 - [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) — the drop-in switch and the api-drift gate
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — slices
 - [`docs/FORMATS.md`](docs/FORMATS.md) — file formats: DOM vs. value model, and Markdown
+- [`docs/XIP.md`](docs/XIP.md) — capability-gated DOM: the owned seam and the opt-in XIP adapter
 
 ## License
 

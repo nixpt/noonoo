@@ -12,6 +12,7 @@
 pub mod cli;
 
 pub use noonoo_caison as caison;
+pub use noonoo_caps as caps;
 pub use noonoo_css as css;
 pub use noonoo_csv as csv;
 pub use noonoo_dom as dom;
@@ -43,7 +44,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The usual way in: the engine, as a set of modules.
 pub mod prelude {
     pub use crate::{
-        caison, css, csv, dom, engine, events, geometry, headless, html, hx, ini, json, layout,
-        markdown, motion, net, paint, parse, selectors, style, svg, text, toml, xml,
+        caison, caps, css, csv, dom, engine, events, geometry, headless, html, hx, ini, json,
+        layout, markdown, motion, net, paint, parse, selectors, style, svg, text, toml, xml,
     };
 }

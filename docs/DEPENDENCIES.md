@@ -76,6 +76,16 @@ the engine's own formats.
 The line is deliberate: we own the small, spec-shaped syntax; we buy the
 multi-year engines.
 
+## Owned policy, borrowed crypto
+
+Capability gating follows the same split as the parsers. **`noonoo-caps` is
+owned and dependency-free** — the scope/grant model, the `Authorizer` seam, and
+the gated DOM. The cryptography behind a real token (Ed25519, SHA-2, `chrono`,
+`bs58`) is **borrowed, and opt-in only**: the `noonoo-xip` adapter verifies a
+signed Exosphere Identity Protocol token through `xip-core`, and lives *outside*
+the workspace so the engine's default build and lockfile stay free of it. See
+[`XIP.md`](XIP.md).
+
 ## Dropping a borrowed engine
 
 "Buy don't build" is the default, not a law. Each borrowed engine was scored on
