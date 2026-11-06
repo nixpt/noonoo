@@ -107,6 +107,7 @@ The borrowed engines are scored in `DEPENDENCY-EXIT.md`. The path to dropping
   selector model + specificity and a property/value model; `noonoo-style` owns
   the cascade, inheritance, computed values, and a UA stylesheet. Done when our
   engine computes `color`/`display`/`margin` for a fixture with stylo absent.
+  *(A1 selectors ✅, A2 value/property model ✅)*
 - **Phase B — layout (drops `taffy`).** block + inline + flex over our values.
 - **Phase C — text (trims `parley`).** line-breaking + `text-align`; shaping
   stays borrowed.

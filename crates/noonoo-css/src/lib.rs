@@ -1,23 +1,29 @@
 //! # noonoo-css
 //!
-//! The CSS layer: a tokenizer following CSS Syntax Level 3, a top-level rule
-//! splitter, and the **selector** model — parsing, specificity, and matching.
+//! The CSS layer: a tokenizer following CSS Syntax Level 3, a rule splitter, the
+//! **selector** model (parsing, specificity, matching), and the **value &
+//! property** model (typed values and shorthand expansion).
 //!
-//! Scope note: this owns *syntax* and *selector matching*. It does not yet own
-//! the cascade (declaration merging, inheritance, computed values), which
-//! `noonoo-style` builds on top — see `docs/DEPENDENCY-EXIT.md` (Phase A).
+//! Scope note: this owns *syntax*, *selectors*, and *value/property typing*. It
+//! does not yet own the cascade (merging declarations by origin, specificity and
+//! order, then inheritance and computed values), which `noonoo-style` builds on
+//! top — see `docs/DEPENDENCY-EXIT.md` (Phase A).
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 use noonoo_parse::ParseResult;
 
+pub mod property;
 pub mod selector;
+pub mod value;
 
+pub use property::{Declaration, Property, parse_declaration};
 pub use selector::{
     AttrOp, AttrSelector, Combinator, ComplexSelector, CompoundSelector, Element, MatchContext,
     Nth, PseudoClass, SelectorList, SimpleSelector, Specificity, TypeSelector,
 };
+pub use value::{Color, Length, LengthUnit, Value, parse_values};
 
 /// A CSS token kind (CSS Syntax Level 3, abridged).
 #[derive(Clone, PartialEq, Debug)]
@@ -434,9 +440,12 @@ fn consume_url(source: &str, mut pos: usize) -> (String, usize, bool) {
 
 // --- stylesheet ------------------------------------------------------------
 
-/// A single CSS declaration.
+/// A single CSS declaration, as spelled in the source (unparsed).
+///
+/// The typed form — property + parsed values — is [`crate::property::Declaration`],
+/// produced by [`crate::parse_declaration`].
 #[derive(Clone, PartialEq, Debug)]
-pub struct Declaration {
+pub struct RawDeclaration {
     /// The property name.
     pub name: String,
     /// The value, verbatim.
@@ -453,7 +462,7 @@ pub enum Rule {
         /// The selector text.
         selector: String,
         /// The declarations in the block.
-        declarations: Vec<Declaration>,
+        declarations: Vec<RawDeclaration>,
     },
     /// An at-rule, e.g. `@media … { … }`. The block is captured verbatim.
     At {
@@ -568,7 +577,7 @@ fn split_at_rule(prelude: &str) -> (String, String) {
     )
 }
 
-fn parse_declarations(source: &str, tokens: &[Token]) -> Vec<Declaration> {
+fn parse_declarations(source: &str, tokens: &[Token]) -> Vec<RawDeclaration> {
     let mut declarations = Vec::new();
     let mut i = 0;
     while i < tokens.len() {
@@ -604,7 +613,7 @@ fn parse_declarations(source: &str, tokens: &[Token]) -> Vec<Declaration> {
             value = value[..idx].trim().to_owned();
         }
         if !name.is_empty() {
-            declarations.push(Declaration {
+            declarations.push(RawDeclaration {
                 name,
                 value,
                 important,
