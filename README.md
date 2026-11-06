@@ -39,6 +39,7 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | [`noonoo-markdown`](crates/noonoo-markdown) | Markdown (subset) → HTML |
 | [`noonoo-csv`](crates/noonoo-csv) | CSV/TSV → HTML table |
 | [`noonoo-ini`](crates/noonoo-ini) | INI → value model (JSON) |
+| [`noonoo-svg`](crates/noonoo-svg) | SVG subset → paint commands |
 | [`noonoo-net`](crates/noonoo-net) | Loading: `file:` + `data:` owned; `http` behind a feature |
 | [`noonoo-engine`](crates/noonoo-engine) | Orchestration: a working document |
 | [`noonoo-headless`](crates/noonoo-headless) | Tree dump, virtual clock, synthetic input |
@@ -85,6 +86,7 @@ noonoo --csv data.csv       # CSV/TSV → HTML table
 noonoo --csv-paint data.csv # CSV/TSV viewer: layout + paint commands
 noonoo --txt note.txt       # plain text → HTML (<pre>)
 noonoo --ini app.ini        # INI → JSON
+noonoo --svg icon.svg       # SVG subset → paint commands
 noonoo --caison app.caison  # parse CAISON, print its JSON projection
 ```
 

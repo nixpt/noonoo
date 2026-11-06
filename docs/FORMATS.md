@@ -20,6 +20,7 @@ settings or data, parse it to a value model.**
 | Format | Crate | Destination |
 |---|---|---|
 | HTML | `noonoo-html` | DOM |
+| SVG (subset) | `noonoo-svg` | paint commands |
 | Markdown | `noonoo-markdown` | DOM (via HTML) |
 | CSV / TSV | `noonoo-csv` | DOM (via `<table>`) |
 | Plain text | `noonoo-html` (`plain_text_to_html`) | DOM (`<pre>`) |
@@ -50,7 +51,7 @@ footnotes, reference links) is ordinary work inside `noonoo-markdown`.
 | **CSV / TSV** | DOM | ✅ `noonoo-csv`: parses and emits a `<table>` the engine lays out |
 | **INI / TOML-lite** | value model | ✅ `noonoo-ini`: sections + pairs → JSON |
 | **Front matter** (`---` YAML-ish in `.md`) | value model | ✅ `noonoo_markdown::split_front_matter` — metadata before the body |
-| **SVG** (subset) | DOM / draw commands | parse shapes → `noonoo-paint` commands (Phase E remainder) |
+| **SVG** (subset) | DOM / draw commands | ✅ `noonoo-svg`: shapes → `noonoo-paint` commands (rect/circle/ellipse/line/polygon/polyline/path) |
 
 Each new format is its **own `noonoo-<format>` crate** (the same rule that keeps
 `noonoo-css` and `noonoo-selectors` separate): one focused parser, no

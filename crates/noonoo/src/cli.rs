@@ -59,6 +59,11 @@ pub enum Command {
         /// The input path, or `-` for stdin.
         path: String,
     },
+    /// Render an SVG file (or stdin for `-`) to paint commands.
+    Svg {
+        /// The input path, or `-` for stdin.
+        path: String,
+    },
 }
 
 /// Parse an argument list (including the program name, as `std::env::args`
@@ -108,6 +113,9 @@ where
             path: next_or_stdin(&mut args),
         }),
         "--ini" => Ok(Command::Ini {
+            path: next_or_stdin(&mut args),
+        }),
+        "--svg" => Ok(Command::Svg {
             path: next_or_stdin(&mut args),
         }),
         other => Err(format!("unexpected argument `{other}`")),
@@ -222,6 +230,16 @@ mod tests {
             parse(["noonoo", "--ini", "app.ini"]),
             Ok(Command::Ini {
                 path: "app.ini".into()
+            })
+        );
+    }
+
+    #[test]
+    fn svg_command() {
+        assert_eq!(
+            parse(["noonoo", "--svg", "icon.svg"]),
+            Ok(Command::Svg {
+                path: "icon.svg".into()
             })
         );
     }

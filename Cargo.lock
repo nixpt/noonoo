@@ -26,6 +26,7 @@ dependencies = [
  "noonoo-selectors",
  "noonoo-shell",
  "noonoo-style",
+ "noonoo-svg",
  "noonoo-text",
 ]
 
@@ -175,6 +176,17 @@ dependencies = [
  "noonoo-dom",
  "noonoo-html",
  "noonoo-selectors",
+]
+
+[[package]]
+name = "noonoo-svg"
+version = "0.2.0"
+dependencies = [
+ "noonoo-css",
+ "noonoo-dom",
+ "noonoo-geometry",
+ "noonoo-html",
+ "noonoo-paint",
 ]
 
 [[package]]

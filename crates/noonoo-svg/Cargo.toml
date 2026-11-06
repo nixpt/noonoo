@@ -1,0 +1,21 @@
+[package]
+name = "noonoo-svg"
+description = "Noonoo's SVG parser: an SVG subset rendered to paint commands."
+version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+noonoo-css.workspace = true
+noonoo-dom.workspace = true
+noonoo-geometry.workspace = true
+noonoo-html.workspace = true
+noonoo-paint.workspace = true

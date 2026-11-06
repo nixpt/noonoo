@@ -116,7 +116,7 @@ The borrowed engines are scored in `DEPENDENCY-EXIT.md`. The path to dropping
 - **Phase D — paint.** the command stream + a recording backend (keep the GPU).
   *✅ (backend-neutral command stream + JSON recording; GPU backend deferred)*
 - **Phase E — net / SVG.** thin HTTP client; SVG subset.
-  *✅ (owned `file:`/`data:` loaders + seam; `http`/TLS behind a feature; SVG pending)*
+  *✅ (owned `file:`/`data:` loaders + seam; `http`/TLS behind a feature; SVG subset → paint commands)*
 
 ## Later
 

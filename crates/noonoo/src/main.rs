@@ -23,6 +23,7 @@ COMMANDS:
     --txt <file|->      Convert plain text to HTML
     --txt-paint <file|-> View plain text: convert, lay out, print paint commands
     --ini <file|->      Parse INI and print its JSON projection
+    --svg <file|->      Render SVG (subset) to paint commands
     --caison <file|->   Parse CAISON and print its JSON projection
 ";
 
@@ -50,6 +51,7 @@ fn main() -> ExitCode {
         Ok(Command::Text { path }) => run_text(&path),
         Ok(Command::TextPaint { path }) => run_text_paint(&path),
         Ok(Command::Ini { path }) => run_ini(&path),
+        Ok(Command::Svg { path }) => run_svg(&path),
         Err(error) => {
             eprintln!("noonoo: {error}\n\n{USAGE}");
             ExitCode::from(2)
@@ -218,6 +220,20 @@ fn run_ini(path: &str) -> ExitCode {
     match read_source(path) {
         Ok(source) => {
             println!("{}", noonoo::ini::to_json(&source).to_string_pretty());
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("noonoo: {error}");
+            ExitCode::from(1)
+        }
+    }
+}
+
+fn run_svg(path: &str) -> ExitCode {
+    match read_source(path) {
+        Ok(source) => {
+            let list = noonoo::svg::render(&source, noonoo::geometry::Size::new(400.0, 400.0));
+            println!("{}", list.to_json().to_string_pretty());
             ExitCode::SUCCESS
         }
         Err(error) => {

@@ -14,7 +14,7 @@
 #![warn(missing_docs)]
 
 use noonoo_css::Color;
-use noonoo_geometry::Rect;
+use noonoo_geometry::{Point, Rect};
 use noonoo_json::Json;
 use noonoo_layout::{BoxKind, LayoutBox, LayoutTree};
 use noonoo_style::Styles;
@@ -26,6 +26,13 @@ pub enum Command {
     FillRect {
         /// The rectangle.
         rect: Rect,
+        /// The fill colour.
+        color: Color,
+    },
+    /// Fill a polygon (at least three points, in order).
+    FillPolygon {
+        /// The vertices.
+        points: Vec<Point>,
         /// The fill colour.
         color: Color,
     },
@@ -163,6 +170,24 @@ fn command_json(command: &Command) -> Json {
             ("y", Json::Number(rect.y as f64)),
             ("width", Json::Number(rect.width as f64)),
             ("height", Json::Number(rect.height as f64)),
+            ("color", Json::String(color_hex(*color))),
+        ]),
+        Command::FillPolygon { points, color } => object(vec![
+            ("op", Json::String("fill-polygon".into())),
+            (
+                "points",
+                Json::Array(
+                    points
+                        .iter()
+                        .map(|p| {
+                            Json::Object(vec![
+                                ("x".to_owned(), Json::Number(p.x as f64)),
+                                ("y".to_owned(), Json::Number(p.y as f64)),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ),
             ("color", Json::String(color_hex(*color))),
         ]),
         Command::DrawText {
