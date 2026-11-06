@@ -17,5 +17,5 @@ std = []
 noonoo-css.workspace = true
 noonoo-dom.workspace = true
 noonoo-geometry.workspace = true
-noonoo-html.workspace = true
+noonoo-xml.workspace = true
 noonoo-paint.workspace = true

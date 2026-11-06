@@ -3,9 +3,10 @@
 //! An SVG **subset** — parse shapes and render them to [`noonoo_paint`]
 //! commands. This is the Phase E remainder (`docs/DEPENDENCY-EXIT.md`).
 //!
-//! SVG is XML/HTML-shaped, so the parser reuses `noonoo-html`'s tokenizer and
-//! `noonoo-dom` (no separate XML engine), then walks the tree into a small shape
-//! model and flattens it to polygons and stroke quads for the command stream.
+//! SVG is XML, so the parser reuses `noonoo-xml` and `noonoo-dom`, then walks
+//! the tree into a small shape model and flattens it to polygons and stroke
+//! quads for the command stream. A file that is not well-formed XML parses to an
+//! empty document — strict, and honest about it.
 //!
 //! Supported: `<svg>` / `<g>`, `<rect>`, `<circle>`, `<ellipse>`, `<line>`,
 //! `<polygon>`, `<polyline>`, `<path>` (M L H V Z, with C/Q/S/T/A approximated
@@ -231,5 +232,21 @@ mod tests {
             commands(r#"<svg><polyline points="0,0 10,0 10,10" fill="none" stroke="red"/></svg>"#);
         // Two stroked edges → two quads, no fill.
         assert_eq!(list.len(), 2);
+    }
+
+    #[test]
+    fn tolerates_an_xml_prolog_and_comments() {
+        let list = commands(
+            r#"<?xml version="1.0"?><!-- icon --><svg width="10" height="10"><rect width="10" height="10" fill="red"/></svg>"#,
+        );
+        assert!(matches!(&list.commands()[0], Command::FillPolygon { .. }));
+    }
+
+    #[test]
+    fn a_malformed_document_renders_nothing() {
+        // `<rect>` is never closed, so the XML parser refuses the document and
+        // there is nothing to draw — rather than a guessed tree.
+        let list = commands(r#"<svg><rect width="10" height="10"></svg>"#);
+        assert_eq!(list.len(), 0);
     }
 }

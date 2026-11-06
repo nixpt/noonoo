@@ -210,8 +210,8 @@ dependencies = [
  "noonoo-css",
  "noonoo-dom",
  "noonoo-geometry",
- "noonoo-html",
  "noonoo-paint",
+ "noonoo-xml",
 ]
 
 [[package]]

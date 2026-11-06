@@ -1,4 +1,4 @@
-//! Parsing SVG into the shape model, reusing the HTML tokenizer and DOM.
+//! Parsing SVG into the shape model, reusing the XML parser and DOM.
 
 use noonoo_css::Color;
 use noonoo_dom::{Document, NodeId};
@@ -6,7 +6,11 @@ use noonoo_dom::{Document, NodeId};
 use crate::{Geometry, Shape, Svg, Transform};
 
 pub(crate) fn parse(source: &str) -> Svg {
-    let document = noonoo_html::parse(source);
+    // SVG is XML: parse it strictly. A file that is not well-formed yields no
+    // shapes rather than a best-effort tree.
+    let Ok(document) = noonoo_xml::parse(source) else {
+        return Svg::default();
+    };
     let Some(root) = document.get_elements_by_tag_name("svg").into_iter().next() else {
         return Svg::default();
     };
