@@ -31,7 +31,7 @@ mod resolve;
 use std::collections::HashMap;
 
 use noonoo_dom::{Document, NodeData, NodeId};
-use noonoo_geometry::{Rect, Size};
+use noonoo_geometry::{Point, Rect, Size};
 use noonoo_style::{BoxSizing, ComputedStyle, Display, Edges, Styles};
 
 pub use noonoo_text::{Align, MetricShaper, Shaper};
@@ -121,6 +121,43 @@ impl LayoutTree {
     /// Indices of the top-level boxes.
     pub fn root_indices(&self) -> &[usize] {
         &self.roots
+    }
+
+    /// The deepest node whose border-box contains `point`.
+    ///
+    /// Later siblings (painted on top) win over earlier ones at equal depth, so
+    /// this matches what the user sees.
+    pub fn hit_test(&self, point: Point) -> Option<NodeId> {
+        let mut best: Option<(usize, NodeId)> = None;
+        for &root in self.roots.iter().rev() {
+            self.hit_box(root, point, 0, &mut best);
+        }
+        best.map(|(_, node)| node)
+    }
+
+    fn hit_box(
+        &self,
+        index: usize,
+        point: Point,
+        depth: usize,
+        best: &mut Option<(usize, NodeId)>,
+    ) {
+        let box_ = &self.boxes[index];
+        if !box_.rect.contains(point) {
+            return;
+        }
+        if let Some(node) = box_.node {
+            let better = match best {
+                Some((best_depth, _)) => depth >= *best_depth,
+                None => true,
+            };
+            if better {
+                *best = Some((depth, node));
+            }
+        }
+        for &child in &box_.children {
+            self.hit_box(child, point, depth + 1, best);
+        }
     }
 }
 

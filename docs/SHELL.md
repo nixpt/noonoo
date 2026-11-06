@@ -132,3 +132,16 @@ The single "Shell" slice becomes three, in this order (see
 Sub-documents can only be built once (a) documents are `Send` (already true) and
 (b) the composition seam exists — which is exactly the dependency order the old
 engine got backwards.
+
+## 7. Status
+
+**Slices 1–2 delivered (headless).** `noonoo-shell` now owns the host model
+(`docs` §4): a `Host` of first-class **layers** — chrome and content documents,
+each with its own DOM/styles/layout/paint — placed at a rectangle in the window,
+with **region routing**, **hit-testing** (`noonoo_layout::LayoutTree::hit_test`),
+**focus**, per-layer **composition** (`Host::layout` fills each layer's command
+stream), and **origin gating** (`navigation_allowed`). The model is
+dependency-free and tested without a display.
+
+The real window/GPU backend (`window`/`gpu` features) and the a11y tree remain
+borrowed and unwired, and **sub-documents (slice 3)** are still to come.

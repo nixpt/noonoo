@@ -162,10 +162,13 @@ dependencies = [
 name = "noonoo-shell"
 version = "0.3.0"
 dependencies = [
+ "noonoo-dom",
  "noonoo-engine",
  "noonoo-events",
- "noonoo-net",
+ "noonoo-geometry",
+ "noonoo-layout",
  "noonoo-paint",
+ "noonoo-style",
 ]
 
 [[package]]

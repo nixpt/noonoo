@@ -44,7 +44,7 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | [`noonoo-engine`](crates/noonoo-engine) | Orchestration: a working document |
 | [`noonoo-headless`](crates/noonoo-headless) | Tree dump, virtual clock, synthetic input |
 | [`noonoo-paint`](crates/noonoo-paint) | Layout → render commands, scene effects, overlays |
-| [`noonoo-shell`](crates/noonoo-shell) | Window, event loop, a11y, GPU surface (feature-gated) |
+| [`noonoo-shell`](crates/noonoo-shell) | Multi-document host: layers, input routing, focus, composition |
 | [`noonoo`](crates/noonoo) | Umbrella re-export + the `noonoo` command line |
 
 ## Why it exists

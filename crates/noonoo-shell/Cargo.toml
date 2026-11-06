@@ -1,6 +1,6 @@
 [package]
 name = "noonoo-shell"
-description = "Noonoo's interactive driver: windowing, event loop, native surface."
+description = "Noonoo's document host: multiple documents in one window, routed and composited."
 version.workspace = true
 license.workspace = true
 homepage.workspace = true
@@ -10,15 +10,20 @@ edition.workspace = true
 rust-version.workspace = true
 
 [features]
-# The shell is opt-in: a build that only needs the engine does not pay for a
-# window, a GPU, or a screen reader.
-default = []
-window = [] # native window + event loop (winit)
-gpu = [] # GPU surface (wgpu + vello)
-a11y = [] # accessibility tree (accesskit)
+default = ["std"]
+std = []
+# A real window + GPU surface (winit + wgpu/vello). Off by default: the host
+# model is testable headless, and the platform backend is a borrowed concern.
+window = []
+gpu = []
+# Accessibility tree (accesskit), behind a feature.
+a11y = []
 
 [dependencies]
+noonoo-dom.workspace = true
 noonoo-engine.workspace = true
 noonoo-events.workspace = true
-noonoo-net.workspace = true
+noonoo-geometry.workspace = true
+noonoo-layout.workspace = true
 noonoo-paint.workspace = true
+noonoo-style.workspace = true

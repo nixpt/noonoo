@@ -29,7 +29,7 @@ pub use computed::{
 };
 
 /// Computed styles for a document, indexed by node.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Styles {
     entries: Vec<Option<ComputedStyle>>,
 }

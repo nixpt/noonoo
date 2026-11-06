@@ -66,10 +66,14 @@ diff-able; scene effects + dirty regions are exposed.
 
 **Done when:** a fixture's command stream matches a golden file.
 
-## Slice 7 — Shell
+## Slice 7 — Shell  ◑ host model shipped
 
-Feature-gated window (`winit` + `wgpu`/`vello`); accessibility on by default;
-real `resumed`/suspend hooks. Headless stays the default path.
+The **multi-document host** (`noonoo-shell`): first-class layers (chrome +
+content), region routing, hit-testing, focus, per-layer composition, and origin
+gating — all headless-testable, zero deps. Delivered.
+
+The **borrowed backend** (a feature-gated window via `winit` + `wgpu`/`vello`)
+and the a11y tree are the remainder of this slice.
 
 **Done when:** `cargo run -p noonoo --features window,gpu` opens a window and the
 a11y tree reaches AT-SPI on Linux without consumer re-enabling.
