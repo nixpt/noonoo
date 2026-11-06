@@ -20,8 +20,15 @@ COMMANDS:
     --md-paint <file|-> View Markdown: convert, lay out, and print paint commands
     --csv <file|->      Convert CSV/TSV to an HTML table
     --csv-paint <file|-> View CSV/TSV: convert, lay out, print paint commands
+    --txt <file|->      Convert plain text to HTML
+    --txt-paint <file|-> View plain text: convert, lay out, print paint commands
+    --ini <file|->      Parse INI and print its JSON projection
     --caison <file|->   Parse CAISON and print its JSON projection
 ";
+
+/// A stylesheet that keeps plain text preformatted and monospaced.
+const PRE_STYLESHEET: &str =
+    "pre { display: block; white-space: pre; font-family: monospace; margin: 16px }";
 
 fn main() -> ExitCode {
     match parse(std::env::args()) {
@@ -40,6 +47,9 @@ fn main() -> ExitCode {
         Ok(Command::MarkdownPaint { path }) => run_markdown_paint(&path),
         Ok(Command::Csv { path }) => run_csv(&path),
         Ok(Command::CsvPaint { path }) => run_csv_paint(&path),
+        Ok(Command::Text { path }) => run_text(&path),
+        Ok(Command::TextPaint { path }) => run_text_paint(&path),
+        Ok(Command::Ini { path }) => run_ini(&path),
         Err(error) => {
             eprintln!("noonoo: {error}\n\n{USAGE}");
             ExitCode::from(2)
@@ -115,7 +125,8 @@ fn run_paint(path: &str) -> ExitCode {
 fn run_markdown(path: &str) -> ExitCode {
     match read_source(path) {
         Ok(source) => {
-            println!("{}", noonoo::markdown::markdown_to_html(&source));
+            let (_, body) = noonoo::markdown::split_front_matter(&source);
+            println!("{}", noonoo::markdown::markdown_to_html(body));
             ExitCode::SUCCESS
         }
         Err(error) => {
@@ -128,11 +139,12 @@ fn run_markdown(path: &str) -> ExitCode {
 fn run_markdown_paint(path: &str) -> ExitCode {
     match read_source(path) {
         Ok(source) => {
-            // Markdown -> HTML, with a default stylesheet so it renders structured.
+            // Strip front matter, then convert with a default stylesheet.
+            let (_, body) = noonoo::markdown::split_front_matter(&source);
             let html = format!(
                 "<style>{}</style>{}",
                 noonoo::markdown::DEFAULT_STYLESHEET,
-                noonoo::markdown::markdown_to_html(&source)
+                noonoo::markdown::markdown_to_html(body)
             );
             paint_html(&html)
         }
@@ -165,6 +177,48 @@ fn run_csv_paint(path: &str) -> ExitCode {
                 noonoo::csv::to_html(&source)
             );
             paint_html(&html)
+        }
+        Err(error) => {
+            eprintln!("noonoo: {error}");
+            ExitCode::from(1)
+        }
+    }
+}
+
+fn run_text(path: &str) -> ExitCode {
+    match read_source(path) {
+        Ok(source) => {
+            println!("{}", noonoo::html::plain_text_to_html(&source));
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("noonoo: {error}");
+            ExitCode::from(1)
+        }
+    }
+}
+
+fn run_text_paint(path: &str) -> ExitCode {
+    match read_source(path) {
+        Ok(source) => {
+            let html = format!(
+                "<style>{PRE_STYLESHEET}</style>{}",
+                noonoo::html::plain_text_to_html(&source)
+            );
+            paint_html(&html)
+        }
+        Err(error) => {
+            eprintln!("noonoo: {error}");
+            ExitCode::from(1)
+        }
+    }
+}
+
+fn run_ini(path: &str) -> ExitCode {
+    match read_source(path) {
+        Ok(source) => {
+            println!("{}", noonoo::ini::to_json(&source).to_string_pretty());
+            ExitCode::SUCCESS
         }
         Err(error) => {
             eprintln!("noonoo: {error}");

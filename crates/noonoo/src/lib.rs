@@ -20,6 +20,7 @@ pub use noonoo_events as events;
 pub use noonoo_geometry as geometry;
 pub use noonoo_headless as headless;
 pub use noonoo_html as html;
+pub use noonoo_ini as ini;
 pub use noonoo_json as json;
 pub use noonoo_layout as layout;
 pub use noonoo_markdown as markdown;
@@ -38,7 +39,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The usual way in: the engine, as a set of modules.
 pub mod prelude {
     pub use crate::{
-        caison, css, csv, dom, engine, events, geometry, headless, html, json, layout, markdown,
-        motion, net, paint, parse, selectors, style, text,
+        caison, css, csv, dom, engine, events, geometry, headless, html, ini, json, layout,
+        markdown, motion, net, paint, parse, selectors, style, text,
     };
 }

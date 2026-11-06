@@ -44,6 +44,21 @@ pub enum Command {
         /// The input path, or `-` for stdin.
         path: String,
     },
+    /// Convert a plain-text file (or stdin for `-`) to HTML.
+    Text {
+        /// The input path, or `-` for stdin.
+        path: String,
+    },
+    /// View a plain-text file: convert to HTML and print its paint commands.
+    TextPaint {
+        /// The input path, or `-` for stdin.
+        path: String,
+    },
+    /// Parse an INI file (or stdin for `-`) and print its JSON projection.
+    Ini {
+        /// The input path, or `-` for stdin.
+        path: String,
+    },
 }
 
 /// Parse an argument list (including the program name, as `std::env::args`
@@ -84,6 +99,15 @@ where
             path: next_or_stdin(&mut args),
         }),
         "--csv-paint" => Ok(Command::CsvPaint {
+            path: next_or_stdin(&mut args),
+        }),
+        "--txt" => Ok(Command::Text {
+            path: next_or_stdin(&mut args),
+        }),
+        "--txt-paint" => Ok(Command::TextPaint {
+            path: next_or_stdin(&mut args),
+        }),
+        "--ini" => Ok(Command::Ini {
             path: next_or_stdin(&mut args),
         }),
         other => Err(format!("unexpected argument `{other}`")),
@@ -182,6 +206,22 @@ mod tests {
             parse(["noonoo", "--csv-paint", "data.tsv"]),
             Ok(Command::CsvPaint {
                 path: "data.tsv".into()
+            })
+        );
+    }
+
+    #[test]
+    fn text_and_ini_commands() {
+        assert_eq!(
+            parse(["noonoo", "--txt", "notes.txt"]),
+            Ok(Command::Text {
+                path: "notes.txt".into()
+            })
+        );
+        assert_eq!(
+            parse(["noonoo", "--ini", "app.ini"]),
+            Ok(Command::Ini {
+                path: "app.ini".into()
             })
         );
     }

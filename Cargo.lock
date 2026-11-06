@@ -15,6 +15,7 @@ dependencies = [
  "noonoo-geometry",
  "noonoo-headless",
  "noonoo-html",
+ "noonoo-ini",
  "noonoo-json",
  "noonoo-layout",
  "noonoo-markdown",
@@ -91,6 +92,13 @@ version = "0.2.0"
 dependencies = [
  "noonoo-dom",
  "noonoo-parse",
+]
+
+[[package]]
+name = "noonoo-ini"
+version = "0.2.0"
+dependencies = [
+ "noonoo-json",
 ]
 
 [[package]]

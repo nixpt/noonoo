@@ -22,6 +22,8 @@ settings or data, parse it to a value model.**
 | HTML | `noonoo-html` | DOM |
 | Markdown | `noonoo-markdown` | DOM (via HTML) |
 | CSV / TSV | `noonoo-csv` | DOM (via `<table>`) |
+| Plain text | `noonoo-html` (`plain_text_to_html`) | DOM (`<pre>`) |
+| INI | `noonoo-ini` | value model |
 | JSON | `noonoo-json` | value model (`noonoo_json::Json`) |
 | CAISON | `noonoo-caison` | value model + JSON projection |
 | CSS | `noonoo-css` (+ `noonoo-selectors`) | stylesheets for `noonoo-style` |
@@ -44,10 +46,10 @@ footnotes, reference links) is ordinary work inside `noonoo-markdown`.
 
 | Format | Pattern | Sketch |
 |---|---|---|
-| **Plain text** (`.txt`) | DOM | wrap in `<pre>`; one function |
+| **Plain text** (`.txt`) | DOM | ✅ `noonoo_html::plain_text_to_html` — one `<pre>` |
 | **CSV / TSV** | DOM | ✅ `noonoo-csv`: parses and emits a `<table>` the engine lays out |
-| **INI / TOML-lite** | value model | a `noonoo-ini` beside `noonoo-caison` |
-| **Front matter** (`---` YAML-ish in `.md`) | value model | a tiny key/value block parsed *before* Markdown → metadata |
+| **INI / TOML-lite** | value model | ✅ `noonoo-ini`: sections + pairs → JSON |
+| **Front matter** (`---` YAML-ish in `.md`) | value model | ✅ `noonoo_markdown::split_front_matter` — metadata before the body |
 | **SVG** (subset) | DOM / draw commands | parse shapes → `noonoo-paint` commands (Phase E remainder) |
 
 Each new format is its **own `noonoo-<format>` crate** (the same rule that keeps

@@ -26,6 +26,7 @@ noonoo-headless.workspace = true
 noonoo-html.workspace = true
 noonoo-markdown.workspace = true
 noonoo-csv.workspace = true
+noonoo-ini.workspace = true
 noonoo-css.workspace = true
 noonoo-selectors.workspace = true
 noonoo-caison.workspace = true

@@ -15,6 +15,71 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+/// Metadata parsed from a leading `---` front-matter block.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FrontMatter {
+    /// Key/value pairs, in order.
+    pub entries: Vec<(String, String)>,
+}
+
+impl FrontMatter {
+    /// The value for `key`, if present.
+    pub fn get(&self, key: &str) -> Option<&str> {
+        self.entries
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.as_str())
+    }
+
+    /// Whether there are no entries.
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    /// Iterate the entries.
+    pub fn iter(&self) -> impl Iterator<Item = &(String, String)> {
+        self.entries.iter()
+    }
+}
+
+/// Split optional front matter from the Markdown body.
+///
+/// Front matter is a `---`-delimited block of `key: value` lines at the very
+/// top of the file (values may be quoted). Returns `(metadata, body)`; when
+/// there is no valid block the metadata is empty and the body is the whole
+/// input.
+pub fn split_front_matter(source: &str) -> (FrontMatter, &str) {
+    let first_end = source.find('\n').map(|i| i + 1).unwrap_or(source.len());
+    if source[..first_end].trim() != "---" {
+        return (FrontMatter::default(), source);
+    }
+
+    let after = &source[first_end..];
+    let mut entries = Vec::new();
+    let mut consumed = 0;
+    let mut closed = false;
+    for line in after.split_inclusive('\n') {
+        let trimmed = line.trim();
+        if trimmed == "---" || trimmed == "..." {
+            consumed += line.len();
+            closed = true;
+            break;
+        }
+        if let Some((key, value)) = trimmed.split_once(':') {
+            entries.push((
+                key.trim().to_owned(),
+                value.trim().trim_matches('"').to_owned(),
+            ));
+        }
+        consumed += line.len();
+    }
+
+    if !closed {
+        return (FrontMatter::default(), source);
+    }
+    (FrontMatter { entries }, &after[consumed..])
+}
+
 /// Convert Markdown to HTML.
 pub fn markdown_to_html(source: &str) -> String {
     blocks(&source.lines().collect::<Vec<_>>())
@@ -489,5 +554,21 @@ mod tests {
     #[test]
     fn escapes_html() {
         assert_eq!(markdown_to_html("a < b"), "<p>a &lt; b</p>");
+    }
+
+    #[test]
+    fn splits_front_matter() {
+        let source = "---\ntitle: \"Hello\"\ndraft: true\n---\n# Body\n";
+        let (meta, body) = split_front_matter(source);
+        assert_eq!(meta.get("title"), Some("Hello"));
+        assert_eq!(meta.get("draft"), Some("true"));
+        assert_eq!(body, "# Body\n");
+    }
+
+    #[test]
+    fn no_front_matter_leaves_input_whole() {
+        let (meta, body) = split_front_matter("# Title\n");
+        assert!(meta.is_empty());
+        assert_eq!(body, "# Title\n");
     }
 }

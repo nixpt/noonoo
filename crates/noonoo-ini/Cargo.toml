@@ -1,0 +1,17 @@
+[package]
+name = "noonoo-ini"
+description = "Noonoo's INI parser: sections and key/value pairs to a value model."
+version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+noonoo-json.workspace = true

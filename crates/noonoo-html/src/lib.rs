@@ -322,6 +322,24 @@ pub fn parse(source: &str) -> Document {
     doc
 }
 
+/// Convert plain text to HTML: one `<pre>` block with escaped content.
+///
+/// The `.txt` viewer — text has no structure, so the whole file is a single
+/// preformatted block.
+pub fn plain_text_to_html(source: &str) -> String {
+    let mut out = String::from("<pre>");
+    for ch in source.chars() {
+        match ch {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            _ => out.push(ch),
+        }
+    }
+    out.push_str("</pre>");
+    out
+}
+
 /// The version of this crate, taken from the workspace.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -372,6 +390,11 @@ mod tests {
         let body = doc.query_selector("div").unwrap().unwrap();
         // br and img are siblings of the text, all under div.
         assert_eq!(doc.tree().children(body).len(), 3);
+    }
+
+    #[test]
+    fn plain_text_is_escaped_and_preformatted() {
+        assert_eq!(plain_text_to_html("a < b\nc"), "<pre>a &lt; b\nc</pre>");
     }
 
     #[test]
