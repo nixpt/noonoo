@@ -64,14 +64,25 @@ pub enum LayerKind {
     Content,
 }
 
+/// A sub-document's placement: anchored to a host node in a parent layer.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Anchor {
+    /// The index of the parent layer.
+    pub parent: usize,
+    /// The host node in the parent document.
+    pub host: NodeId,
+}
+
 /// One document placed in the window.
 pub struct Layer {
     /// The document's trust context.
     pub origin: Origin,
     /// The layer's role.
     pub kind: LayerKind,
-    /// Where the document sits in the window.
+    /// Where the document sits in the window (computed from the parent for
+    /// sub-documents, fixed otherwise).
     pub rect: Rect,
+    anchor: Option<Anchor>,
     engine: Engine,
     styles: Styles,
     layout: LayoutTree,
@@ -97,6 +108,11 @@ impl Layer {
     /// The layer's paint commands (populated by [`Host::layout`]).
     pub fn commands(&self) -> &CommandList {
         &self.commands
+    }
+
+    /// The sub-document anchor, if this layer is a sub-document.
+    pub fn anchor(&self) -> Option<Anchor> {
+        self.anchor
     }
 }
 
@@ -134,6 +150,28 @@ impl Host {
             origin,
             kind,
             rect,
+            anchor: None,
+            engine,
+            styles: Styles::default(),
+            layout: LayoutTree::default(),
+            commands: CommandList::default(),
+        });
+        index
+    }
+
+    /// Attach `engine` as a sub-document of the host node `host` in `parent`.
+    ///
+    /// The parent sizes the sub-document: its rectangle is the host node's
+    /// content box, computed on the next [`Host::layout`]. Sub-documents are
+    /// first-class layers, so routing, hit-testing, and composition apply to
+    /// them unchanged.
+    pub fn add_sub_document(&mut self, parent: usize, host: NodeId, engine: Engine) -> usize {
+        let index = self.layers.len();
+        self.layers.push(Layer {
+            origin: Origin::Content,
+            kind: LayerKind::Content,
+            rect: Rect::default(),
+            anchor: Some(Anchor { parent, host }),
             engine,
             styles: Styles::default(),
             layout: LayoutTree::default(),
@@ -153,8 +191,32 @@ impl Host {
     }
 
     /// Compute styles, layout, and paint commands for every layer.
+    /// Compute styles, layout, and paint commands for every layer.
+    ///
+    /// A sub-document's rectangle is taken from its host node's content box in
+    /// the (already laid-out) parent, so the parent sizes it; the sub-document
+    /// is then laid out and painted with its own styles.
     pub fn layout(&mut self, shaper: &dyn Shaper) {
-        for layer in &mut self.layers {
+        for index in 0..self.layers.len() {
+            if let Some(anchor) = self.layers[index].anchor {
+                let rect = {
+                    let parent = &self.layers[anchor.parent];
+                    let content = parent
+                        .layout
+                        .get(anchor.host)
+                        .map(|box_| box_.content_box())
+                        .unwrap_or_default();
+                    Rect::new(
+                        parent.rect.x + content.x,
+                        parent.rect.y + content.y,
+                        content.width,
+                        content.height,
+                    )
+                };
+                self.layers[index].rect = rect;
+            }
+
+            let layer = &mut self.layers[index];
             let styles = layer.engine.compute_styles();
             let layout =
                 noonoo_layout::layout(layer.engine.dom(), &styles, layer.rect.size(), shaper);
@@ -324,6 +386,53 @@ mod tests {
         assert_eq!(host.layers().len(), 2);
         assert!(!host.layer(0).unwrap().commands().is_empty());
         assert!(!host.layer(1).unwrap().commands().is_empty());
+    }
+
+    #[test]
+    fn sub_document_is_sized_by_its_host_node() {
+        let mut host = Host::new(Size::new(400.0, 300.0));
+        let parent = host.add_chrome(
+            engine(
+                r#"<div id="slot"></div>"#,
+                "#slot { width: 200px; height: 100px }",
+            ),
+            Rect::new(0.0, 0.0, 400.0, 300.0),
+        );
+        let slot = host
+            .layer(parent)
+            .unwrap()
+            .engine()
+            .dom()
+            .get_element_by_id("slot")
+            .unwrap();
+        let sub = engine(
+            r#"<p id="emb">embedded</p>"#,
+            "p { height: 40px; background-color: #eeeeee }",
+        );
+        let sub_index = host.add_sub_document(parent, slot, sub);
+        host.layout(&MetricShaper);
+
+        // The parent's host node (200×100) sized the sub-document.
+        assert_eq!(
+            host.layer(sub_index).unwrap().rect,
+            Rect::new(0.0, 0.0, 200.0, 100.0)
+        );
+        // Inside the sub-document, routing and hit-testing select it.
+        assert_eq!(host.route(Point::new(10.0, 10.0)), Some(sub_index));
+        let (layer, node) = host.hit(Point::new(10.0, 10.0)).unwrap();
+        assert_eq!(layer, sub_index);
+        // The deepest node is the text run inside the sub-document's <p>.
+        assert_eq!(
+            host.layer(sub_index)
+                .unwrap()
+                .engine()
+                .dom()
+                .node(node)
+                .and_then(|data| data.as_text()),
+            Some("embedded")
+        );
+        // It composed its own command stream.
+        assert!(!host.layer(sub_index).unwrap().commands().is_empty());
     }
 
     #[test]

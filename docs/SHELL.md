@@ -135,13 +135,17 @@ engine got backwards.
 
 ## 7. Status
 
-**Slices 1–2 delivered (headless).** `noonoo-shell` now owns the host model
-(`docs` §4): a `Host` of first-class **layers** — chrome and content documents,
-each with its own DOM/styles/layout/paint — placed at a rectangle in the window,
-with **region routing**, **hit-testing** (`noonoo_layout::LayoutTree::hit_test`),
-**focus**, per-layer **composition** (`Host::layout` fills each layer's command
-stream), and **origin gating** (`navigation_allowed`). The model is
-dependency-free and tested without a display.
+**Slices 1–3 delivered (headless).** `noonoo-shell` owns the host model
+(`docs` §4): a `Host` of first-class **layers** — chrome, content, and
+**sub-documents** — each with its own DOM/styles/layout/paint, with **region
+routing**, **hit-testing** (`LayoutTree::hit_test`), **focus**, per-layer
+**composition**, and **origin gating** (`navigation_allowed`).
+
+Sub-documents (slice 3) are realized as **anchored layers**: a document is
+attached to a host node in a parent layer (`Host::add_sub_document`), the parent
+**sizes** it from that node's content box, and routing/hit-testing/input reach it
+through its own document — the texture-overlay pattern is gone.
 
 The real window/GPU backend (`window`/`gpu` features) and the a11y tree remain
-borrowed and unwired, and **sub-documents (slice 3)** are still to come.
+borrowed and unwired; wheel-scroll chaining from a sub-document to its parent is
+not yet implemented.
