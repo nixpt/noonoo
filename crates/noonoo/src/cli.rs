@@ -24,6 +24,16 @@ pub enum Command {
         /// The input path, or `-` for stdin.
         path: String,
     },
+    /// Convert a Markdown file (or stdin for `-`) to HTML.
+    Markdown {
+        /// The input path, or `-` for stdin.
+        path: String,
+    },
+    /// View a Markdown file: convert to HTML and print its paint commands.
+    MarkdownPaint {
+        /// The input path, or `-` for stdin.
+        path: String,
+    },
 }
 
 /// Parse an argument list (including the program name, as `std::env::args`
@@ -52,6 +62,12 @@ where
             Ok(Command::Caison { path })
         }
         "--paint" => Ok(Command::Paint {
+            path: next_or_stdin(&mut args),
+        }),
+        "--md" => Ok(Command::Markdown {
+            path: next_or_stdin(&mut args),
+        }),
+        "--md-paint" => Ok(Command::MarkdownPaint {
             path: next_or_stdin(&mut args),
         }),
         other => Err(format!("unexpected argument `{other}`")),
@@ -119,6 +135,22 @@ mod tests {
         assert_eq!(
             parse(["noonoo", "--paint"]),
             Ok(Command::Paint { path: "-".into() })
+        );
+    }
+
+    #[test]
+    fn markdown_commands() {
+        assert_eq!(
+            parse(["noonoo", "--md", "README.md"]),
+            Ok(Command::Markdown {
+                path: "README.md".into()
+            })
+        );
+        assert_eq!(
+            parse(["noonoo", "--md-paint", "README.md"]),
+            Ok(Command::MarkdownPaint {
+                path: "README.md".into()
+            })
         );
     }
 

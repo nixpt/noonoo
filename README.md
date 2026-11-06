@@ -36,7 +36,8 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | [`noonoo-motion`](crates/noonoo-motion) | Springs, velocity-preserving retarget |
 | [`noonoo-style`](crates/noonoo-style) | Style ingestion and the cascade |
 | [`noonoo-layout`](crates/noonoo-layout) | Box layout: computed style → boxes (block / inline / flex) |
-| [`noonoo-net`](crates/noonoo-net) | Document loading: `http(s)`/`file`/`data`/`exo` |
+| [`noonoo-markdown`](crates/noonoo-markdown) | Markdown (subset) → HTML |
+| [`noonoo-net`](crates/noonoo-net) | Loading: `file:` + `data:` owned; `http` behind a feature |
 | [`noonoo-engine`](crates/noonoo-engine) | Orchestration: a working document |
 | [`noonoo-headless`](crates/noonoo-headless) | Tree dump, virtual clock, synthetic input |
 | [`noonoo-paint`](crates/noonoo-paint) | Layout → render commands, scene effects, overlays |
@@ -76,6 +77,8 @@ The parser crates are wired into the engine, so the CLI works today:
 noonoo --tree page.html     # parse HTML (own tokenizer), print the DOM as JSON
 noonoo --tree -             # …or read from stdin
 noonoo --paint page.html    # parse → style → layout → paint, print commands as JSON
+noonoo --md notes.md        # Markdown → HTML
+noonoo --md-paint notes.md  # Markdown viewer: layout + paint commands
 noonoo --caison app.caison  # parse CAISON, print its JSON projection
 ```
 
@@ -89,6 +92,7 @@ The workspace MSRV is **1.89**. CI checks it explicitly.
 - [`docs/FEATURE-OWNERSHIP.md`](docs/FEATURE-OWNERSHIP.md) — what belongs in Noonoo vs. the consumer
 - [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) — the drop-in switch and the api-drift gate
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — slices
+- [`docs/FORMATS.md`](docs/FORMATS.md) — file formats: DOM vs. value model, and Markdown
 
 ## License
 

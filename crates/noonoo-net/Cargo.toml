@@ -1,6 +1,6 @@
 [package]
 name = "noonoo-net"
-description = "Noonoo's document loading: http(s), file, data, and capability-gated schemes."
+description = "Noonoo's document loading: file:, data:, and (feature-gated) http(s)."
 version.workspace = true
 license.workspace = true
 homepage.workspace = true
@@ -12,7 +12,8 @@ rust-version.workspace = true
 [features]
 default = ["std"]
 std = []
-# Async HTTP(S) loading.
+# Async HTTP(S) loading. Off by default: it is the one part of a loader that
+# needs TLS, which is a borrowed concern.
 http = []
 
 [dependencies]

@@ -24,6 +24,7 @@ noonoo-geometry.workspace = true
 noonoo-events.workspace = true
 noonoo-headless.workspace = true
 noonoo-html.workspace = true
+noonoo-markdown.workspace = true
 noonoo-css.workspace = true
 noonoo-selectors.workspace = true
 noonoo-caison.workspace = true

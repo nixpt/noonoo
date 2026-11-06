@@ -16,6 +16,7 @@ dependencies = [
  "noonoo-html",
  "noonoo-json",
  "noonoo-layout",
+ "noonoo-markdown",
  "noonoo-motion",
  "noonoo-net",
  "noonoo-paint",
@@ -105,6 +106,10 @@ dependencies = [
  "noonoo-style",
  "noonoo-text",
 ]
+
+[[package]]
+name = "noonoo-markdown"
+version = "0.2.0"
 
 [[package]]
 name = "noonoo-motion"
