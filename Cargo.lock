@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "noonoo"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "noonoo-caison",
  "noonoo-css",
@@ -26,7 +26,7 @@ dependencies = [
 
 [[package]]
 name = "noonoo-caison"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "noonoo-json",
  "noonoo-parse",
@@ -34,7 +34,7 @@ dependencies = [
 
 [[package]]
 name = "noonoo-css"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "noonoo-dom",
  "noonoo-parse",
@@ -42,11 +42,11 @@ dependencies = [
 
 [[package]]
 name = "noonoo-dom"
-version = "0.0.1"
+version = "0.1.0"
 
 [[package]]
 name = "noonoo-engine"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "noonoo-css",
  "noonoo-dom",
@@ -57,14 +57,14 @@ dependencies = [
 
 [[package]]
 name = "noonoo-events"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "noonoo-dom",
 ]
 
 [[package]]
 name = "noonoo-headless"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "noonoo-dom",
  "noonoo-events",
@@ -73,7 +73,7 @@ dependencies = [
 
 [[package]]
 name = "noonoo-html"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "noonoo-dom",
  "noonoo-parse",
@@ -81,14 +81,14 @@ dependencies = [
 
 [[package]]
 name = "noonoo-json"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "noonoo-parse",
 ]
 
 [[package]]
 name = "noonoo-layout"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "noonoo-dom",
  "noonoo-style",
@@ -97,15 +97,15 @@ dependencies = [
 
 [[package]]
 name = "noonoo-motion"
-version = "0.0.1"
+version = "0.1.0"
 
 [[package]]
 name = "noonoo-net"
-version = "0.0.1"
+version = "0.1.0"
 
 [[package]]
 name = "noonoo-paint"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "noonoo-dom",
  "noonoo-layout",
@@ -113,11 +113,11 @@ dependencies = [
 
 [[package]]
 name = "noonoo-parse"
-version = "0.0.1"
+version = "0.1.0"
 
 [[package]]
 name = "noonoo-shell"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "noonoo-engine",
  "noonoo-events",
@@ -127,7 +127,7 @@ dependencies = [
 
 [[package]]
 name = "noonoo-style"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "noonoo-css",
  "noonoo-dom",
@@ -136,4 +136,4 @@ dependencies = [
 
 [[package]]
 name = "noonoo-text"
-version = "0.0.1"
+version = "0.1.0"
