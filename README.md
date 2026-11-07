@@ -49,7 +49,7 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | [`noonoo-engine`](crates/noonoo-engine) | Orchestration: a working document |
 | [`noonoo-headless`](crates/noonoo-headless) | Tree dump, virtual clock, synthetic input |
 | [`noonoo-paint`](crates/noonoo-paint) | Layout → render commands (fills, gradients, text runs or glyph outlines, clip) |
-| [`noonoo-shell`](crates/noonoo-shell) | Multi-document host: layers, input routing, focus, composition |
+| [`noonoo-shell`](crates/noonoo-shell) | Multi-document host: layers, input routing, focus, hover/active state, composition |
 | [`noonoo`](crates/noonoo) | Umbrella re-export + the `noonoo` command line |
 
 ## Why it exists

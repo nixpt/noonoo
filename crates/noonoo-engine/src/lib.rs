@@ -97,13 +97,24 @@ impl Engine {
     /// Compute every element's style against `viewport`, so `vw`/`vh` and
     /// `calc(100vw - 2rem)` resolve correctly.
     pub fn compute_styles_for(&self, viewport: noonoo_geometry::Size) -> noonoo_style::Styles {
-        noonoo_style::compute_with(
+        self.compute_styles_in(viewport, noonoo_style::Interaction::default())
+    }
+
+    /// Compute every element's style against `viewport` and the interactive
+    /// state, so `:hover`/`:focus`/`:active` style the elements they name.
+    pub fn compute_styles_in(
+        &self,
+        viewport: noonoo_geometry::Size,
+        interaction: noonoo_style::Interaction,
+    ) -> noonoo_style::Styles {
+        noonoo_style::compute_interactive(
             &self.dom,
             &self.stylesheets,
             noonoo_style::Viewport {
                 width: viewport.width,
                 height: viewport.height,
             },
+            interaction,
         )
     }
 

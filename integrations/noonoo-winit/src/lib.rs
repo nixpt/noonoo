@@ -23,7 +23,9 @@
 //! A [`Host`] already populated with layers, a listener for DOM events, and —
 //! if fonts are wanted — a `Shaper` (the default is the deterministic
 //! [`noonoo_text::MetricShaper`]). Keyboard focus follows pointer *buttons*
-//! only; pointer moves are routed to the DOM without stealing focus.
+//! only; pointer moves route to the DOM without stealing focus, update the
+//! host's `:hover` state, and reflect the hovered node's computed `cursor` on
+//! the window.
 
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
@@ -42,6 +44,7 @@ use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::keyboard::ModifiersState;
+use winit::cursor::CursorIcon;
 use winit::window::{Window, WindowAttributes, WindowId};
 
 pub use input::{Action, LINE_HEIGHT, translate};
@@ -160,11 +163,13 @@ impl App {
         self.cursor = point;
         match event {
             Event::PointerDown(_) => {
-                // `dispatch_pointer` routes *and* sets keyboard focus, which is
-                // what a press should do.
+                // `:active` starts; `dispatch_pointer` routes *and* sets
+                // keyboard focus, which is what a press should do.
+                self.host.press(point);
                 self.press = self.host.dispatch_pointer(point, event, listener!(self));
             }
             Event::PointerUp(pointer) => {
+                self.host.release();
                 let hit = self.host.hit(point);
                 self.host.dispatch_pointer(point, event, listener!(self));
                 // A press and a release on one target is a click.
@@ -186,10 +191,19 @@ impl App {
                         .tree();
                     dispatch(tree, node, event, listener!(self));
                 }
+                self.update_cursor();
             }
             _ => {}
         }
         self.invalidate();
+    }
+
+    /// Reflect the hovered node's computed `cursor` on the window.
+    fn update_cursor(&mut self) {
+        let icon = cursor_icon(self.host.cursor_at(self.cursor));
+        if let Some(window) = &self.window {
+            window.set_cursor(winit::cursor::Cursor::from(icon));
+        }
     }
 
     /// Lay out (if dirty) and present a frame.
@@ -201,6 +215,19 @@ impl App {
         if let Some(error) = self.gpu.as_mut().and_then(|gpu| gpu.draw(&self.host).err()) {
             eprintln!("noonoo-winit: {error}");
         }
+    }
+}
+
+/// Noonoo's `cursor` property into a winit cursor icon.
+fn cursor_icon(cursor: noonoo_style::Cursor) -> CursorIcon {
+    match cursor {
+        noonoo_style::Cursor::Pointer => CursorIcon::Pointer,
+        noonoo_style::Cursor::Text => CursorIcon::Text,
+        noonoo_style::Cursor::Move => CursorIcon::Move,
+        noonoo_style::Cursor::NotAllowed => CursorIcon::NotAllowed,
+        noonoo_style::Cursor::Auto
+        | noonoo_style::Cursor::Default
+        | noonoo_style::Cursor::Other(_) => CursorIcon::Default,
     }
 }
 
@@ -232,6 +259,7 @@ impl ApplicationHandler for App {
             );
         }
         self.layout();
+        self.update_cursor();
         if let Some(window) = &self.window {
             window.request_redraw();
         }

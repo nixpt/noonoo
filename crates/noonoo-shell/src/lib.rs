@@ -10,6 +10,11 @@
 //! key event is routed to the owning document at the right coordinates, and the
 //! composition seam returns one command stream per layer.
 //!
+//! Interactive state is host state: [`Host::hover`] tracks the hovered node,
+//! [`Host::press`]/[`Host::release`] the pressed one, and [`Host::set_focus`]
+//! keyboard focus. [`Host::layout`] feeds that state into the cascade, so
+//! `:hover`/`:active`/`:focus` style the elements they name.
+//!
 //! The host model is dependency-free and testable headless. The actual window
 //! and GPU surface (`window`/`gpu`) are a borrowed backend behind features, and
 //! the a11y tree (`a11y`) is deferred — the model is what this crate delivers.
@@ -23,7 +28,7 @@ use noonoo_events::{Event, EventListener, dispatch};
 use noonoo_geometry::{Point, Rect, Size};
 use noonoo_layout::{LayoutTree, Shaper};
 use noonoo_paint::CommandList;
-use noonoo_style::Styles;
+use noonoo_style::{Cursor, Interaction, Styles};
 
 /// A document's trust context.
 ///
@@ -134,6 +139,8 @@ pub struct Host {
     pub viewport: Size,
     layers: Vec<Layer>,
     focus: Option<(usize, NodeId)>,
+    hovered: Option<(usize, NodeId)>,
+    active: Option<(usize, NodeId)>,
 }
 
 impl Host {
@@ -143,6 +150,8 @@ impl Host {
             viewport,
             layers: Vec::new(),
             focus: None,
+            hovered: None,
+            active: None,
         }
     }
 
@@ -235,8 +244,11 @@ impl Host {
                 self.layers[index].rect = rect;
             }
 
+            let interaction = self.interaction_for(index);
             let layer = &mut self.layers[index];
-            let styles = layer.engine.compute_styles_for(layer.rect.size());
+            let styles = layer
+                .engine
+                .compute_styles_in(layer.rect.size(), interaction);
             let mut layout =
                 noonoo_layout::layout(layer.engine.dom(), &styles, layer.rect.size(), shaper);
             // Preserve what the user scrolled across a re-layout.
@@ -272,6 +284,67 @@ impl Host {
     /// Set focus to a specific layer and node.
     pub fn set_focus(&mut self, layer: usize, node: NodeId) {
         self.focus = Some((layer, node));
+    }
+
+    /// Update the hovered node from a hit test at `point`.
+    ///
+    /// Returns whether it changed — a caller re-layouts to restyle, which is
+    /// when `:hover` takes effect.
+    pub fn hover(&mut self, point: Point) -> bool {
+        let hit = self.hit(point);
+        if hit != self.hovered {
+            self.hovered = hit;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// The hovered `(layer, node)`, if any.
+    pub fn hovered(&self) -> Option<(usize, NodeId)> {
+        self.hovered
+    }
+
+    /// Mark the node under `point` as pressed (`:active`).
+    pub fn press(&mut self, point: Point) {
+        self.active = self.hit(point);
+    }
+
+    /// Release the press (`:active` ends).
+    pub fn release(&mut self) {
+        self.active = None;
+    }
+
+    /// The pressed `(layer, node)`, if any.
+    pub fn active(&self) -> Option<(usize, NodeId)> {
+        self.active
+    }
+
+    /// The computed `cursor` of the node under `point` (`Auto` when nothing
+    /// is there). Call after a layout, so the styles are fresh.
+    pub fn cursor_at(&self, point: Point) -> Cursor {
+        match self.hit(point) {
+            Some((index, node)) => self.layers[index]
+                .styles
+                .get(node)
+                .map(|style| style.cursor.clone())
+                .unwrap_or(Cursor::Auto),
+            None => Cursor::Auto,
+        }
+    }
+
+    /// The interactive state of one layer: only nodes *in* it count.
+    fn interaction_for(&self, index: usize) -> Interaction {
+        let on_layer = |state: Option<(usize, NodeId)>| {
+            state
+                .filter(|(layer, _)| *layer == index)
+                .map(|(_, node)| node)
+        };
+        Interaction {
+            hovered: on_layer(self.hovered),
+            focused: on_layer(self.focus),
+            active: on_layer(self.active),
+        }
     }
 
     /// Route a pointer event to the layer under `point`, updating focus.
@@ -368,6 +441,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 mod tests {
     use super::*;
     use noonoo_layout::MetricShaper;
+    use noonoo_paint::Color;
     use std::cell::RefCell;
     use std::rc::Rc;
 
@@ -506,6 +580,97 @@ mod tests {
         );
         // It composed its own command stream.
         assert!(!host.layer(sub_index).unwrap().commands().is_empty());
+    }
+
+    #[test]
+    fn hover_and_active_restyle_on_the_next_layout() {
+        let mut host = Host::new(Size::new(400.0, 300.0));
+        host.add_content(
+            engine(
+                r#"<button id="b">hi</button>"#,
+                "button { cursor: pointer; background: white }
+                 button:hover { background: red }
+                 button:active { background: green }
+                 button:focus { outline: 1px }",
+            ),
+            Rect::new(0.0, 0.0, 400.0, 300.0),
+        );
+        host.layout(&MetricShaper);
+        let point = Point::new(10.0, 10.0);
+
+        // Nothing hovered: white, but `cursor: pointer` is unconditional.
+        assert!(host.hovered().is_none());
+        assert_eq!(host.cursor_at(point), Cursor::Pointer);
+
+        // Hover restyles on the next layout and lights up the cursor.
+        assert!(host.hover(point), "the first hover is a change");
+        host.layout(&MetricShaper);
+        let b = host.hovered().unwrap().1;
+        assert_eq!(
+            host.layer(0)
+                .unwrap()
+                .styles()
+                .get(b)
+                .unwrap()
+                .background_color,
+            Color::rgb(255, 0, 0)
+        );
+        assert_eq!(host.cursor_at(point), Cursor::Pointer);
+        // Hovering the same point again is not a change.
+        assert!(!host.hover(point));
+
+        // Pressing goes active; releasing returns to the hover colour.
+        host.press(point);
+        host.layout(&MetricShaper);
+        assert_eq!(
+            host.layer(0)
+                .unwrap()
+                .styles()
+                .get(b)
+                .unwrap()
+                .background_color,
+            Color::rgb(0, 128, 0)
+        );
+        host.release();
+        host.layout(&MetricShaper);
+        assert_eq!(
+            host.layer(0)
+                .unwrap()
+                .styles()
+                .get(b)
+                .unwrap()
+                .background_color,
+            Color::rgb(255, 0, 0)
+        );
+    }
+
+    #[test]
+    fn hover_does_not_leak_across_layers() {
+        let mut host = Host::new(Size::new(400.0, 300.0));
+        host.add_chrome(
+            engine("<div id=\"c\">x</div>", "div:hover { color: red }"),
+            Rect::new(0.0, 0.0, 400.0, 50.0),
+        );
+        host.add_content(
+            engine("<div id=\"d\">y</div>", "div { color: black }"),
+            Rect::new(0.0, 50.0, 400.0, 250.0),
+        );
+        host.layout(&MetricShaper);
+
+        // Hovering the content layer must not style the chrome's div.
+        assert!(host.hover(Point::new(10.0, 60.0)));
+        host.layout(&MetricShaper);
+        let c = host
+            .layer(0)
+            .unwrap()
+            .engine()
+            .dom()
+            .get_element_by_id("c")
+            .unwrap();
+        assert_eq!(
+            host.layer(0).unwrap().styles().get(c).unwrap().color,
+            Color::BLACK
+        );
     }
 
     #[test]

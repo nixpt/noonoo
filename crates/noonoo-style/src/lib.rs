@@ -36,7 +36,11 @@
 //! the box is resolved later, in `noonoo-paint` (see the `gradient` module).
 //!
 //! Viewport units (`vw`, `vh`, `vmin`, `vmax`) resolve in the same pass against
-//! the [`Viewport`] passed to [`compute_with`]. [`compute`] uses
+//! the [`Viewport`] passed to [`compute_with`].
+//!
+//! Interactive state — [`Interaction`], the hovered/focused/pressed nodes —
+//! flows through [`compute_interactive`], which is what makes `:hover`,
+//! `:focus`, and `:active` style the elements they name and nothing else. [`compute`] uses
 //! [`Viewport::DEFAULT`] (800x600), matching the headless CLI. `Engine` callers
 //! get the real size because the engine computes styles per layout viewport.
 
@@ -100,6 +104,20 @@ impl Default for Viewport {
     }
 }
 
+/// The interactive state a cascade styles against: which node the pointer is
+/// over, which holds keyboard focus, and which is pressed (`:active`).
+///
+/// Per node: `:hover` matches only the hovered element, not its ancestors.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct Interaction {
+    /// The hovered node, if any.
+    pub hovered: Option<NodeId>,
+    /// The focused node, if any.
+    pub focused: Option<NodeId>,
+    /// The pressed node, if any.
+    pub active: Option<NodeId>,
+}
+
 /// Compute every element's style in `document`, cascading the given author
 /// stylesheets over the built-in user-agent sheet and inline styles.
 ///
@@ -112,8 +130,19 @@ pub fn compute(document: &Document, stylesheets: &[Stylesheet]) -> Styles {
 /// Compute every element's style against a specific viewport, so `vw`/`vh`
 /// (and `calc(100vw - 2rem)`) resolve correctly.
 pub fn compute_with(document: &Document, stylesheets: &[Stylesheet], viewport: Viewport) -> Styles {
+    compute_interactive(document, stylesheets, viewport, Interaction::default())
+}
+
+/// Compute every element's style against a viewport *and* the interactive
+/// state, so `:hover`/`:focus`/`:active` style the elements they name.
+pub fn compute_interactive(
+    document: &Document,
+    stylesheets: &[Stylesheet],
+    viewport: Viewport,
+    interaction: Interaction,
+) -> Styles {
     Styles {
-        entries: cascade::compute(document, stylesheets, viewport),
+        entries: cascade::compute(document, stylesheets, viewport, interaction),
     }
 }
 
@@ -467,6 +496,55 @@ mod tests {
         assert_eq!(s.width, Dimension::Px(980.0));
         // Both arguments are absolute once `vw` resolves, so this folds here.
         assert_eq!(s.height, Dimension::Px(1000.0));
+    }
+
+    #[test]
+    fn interactive_pseudo_classes_style_only_the_named_node() {
+        let doc = noonoo_html::parse("<div><p id=\"a\">x</p><p id=\"b\">y</p></div>");
+        let sheet = Stylesheet::parse("p { color: blue } p:hover { color: red }").unwrap();
+        let a = doc.get_element_by_id("a").unwrap();
+        let b = doc.get_element_by_id("b").unwrap();
+        let div = doc.get_elements_by_tag_name("div")[0];
+
+        // Without state, nothing is hovered.
+        let styles = compute(&doc, std::slice::from_ref(&sheet));
+        assert_eq!(styles.get(a).unwrap().color, Color::rgb(0, 0, 255));
+
+        let styles = compute_interactive(
+            &doc,
+            &[sheet],
+            Viewport::DEFAULT,
+            Interaction {
+                hovered: Some(a),
+                ..Interaction::default()
+            },
+        );
+        assert_eq!(styles.get(a).unwrap().color, Color::rgb(255, 0, 0));
+        assert_eq!(styles.get(b).unwrap().color, Color::rgb(0, 0, 255));
+        // The hovered node's ancestors do not match.
+        assert_eq!(styles.get(div).unwrap().color, Color::BLACK);
+    }
+
+    #[test]
+    fn focus_and_active_are_separate_states() {
+        let doc = noonoo_html::parse("<input id=\"i\">");
+        let sheet = Stylesheet::parse(
+            "input { color: black } input:focus { color: blue } input:active { color: red }",
+        )
+        .unwrap();
+        let input = doc.get_element_by_id("i").unwrap();
+        let styles = compute_interactive(
+            &doc,
+            &[sheet],
+            Viewport::DEFAULT,
+            Interaction {
+                focused: Some(input),
+                active: Some(input),
+                ..Interaction::default()
+            },
+        );
+        // `:active` wins by source order.
+        assert_eq!(styles.get(input).unwrap().color, Color::rgb(255, 0, 0));
     }
 
     #[test]

@@ -7,6 +7,7 @@
 
 use std::collections::HashMap;
 
+use crate::Interaction;
 use noonoo_css::value::Value;
 use noonoo_css::{Declaration, Property, Stylesheet, parse_declaration, parse_declarations};
 use noonoo_dom::{Document, NodeId};
@@ -199,9 +200,20 @@ fn insert_best(
     }
 }
 
-fn winners_for(doc: &Document, id: NodeId, rules: &[Rule]) -> HashMap<Property, Candidate> {
+fn winners_for(
+    doc: &Document,
+    id: NodeId,
+    rules: &[Rule],
+    interaction: Interaction,
+) -> HashMap<Property, Candidate> {
     let view = DomView { doc, id };
-    let ctx = MatchContext::default();
+    // Dynamic pseudo-classes describe *this* element: `:hover` matches only
+    // the hovered node, not its ancestors or the whole tree.
+    let ctx = MatchContext {
+        hovered: interaction.hovered == Some(id),
+        focused: interaction.focused == Some(id),
+        active: interaction.active == Some(id),
+    };
     let mut winners = HashMap::new();
 
     for rule in rules {
@@ -251,6 +263,7 @@ pub(crate) fn compute(
     doc: &Document,
     stylesheets: &[Stylesheet],
     viewport: Viewport,
+    interaction: Interaction,
 ) -> Vec<Option<ComputedStyle>> {
     let rules = collect_rules(stylesheets);
     let mut out: Vec<Option<ComputedStyle>> = vec![None; doc.tree().len()];
@@ -266,7 +279,7 @@ pub(crate) fn compute(
             .map(|p| custom[p.index()].clone())
             .unwrap_or_default();
 
-        let winners = winners_for(doc, id, &rules);
+        let winners = winners_for(doc, id, &rules, interaction);
 
         // Custom properties inherit, then this element's winners override them.
         // Build the full map *before* substituting, so declaration order within

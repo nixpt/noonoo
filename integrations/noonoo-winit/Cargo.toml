@@ -1,6 +1,6 @@
 [package]
 name = "noonoo-winit"
-version = "0.13.0"
+version = "0.14.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 publish = false
@@ -12,6 +12,7 @@ description = "Opt-in: run a noonoo-shell Host in a winit window (GPU + input)."
 [dependencies]
 noonoo-dom = { path = "../../crates/noonoo-dom" }
 noonoo-shell = { path = "../../crates/noonoo-shell" }
+noonoo-style = { path = "../../crates/noonoo-style" }
 noonoo-vello = { path = "../noonoo-vello" }
 noonoo-events = { path = "../../crates/noonoo-events" }
 noonoo-geometry = { path = "../../crates/noonoo-geometry" }
