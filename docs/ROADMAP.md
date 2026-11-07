@@ -68,26 +68,28 @@ diff-able; scene effects + dirty regions are exposed.
 
 **Done when:** a fixture's command stream matches a golden file.
 
-## Slice 7 — Shell  ◑ host model + a11y tree shipped
+## Slice 7 — Shell  ✅ shipped
 
 The **multi-document host** (`noonoo-shell`): first-class layers (chrome +
 content), region routing, hit-testing, focus, per-layer composition, and origin
-gating — all headless-testable, zero deps. Delivered.
+gating — all headless-testable, zero deps.
 
 The **accessibility tree** is owned (`noonoo-a11y`) and on by default. It
 projects roles, accessible names/descriptions, values, states, heading levels,
 and bounds from the DOM, computed style, and layout; `Host::a11y` composes every
 layer under one window root with offset bounds and unique ids. The opt-in
 `integrations/noonoo-accesskit` projects that tree onto AccessKit, and the
-platform adapters (AT-SPI/UiKit/WinRT) are the window backend's concern — a
-consumer never re-enables a no-op Linux path.
+**window pass** (`integrations/noonoo-winit`) creates an AT-SPI adapter on
+Linux, pushes updates after every layout, forwards focus/click actions back to
+the host on the event-loop thread, and falls back cleanly when no session bus
+exists. A consumer never re-enables a no-op Linux path.
 
 The **borrowed backend** (a feature-gated window via `winit` + `wgpu`/`vello`)
-is the remainder of this slice.
+is the other half of this slice, landed in the window pass.
 
 **Done when:** `cargo run -p noonoo --features window,gpu` opens a window and the
-a11y tree reaches AT-SPI on Linux without consumer re-enabling. *(The tree and
-its AccessKit projection are shipped; platform activation remains.)*
+a11y tree reaches AT-SPI on Linux without consumer re-enabling. *(Met; runtime
+AT-SPI delivery still needs a desktop session to observe.)*
 
 ## Slice 8 — Sub-documents  ◑ anchored layers + scroll chaining shipped
 

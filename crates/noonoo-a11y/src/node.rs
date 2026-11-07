@@ -59,6 +59,8 @@ pub struct A11yNode {
     pub id: u64,
     /// The source DOM node, or `None` for a synthesized root (a window).
     pub node: Option<NodeId>,
+    /// The host layer the node belongs to, for a composed window tree.
+    pub layer: Option<usize>,
     /// What this node is.
     pub role: Role,
     /// The computed accessible name.
@@ -115,6 +117,13 @@ impl A11yNode {
         *next += 1;
         for child in &mut self.children {
             child.renumber(next);
+        }
+    }
+
+    pub(crate) fn set_layer(&mut self, layer: usize) {
+        self.layer = Some(layer);
+        for child in &mut self.children {
+            child.set_layer(layer);
         }
     }
 

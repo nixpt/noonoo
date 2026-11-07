@@ -110,8 +110,9 @@ Codec support is a swamp with a security surface; a curated dependency is right.
 The protocol + platform bridges (AT-SPI/UiKit/WinRT) are not ours to write; the
 a11y *tree* built from our DOM is (and the old engine's Linux path was a no-op
 anyway). Shipped: `noonoo-a11y` owns the tree (roles, names, states, bounds) and
-`integrations/noonoo-accesskit` projects it onto AccessKit. Platform activation
-is the window backend's concern and stays opt-in.
+`integrations/noonoo-accesskit` projects it onto AccessKit. The Linux window
+pass (`integrations/noonoo-winit`) creates the AT-SPI adapter and forwards
+focus/click actions; platform delivery stays opt-in with the window backend.
 
 ## 3. The buy-line (do not build)
 

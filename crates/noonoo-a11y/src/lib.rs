@@ -67,6 +67,7 @@ pub fn compose(name: &str, layers: &[(&A11yTree, Point)]) -> A11yTree {
     let mut root = A11yNode {
         id: 1,
         node: None,
+        layer: None,
         role: Role::Window,
         name: name.to_owned(),
         description: String::new(),
@@ -79,9 +80,10 @@ pub fn compose(name: &str, layers: &[(&A11yTree, Point)]) -> A11yTree {
 
     let mut next_id = 2;
     let mut focus = None;
-    for (tree, offset) in layers {
+    for (index, (tree, offset)) in layers.iter().enumerate() {
         let mut child = tree.root.clone();
         child.translate(offset.x, offset.y);
+        child.set_layer(index);
         child.renumber(&mut next_id);
         if let Some(id) = child.focused() {
             focus = Some(id);

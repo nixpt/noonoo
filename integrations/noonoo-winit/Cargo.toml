@@ -1,6 +1,6 @@
 [package]
 name = "noonoo-winit"
-version = "0.19.0"
+version = "0.20.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 publish = false
@@ -24,3 +24,13 @@ pollster = "0.4"
 
 [dev-dependencies]
 noonoo-engine = { path = "../../crates/noonoo-engine" }
+noonoo-html = { path = "../../crates/noonoo-html" }
+
+# Linux accessibility (AT-SPI). The tree and the AccessKit projection are
+# portable; only the platform adapter is target-specific, and it stays out of
+# non-Linux builds.
+[target.'cfg(target_os = "linux")'.dependencies]
+accesskit = "0.24"
+accesskit_unix = "0.20"
+noonoo-a11y = { path = "../../crates/noonoo-a11y" }
+noonoo-accesskit = { path = "../noonoo-accesskit" }

@@ -101,7 +101,8 @@ fn object(pairs: Vec<(&str, Json)>) -> Json {
 ///
 /// The shape is stable and deterministic: `{"root": …, "focus": …}`, with each
 /// node carrying `id`, `role`, `name`, `description`, `value`, `level`, `node`
-/// (the source DOM index), `bounds`, `states`, and `children`, in that order.
+/// (the source DOM index), `layer` (for a composed window tree), `bounds`,
+/// `states`, and `children`, in that order.
 /// Passing a layout tree adds bounds in page coordinates.
 pub fn a11y_json(doc: &Document, styles: &Styles, layout: Option<&LayoutTree>) -> String {
     let tree = noonoo_a11y::build_in(doc, styles, layout, None);
@@ -131,6 +132,10 @@ fn a11y_node_json(node: &A11yNode) -> Json {
         (
             "node",
             optional_number(node.node.map(|node| node.index() as f64)),
+        ),
+        (
+            "layer",
+            optional_number(node.layer.map(|layer| layer as f64)),
         ),
         ("bounds", bounds_json(node.bounds)),
         ("states", states_json(&node.states)),

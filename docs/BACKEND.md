@@ -41,6 +41,7 @@ renderer each frame, and converting platform input into `noonoo-events`.
 | `vello` | `0.7` | matches mustang; renderer behind the `wgpu` feature |
 | `wgpu` | `27` | vello 0.7 + mustang 0.3 both use it |
 | `winit` | `=0.31.0-beta.2` | the fork the ecosystem pins |
+| `accesskit`, `accesskit_unix` | `0.24`, `0.20` | Linux AT-SPI adapter (target-gated; no session bus required to build) |
 | `anyrender` (opt.) | `0.7` | the `PaintScene` seam mustang consumes |
 
 **Shape (as landed):**
@@ -66,12 +67,21 @@ renderer each frame, and converting platform input into `noonoo-events`.
    target, pointer *moves* route to the DOM without stealing focus, wheel
    chains through `Host::wheel`, and rendering is redraw-driven with a dirty
    flag.
+4. **`a11y`** (Linux) — an `accesskit_unix::Adapter` wired to `Host::a11y`.
+   AccessKit's handlers run on another thread, so they only send messages and
+   wake the loop; the event loop services them in `proxy_wake_up`/
+   `about_to_wait`: a tree request pushes a full update, and `Click`/`Focus`
+   actions are mapped back to `(layer, node)` and dispatched through the host.
+   Window bounds and native-focus state stay in sync. With no session bus the
+   adapter's thread has nothing to connect to and the window runs unchanged.
 
 **Verification**: the input seam is unit-tested without a display (8 tests over
-winit's real event types); the whole crate — handler, renderer, and a runnable
-`examples/showcase.rs` — compiles against the pinned `winit =0.31.0-beta.2`,
-`wgpu 27`, and `vello 0.7`. Presenting frames needs a display and remains
-runtime-verified only.
+winit's real event types) and the a11y bridge is unit-tested for tree retention
+and forwarding (1 test); the whole crate — handler, renderer, bridge, and a
+runnable `examples/showcase.rs` — compiles against the pinned
+`winit =0.31.0-beta.2`, `wgpu 27`, and `vello 0.7`. Presenting frames and
+observing the AT-SPI tree need a desktop session and remain runtime-verified
+only.
 
 ## mustang — the effect compositor
 
@@ -105,7 +115,8 @@ backends are **excluded** (like `integrations/noonoo-xip` and
 ## Status
 
 - **GPU pass** (`noonoo-vello`): landed, headless-tested.
-- **Window pass** (`noonoo-winit`): landed; input seam headless-tested, frame
-  presentation runtime-verified only (no display in CI).
+- **Window pass** (`noonoo-winit`): landed; input seam and a11y bridge
+  headless-tested, frame presentation and AT-SPI delivery runtime-verified only
+  (no display in CI).
 - **Effects** (mustang): out of scope for now — it is a separate project with a
   clean seam (`vello::Scene`) to attach at.

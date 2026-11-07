@@ -37,6 +37,7 @@ pub fn build_in(
         .unwrap_or_else(|| A11yNode {
             id: 1,
             node: None,
+            layer: None,
             role: Role::Document,
             name: String::new(),
             description: String::new(),
@@ -71,6 +72,7 @@ impl Builder<'_> {
                 vec![A11yNode {
                     id: a11y_id,
                     node: Some(id),
+                    layer: None,
                     role: Role::Document,
                     name,
                     description: String::new(),
@@ -93,6 +95,7 @@ impl Builder<'_> {
                 vec![A11yNode {
                     id: self.take_id(),
                     node: Some(id),
+                    layer: None,
                     role: Role::StaticText,
                     name,
                     description: String::new(),
@@ -141,6 +144,7 @@ impl Builder<'_> {
         vec![A11yNode {
             id: a11y_id,
             node: Some(id),
+            layer: None,
             role,
             name,
             description,

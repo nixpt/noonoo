@@ -853,6 +853,7 @@ mod tests {
                     .unwrap()
             )
         );
+        assert_eq!(node.layer, Some(1));
         assert_eq!(node.role, noonoo_a11y::Role::Generic);
         assert!(node.bounds.unwrap().y >= 24.0);
     }

@@ -277,6 +277,17 @@ fn compose_offsets_renumbers_and_keeps_focus() {
 
     let focused = window.focus.unwrap();
     assert_eq!(window.find_by_id(focused).unwrap().name, "A");
+    assert_eq!(window.find_by_id(focused).unwrap().layer, Some(0));
+
+    let main = window
+        .root
+        .children
+        .iter()
+        .find(|child| child.layer == Some(1))
+        .and_then(|child| child.children.first())
+        .unwrap();
+    assert_eq!(main.role, Role::Main);
+    assert_eq!(main.layer, Some(1));
 }
 
 #[test]

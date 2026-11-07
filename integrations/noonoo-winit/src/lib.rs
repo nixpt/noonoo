@@ -17,6 +17,9 @@
 //! - [`App`] implements winit's `ApplicationHandler`: it creates the window and
 //!   surface in `can_create_surfaces`, drops the surface in `suspended`, maps
 //!   input to `Host` methods, and renders on `RedrawRequested`.
+//! - [`a11y`] (Linux) bridges the host's accessibility tree to AT-SPI through
+//!   AccessKit: the adapter lives here, but the tree and its projection stay in
+//!   `noonoo-a11y` / `noonoo-accesskit`.
 //!
 //! ## What the embedder supplies
 //!
@@ -25,7 +28,8 @@
 //! [`noonoo_text::MetricShaper`]). Keyboard focus follows pointer *buttons*
 //! only; pointer moves route to the DOM without stealing focus, update the
 //! host's `:hover` state, and reflect the hovered node's computed `cursor` on
-//! the window.
+//! the window. On Linux the window is exposed to assistive technology by
+//! default; see [`a11y`].
 
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
@@ -33,18 +37,23 @@
 pub mod input;
 pub mod render;
 
+#[cfg(target_os = "linux")]
+pub mod a11y;
+
 use noonoo_dom::NodeId;
-use noonoo_events::ElementState;
-use noonoo_events::{Event, EventPhase, FnListener, Propagation, dispatch};
+use noonoo_events::{
+    ElementState, Event, EventPhase, FnListener, Modifiers, MouseButton, PointerEvent, Propagation,
+    dispatch,
+};
 use noonoo_geometry::{Point, Size};
 use noonoo_shell::Host;
 use noonoo_text::{MetricShaper, Shaper};
 use winit::application::ApplicationHandler;
+use winit::cursor::CursorIcon;
 use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::keyboard::ModifiersState;
-use winit::cursor::CursorIcon;
 use winit::window::{Window, WindowAttributes, WindowId};
 
 pub use input::{Action, LINE_HEIGHT, translate};
@@ -82,6 +91,9 @@ pub struct App {
     /// before the window.
     gpu: Option<render::Renderer>,
     window: Option<Box<dyn Window>>,
+    /// The Linux AT-SPI adapter, created with the first window.
+    #[cfg(target_os = "linux")]
+    a11y: Option<a11y::Bridge>,
 }
 
 impl App {
@@ -104,6 +116,8 @@ impl App {
             dirty: false,
             gpu: None,
             window: None,
+            #[cfg(target_os = "linux")]
+            a11y: None,
         }
     }
 
@@ -154,6 +168,12 @@ impl App {
         self.host.viewport = size;
         if let Some(gpu) = &mut self.gpu {
             gpu.resize(width, height);
+        }
+        #[cfg(target_os = "linux")]
+        if let Some(window) = &self.window
+            && let Some(bridge) = &mut self.a11y
+        {
+            bridge.set_window_bounds(window.as_ref());
         }
         self.invalidate();
     }
@@ -211,9 +231,101 @@ impl App {
         if self.dirty {
             self.layout();
             self.dirty = false;
+            self.sync_a11y();
         }
         if let Some(error) = self.gpu.as_mut().and_then(|gpu| gpu.draw(&self.host).err()) {
             eprintln!("noonoo-winit: {error}");
+        }
+    }
+
+    /// Push the current accessibility tree to the platform adapter.
+    #[cfg(target_os = "linux")]
+    fn sync_a11y(&mut self) {
+        if self.a11y.is_none() {
+            return;
+        }
+        let tree = self.host.a11y();
+        if let Some(bridge) = &mut self.a11y {
+            bridge.update(tree);
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn sync_a11y(&mut self) {}
+
+    /// Service accessibility-thread messages on the event-loop thread.
+    #[cfg(target_os = "linux")]
+    fn pump_a11y(&mut self) {
+        let mut messages = Vec::new();
+        if let Some(bridge) = &self.a11y {
+            while let Some(message) = bridge.try_recv() {
+                messages.push(message);
+            }
+        }
+        if messages.is_empty() {
+            return;
+        }
+        for message in messages {
+            match message {
+                a11y::Message::RequestTree => {}
+                a11y::Message::Action(request) => self.a11y_action(request),
+            }
+        }
+        self.sync_a11y();
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn pump_a11y(&mut self) {}
+
+    /// Apply an AccessKit action to the host, on the event-loop thread.
+    #[cfg(target_os = "linux")]
+    fn a11y_action(&mut self, request: accesskit::ActionRequest) {
+        let Some(node) = self
+            .a11y
+            .as_ref()
+            .and_then(|bridge| bridge.node(request.target_node.0))
+            .cloned()
+        else {
+            return;
+        };
+        let (Some(layer), Some(source)) = (node.layer, node.node) else {
+            return;
+        };
+
+        match request.action {
+            accesskit::Action::Focus => {
+                self.host.set_focus(layer, source);
+                self.invalidate();
+            }
+            accesskit::Action::Click => {
+                self.host.set_focus(layer, source);
+                let point = node
+                    .bounds
+                    .map(|bounds| {
+                        Point::new(
+                            bounds.x + bounds.width / 2.0,
+                            bounds.y + bounds.height / 2.0,
+                        )
+                    })
+                    .unwrap_or(self.cursor);
+                let pointer = PointerEvent {
+                    x: f64::from(point.x),
+                    y: f64::from(point.y),
+                    button: MouseButton::Primary,
+                    state: ElementState::Released,
+                    modifiers: Modifiers::default(),
+                };
+                if let Some(layer) = self.host.layer(layer) {
+                    dispatch(
+                        layer.engine().dom().tree(),
+                        source,
+                        &Event::Click(pointer),
+                        listener!(self),
+                    );
+                }
+                self.invalidate();
+            }
+            _ => {}
         }
     }
 }
@@ -258,8 +370,17 @@ impl ApplicationHandler for App {
                     .expect("noonoo-winit: create renderer"),
             );
         }
+        #[cfg(target_os = "linux")]
+        if let Some(window) = &self.window {
+            let proxy = event_loop.create_proxy();
+            let bridge = self
+                .a11y
+                .get_or_insert_with(move || a11y::Bridge::new(move || proxy.wake_up()));
+            bridge.set_window_bounds(window.as_ref());
+        }
         self.layout();
         self.update_cursor();
+        self.sync_a11y();
         if let Some(window) = &self.window {
             window.request_redraw();
         }
@@ -272,6 +393,14 @@ impl ApplicationHandler for App {
         event: WindowEvent,
     ) {
         match event {
+            WindowEvent::Focused(focused) => {
+                #[cfg(target_os = "linux")]
+                if let Some(bridge) = &mut self.a11y {
+                    bridge.set_window_focus(focused);
+                }
+                #[cfg(not(target_os = "linux"))]
+                let _ = focused;
+            }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 self.scale = scale_factor;
                 if let Some(window) = &self.window {
@@ -307,7 +436,15 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, _event_loop: &dyn ActiveEventLoop) {
-        // The render loop is redraw-driven; nothing to do between events.
+        // Service accessibility requests; the render loop itself is
+        // redraw-driven.
+        self.pump_a11y();
+    }
+
+    fn proxy_wake_up(&mut self, _event_loop: &dyn ActiveEventLoop) {
+        // The a11y thread asked the loop to wake so a tree request or action
+        // can be serviced promptly, even while the window is otherwise idle.
+        self.pump_a11y();
     }
 
     fn suspended(&mut self, _event_loop: &dyn ActiveEventLoop) {

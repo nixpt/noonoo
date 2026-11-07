@@ -17,7 +17,7 @@ them and **own** the integration.
 | `parley` (+ `fontique`/`swash`/`skrifa`) | `noonoo-text` | **Keep for shaping.** Line breaking + alignment are owned (`noonoo-text`) and font *metrics* are owned (`noonoo-ttf`); only shaping — kerning, ligatures, complex scripts, family resolution — stays borrowed behind the `Shaper` seam. |
 | `anyrender` / `vello` / `wgpu` | `integrations/noonoo-vello` (`noonoo-winit` planned) | **Keep (backend).** The command stream is owned (`noonoo-paint`); the GPU *pass* (`noonoo-vello`, opt-in, outside the workspace) translates it to a `vello::Scene` — see [`BACKEND.md`](BACKEND.md). The window pass is the remaining opt-in slice. |
 | `winit` | `integrations/noonoo-winit` | **Keep.** Windowing; a separate opt-in crate. |
-| `accesskit` | `integrations/noonoo-accesskit` | **Keep the bridge, own the tree.** The platform protocol/adapter is borrowed; `noonoo-a11y` owns the tree and its semantics. |
+| `accesskit` | `integrations/noonoo-accesskit`, `integrations/noonoo-winit` | **Keep the bridge, own the tree.** The platform protocol/adapter is borrowed; `noonoo-a11y` owns the tree and its semantics. |
 
 ## The rules that keep the surface thin
 

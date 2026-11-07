@@ -74,7 +74,8 @@ the engine's lockfile. Layout covers block, inline, flex, grid, and floats;
 the cascade covers custom properties, the math functions, viewport units, and
 gradients; fonts load via `@font-face`; `:hover`/`:focus`/`:active` style for
 real; and the accessibility tree is owned and on by default (`noonoo-a11y`),
-with the AccessKit/AT-SPI bridge opt-in. The GPU and window backends are opt-in
+with the AccessKit bridge opt-in and the Linux window pass activating AT-SPI
+without consumer re-enabling. The GPU and window backends are opt-in
 integrations outside the workspace (`docs/BACKEND.md`). The API is pre-1.0 and
 still moving.
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`ARCHITECTURE.md`](ARCHITECTURE.md).
