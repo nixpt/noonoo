@@ -25,5 +25,5 @@ h6 { font-size: 0.67em; font-weight: bold }
 strong, b { font-weight: bold }
 em, i { font-style: italic }
 pre, code { font-family: monospace }
-a { color: #0000ee }
+a { color: #0000ee; text-decoration: underline }
 "#;

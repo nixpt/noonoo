@@ -423,6 +423,7 @@ pub fn parse_declaration(
         "border-left" => Some(expand_border_side(values.clone(), important, 3)),
         "background" => Some(expand_background(values.clone(), important)),
         "font" => Some(expand_font(values.clone(), important)),
+        "text-decoration" => Some(expand_text_decoration(values.clone(), important)),
         _ => None,
     };
 
@@ -734,6 +735,30 @@ fn expand_font(values: Vec<Value>, important: bool) -> Vec<Declaration> {
     out
 }
 
+/// `text-decoration: <line>? <style>? <colour>? <thickness>?` → the one line
+/// list Noonoo models, `text-decoration-line`.
+fn expand_text_decoration(values: Vec<Value>, important: bool) -> Vec<Declaration> {
+    let lines: Vec<Value> = values
+        .into_iter()
+        .filter(|value| {
+            value.as_keyword().is_some_and(|keyword| {
+                matches!(
+                    keyword.to_ascii_lowercase().as_str(),
+                    "none" | "underline" | "overline" | "line-through" | "blink"
+                )
+            })
+        })
+        .collect();
+
+    // The shorthand resets the line to `none` when it names no line.
+    let lines = if lines.is_empty() {
+        vec![Value::Keyword("none".into())]
+    } else {
+        lines
+    };
+    vec![decl(Property::TextDecorationLine, lines, important)]
+}
+
 fn is_border_style(name: &str) -> bool {
     matches!(
         name.to_ascii_lowercase().as_str(),
@@ -918,5 +943,16 @@ mod tests {
         );
         assert_eq!(decls[1].values, vec![Value::Keyword("dashed".into())]);
         assert_eq!(decls[2].values, vec![Value::Keyword("blue".into())]);
+    }
+
+    #[test]
+    fn text_decoration_shorthand_expands() {
+        let decls = parse_declaration("text-decoration", "underline", false).unwrap();
+        assert_eq!(props(&decls), vec!["text-decoration-line"]);
+        assert_eq!(decls[0].values, vec![Value::Keyword("underline".into())]);
+
+        // A shorthand that names no line resets it to none.
+        let none = parse_declaration("text-decoration", "#ff0000", false).unwrap();
+        assert_eq!(none[0].values, vec![Value::Keyword("none".into())]);
     }
 }

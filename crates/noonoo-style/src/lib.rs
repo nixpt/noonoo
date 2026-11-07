@@ -25,7 +25,7 @@ use noonoo_dom::{Document, NodeId};
 pub use computed::{
     AlignItems, BorderStyle, BoxSizing, ComputedStyle, Cursor, Dimension, Display, Edges,
     FlexDirection, FlexWrap, FontStyle, JustifyContent, Length, LengthOrAuto, Overflow, Position,
-    TextAlign, Visibility, WhiteSpace, ZIndex,
+    TextAlign, TextDecoration, Visibility, WhiteSpace, ZIndex,
 };
 
 /// Computed styles for a document, indexed by node.
@@ -169,5 +169,18 @@ mod tests {
         assert_eq!(s.font_size, 20.0);
         assert_eq!(s.line_height, 28.0);
         assert_eq!(s.font_family, vec!["serif".to_owned()]);
+    }
+
+    #[test]
+    fn text_decoration_reaches_computed_style() {
+        let (doc, styles) = styled(
+            r#"<p class="x">hi</p>"#,
+            ".x { text-decoration: underline line-through }",
+        );
+        let p = doc.get_elements_by_tag_name("p")[0];
+        let s = styles.get(p).unwrap();
+        assert!(s.text_decoration.contains(TextDecoration::UNDERLINE));
+        assert!(s.text_decoration.contains(TextDecoration::LINE_THROUGH));
+        assert!(!s.text_decoration.contains(TextDecoration::OVERLINE));
     }
 }

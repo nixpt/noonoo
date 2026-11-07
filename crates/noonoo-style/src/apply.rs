@@ -268,6 +268,20 @@ pub(crate) fn apply(
         Property::FontFamily => style.font_family = font_family(values),
         Property::LineHeight => set_line_height(&mut style.line_height, values, font_size),
         Property::TextAlign => set_text_align(&mut style.text_align, values),
+        Property::TextDecorationLine => {
+            let mut decoration = TextDecoration::NONE;
+            for value in values {
+                if let Value::Keyword(keyword) = value {
+                    decoration = decoration.union(match keyword.to_ascii_lowercase().as_str() {
+                        "underline" => TextDecoration::UNDERLINE,
+                        "overline" => TextDecoration::OVERLINE,
+                        "line-through" => TextDecoration::LINE_THROUGH,
+                        _ => TextDecoration::NONE,
+                    });
+                }
+            }
+            style.text_decoration = decoration;
+        }
         Property::WhiteSpace => set_white_space(&mut style.white_space, values),
         Property::Visibility => set_visibility(&mut style.visibility, values),
         Property::Opacity => {
@@ -519,6 +533,7 @@ fn copy_property(dst: &mut ComputedStyle, src: &ComputedStyle, property: &Proper
         Property::FontFamily => dst.font_family = src.font_family.clone(),
         Property::LineHeight => dst.line_height = src.line_height,
         Property::TextAlign => dst.text_align = src.text_align,
+        Property::TextDecorationLine => dst.text_decoration = src.text_decoration,
         Property::WhiteSpace => dst.white_space = src.white_space,
         Property::Opacity => dst.opacity = src.opacity,
         Property::OverflowX => dst.overflow_x = src.overflow_x,

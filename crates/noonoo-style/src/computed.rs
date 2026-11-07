@@ -269,6 +269,36 @@ pub enum ZIndex {
     Number(i32),
 }
 
+/// `text-decoration-line`: the lines drawn with a text run, as a small bitset.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct TextDecoration(u8);
+
+impl TextDecoration {
+    /// No decoration.
+    pub const NONE: TextDecoration = TextDecoration(0);
+    /// `underline`.
+    pub const UNDERLINE: TextDecoration = TextDecoration(0b001);
+    /// `overline`.
+    pub const OVERLINE: TextDecoration = TextDecoration(0b010);
+    /// `line-through`.
+    pub const LINE_THROUGH: TextDecoration = TextDecoration(0b100);
+
+    /// Whether `flag` is in the set.
+    pub fn contains(self, flag: TextDecoration) -> bool {
+        self.0 & flag.0 != 0
+    }
+
+    /// The union of two sets.
+    pub fn union(self, other: TextDecoration) -> TextDecoration {
+        TextDecoration(self.0 | other.0)
+    }
+
+    /// Whether the set is empty.
+    pub fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+}
+
 /// `cursor`.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Cursor {
@@ -311,6 +341,8 @@ pub struct ComputedStyle {
     pub line_height: f32,
     /// `text-align`.
     pub text_align: TextAlign,
+    /// `text-decoration-line`.
+    pub text_decoration: TextDecoration,
     /// `white-space`.
     pub white_space: WhiteSpace,
     /// `visibility`.
@@ -378,6 +410,7 @@ impl Default for ComputedStyle {
             font_family: Vec::new(),
             line_height: 16.0 * 1.2,
             text_align: TextAlign::Start,
+            text_decoration: TextDecoration::NONE,
             white_space: WhiteSpace::Normal,
             visibility: Visibility::Visible,
             opacity: 1.0,

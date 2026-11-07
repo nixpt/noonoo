@@ -1,9 +1,9 @@
 //! # noonoo-paint
 //!
 //! Turn a [`LayoutTree`] into a backend-neutral **command stream**: fill a box,
-//! draw a border side, draw a text run. The stream is the artifact — it can be
-//! diffed (as JSON), fed to a GPU rasterizer, or recorded by a test without a
-//! screen.
+//! draw a border side, draw a text run and its decoration bars. The stream is the
+//! artifact — it can be diffed (as JSON), fed to a GPU rasterizer, or recorded
+//! by a test without a screen.
 //!
 //! This is Phase D of the dependency-exit plan (`docs/DEPENDENCY-EXIT.md`). The
 //! GPU backend (`anyrender`/`vello`) is deliberately **not** wired yet: this
@@ -17,7 +17,7 @@ use noonoo_css::Color;
 use noonoo_geometry::{Point, Rect};
 use noonoo_json::Json;
 use noonoo_layout::{BoxKind, LayoutBox, LayoutTree};
-use noonoo_style::Styles;
+use noonoo_style::{Styles, TextDecoration};
 
 /// A single drawing instruction.
 #[derive(Clone, PartialEq, Debug)]
@@ -121,6 +121,27 @@ fn paint_box(index: usize, boxes: &[LayoutBox], styles: &Styles, out: &mut Comma
             font_size,
             color,
         });
+
+        // Text decorations are bars across the run, in the text colour.
+        if let Some(style) = style {
+            let decoration = style.text_decoration;
+            if !decoration.is_empty() {
+                let thickness = (font_size * 0.07).max(1.0);
+                let baseline = b.rect.y + font_size * 0.8;
+                for (flag, y) in [
+                    (TextDecoration::UNDERLINE, baseline + font_size * 0.08),
+                    (TextDecoration::OVERLINE, b.rect.y),
+                    (TextDecoration::LINE_THROUGH, baseline - font_size * 0.32),
+                ] {
+                    if decoration.contains(flag) {
+                        out.0.push(Command::FillRect {
+                            rect: Rect::new(b.rect.x, y, b.rect.width, thickness),
+                            color,
+                        });
+                    }
+                }
+            }
+        }
     }
 
     for &child in &b.children {
@@ -283,5 +304,28 @@ mod tests {
         let json = list.to_json().to_string();
         assert!(json.starts_with('['));
         assert!(json.contains("draw-text"));
+    }
+
+    #[test]
+    fn paints_a_text_decoration_bar() {
+        let list = render(
+            r#"<div id="a">hi</div>"#,
+            "#a { color: red; text-decoration: underline }",
+        );
+        // An underline bar, in the text colour, alongside the run.
+        assert!(list.commands().iter().any(|c| matches!(
+            c,
+            Command::FillRect { color, .. } if *color == Color::rgb(255, 0, 0)
+        )));
+    }
+
+    #[test]
+    fn links_are_underlined_by_the_user_agent_sheet() {
+        let list = render(r##"<a href="#">go</a>"##, "");
+        assert!(
+            list.commands()
+                .iter()
+                .any(|c| matches!(c, Command::FillRect { .. }))
+        );
     }
 }
