@@ -1,0 +1,14 @@
+[package]
+name = "noonoo-vello"
+version = "0.6.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+description = "Opt-in: render a Noonoo command stream with Vello (GPU)."
+
+# Deliberately OUTSIDE the noonoo workspace (see the root `exclude`): it pulls
+# Vello, which the engine's default build and lockfile must not pay for.
+[dependencies]
+noonoo-paint = { path = "../../crates/noonoo-paint" }
+noonoo-geometry = { path = "../../crates/noonoo-geometry" }
+vello = { version = "0.7", default-features = false }

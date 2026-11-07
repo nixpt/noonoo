@@ -85,7 +85,7 @@ Seventeen crates in five tiers. Arrows point *downward only*.
 | `noonoo-engine` | the working document (parse→style→layout) | — (orchestrates) |
 | `noonoo-headless` | tree dump, virtual clock, synthetic input | — |
 | `noonoo-paint` | render command stream (fills, text or glyph outlines, clip) | `anyrender`/`vello` (feature-gated) |
-| `noonoo-shell` | multi-document host: layers, routing, focus, composition | window/GPU (borrowed, feature-gated) |
+| `noonoo-shell` | multi-document host: layers, routing, focus, composition | window/GPU (borrowed; the Vello GPU pass is `noonoo-vello`, opt-in) |
 | `noonoo` | umbrella + CLI | — |
 
 **Parsers and the style engine are owned, not borrowed.** The four format crates

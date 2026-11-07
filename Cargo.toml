@@ -40,7 +40,7 @@ members = [
 ]
 # tools/ is deliberately outside the workspace: the api-snapshot helper pulls
 # serde_json and the api-drift path dep, which the engine build must not pay for.
-exclude = ["tools/api-snapshot", "integrations/noonoo-xip"]
+exclude = ["tools/api-snapshot", "integrations/noonoo-xip", "integrations/noonoo-vello"]
 
 # Noonoo is a clean-room reimplementation. Nothing here depends on the code of
 # the engine it replaces (bliss-engine / upstream Blitz). Today the workspace

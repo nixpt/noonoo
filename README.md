@@ -118,6 +118,7 @@ The workspace MSRV is **1.89**. CI checks it explicitly.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — slices
 - [`docs/FORMATS.md`](docs/FORMATS.md) — file formats: DOM vs. value model, and Markdown
 - [`docs/FONTS.md`](docs/FONTS.md) — the font layer: what Noonoo owns, the seams, what is borrowed
+- [`docs/BACKEND.md`](docs/BACKEND.md) — GPU & window backends: the opt-in Vello pass and the planned window pass
 - [`docs/XIP.md`](docs/XIP.md) — capability-gated DOM: the owned seam and the opt-in XIP adapter
 
 ## License

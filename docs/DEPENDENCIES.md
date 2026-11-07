@@ -15,8 +15,8 @@ them and **own** the integration.
 | `stylo` (+ `selectors`, `cssparser`) | — | **Owned.** Phase A replaced it with a documented CSS subset (`noonoo-css` + `noonoo-style`); `stylo` is not a dependency. See [`DEPENDENCY-EXIT.md`](DEPENDENCY-EXIT.md). |
 | `taffy` | — | **Owned.** Phase B replaced it with `noonoo-layout` (block / inline / flex); `taffy` is not a dependency. |
 | `parley` (+ `fontique`/`swash`/`skrifa`) | `noonoo-text` | **Keep for shaping.** Line breaking + alignment are owned (`noonoo-text`) and font *metrics* are owned (`noonoo-ttf`); only shaping — kerning, ligatures, complex scripts, family resolution — stays borrowed behind the `Shaper` seam. |
-| `anyrender` / `vello` / `wgpu` | `noonoo-paint`, `noonoo-shell` | **Keep (backend).** The command stream is owned (`noonoo-paint`); the GPU 2D backend is behind a feature, not wired yet. |
-| `winit`, `accesskit` | `noonoo-shell` | **Keep.** Windowing + a11y, behind features. |
+| `anyrender` / `vello` / `wgpu` | `integrations/noonoo-vello` (`noonoo-winit` planned) | **Keep (backend).** The command stream is owned (`noonoo-paint`); the GPU *pass* (`noonoo-vello`, opt-in, outside the workspace) translates it to a `vello::Scene` — see [`BACKEND.md`](BACKEND.md). The window pass is the remaining opt-in slice. |
+| `winit`, `accesskit` | `integrations/noonoo-winit` (planned) | **Keep.** Windowing + a11y; a separate opt-in crate. |
 
 ## The rules that keep the surface thin
 
