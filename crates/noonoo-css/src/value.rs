@@ -258,6 +258,11 @@ impl Value {
             _ => None,
         }
     }
+
+    /// Whether this is a `calc()` function.
+    pub fn is_calc(&self) -> bool {
+        matches!(self, Self::Function { name, .. } if name.eq_ignore_ascii_case("calc"))
+    }
 }
 
 /// Parse a declaration value into its component values.

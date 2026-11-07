@@ -528,7 +528,7 @@ fn classify_border(values: Vec<Value>) -> (Option<Value>, Option<Value>, Option<
     let mut style = None;
     let mut color = None;
     for value in values {
-        if value.as_length().is_some() {
+        if value.as_length().is_some() || value.is_calc() {
             width = Some(value);
         } else if let Some(name) = value.as_keyword() {
             if Color::named(name).is_some() {
@@ -854,6 +854,17 @@ mod tests {
             .find(|d| d.property == Property::BorderTopStyle)
             .unwrap();
         assert_eq!(top_style.values, vec![Value::Keyword("solid".into())]);
+    }
+
+    #[test]
+    fn border_shorthand_accepts_calc_width() {
+        let decls = parse_declaration("border", "calc(2px) solid red", false).unwrap();
+        assert_eq!(decls.len(), 12);
+        let top_width = decls
+            .iter()
+            .find(|d| d.property == Property::BorderTopWidth)
+            .unwrap();
+        assert!(matches!(&top_width.values[0], Value::Function { name, .. } if name == "calc"));
     }
 
     #[test]
