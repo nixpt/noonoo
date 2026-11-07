@@ -19,6 +19,7 @@ a `vello::Scene`.
 | Noonoo command | Vello |
 |---|---|
 | `FillRect` | `Scene::fill` a `kurbo::Rect` |
+| `FillGradient` | `Scene::fill` a `kurbo::Rect` with a `peniko::Gradient` (`Extend::Repeat` for repeating; elliptical radial gradients via a brush transform) |
 | `FillPolygon` | `Scene::fill` a closed `kurbo::BezPath` |
 | `PushClip` / `PopClip` | `Scene::push_layer` / `pop_layer` |
 | `DrawText` | *not drawn* — text is rendered as glyph outlines, so a bare run has no paths |

@@ -31,6 +31,10 @@
 //! [`Dimension::Extreme`]/[`Length::Extreme`] and resolved in layout. Arguments
 //! that share a slope (all absolute, or all percentages) are folded here.
 //!
+//! Gradients (`linear-gradient()`, `radial-gradient()`, and their `repeating-`
+//! forms) parse into [`Gradient`] values in the same pass; geometry that needs
+//! the box is resolved later, in `noonoo-paint` (see the `gradient` module).
+//!
 //! Viewport units (`vw`, `vh`, `vmin`, `vmax`) resolve in the same pass against
 //! the [`Viewport`] passed to [`compute_with`]. [`compute`] uses
 //! [`Viewport::DEFAULT`] (800x600), matching the headless CLI. `Engine` callers
@@ -43,6 +47,7 @@ mod apply;
 mod calc;
 mod cascade;
 pub mod computed;
+mod gradient;
 pub mod ua;
 mod vars;
 
@@ -51,8 +56,9 @@ use noonoo_dom::{Document, NodeId};
 
 pub use computed::{
     AlignItems, BorderStyle, BoxSizing, CalcTerm, ComputedStyle, Cursor, Dimension, Display, Edges,
-    Extreme, FlexDirection, FlexWrap, FontStyle, JustifyContent, Length, LengthOrAuto, Overflow,
-    Position, TextAlign, TextDecoration, Visibility, WhiteSpace, ZIndex,
+    Extreme, FlexDirection, FlexWrap, FontStyle, Gradient, GradientKind, GradientStop,
+    JustifyContent, Length, LengthOrAuto, LinearDirection, Overflow, Position, RadialShape,
+    RadialSize, TextAlign, TextDecoration, Visibility, WhiteSpace, ZIndex,
 };
 
 /// Computed styles for a document, indexed by node.

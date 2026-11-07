@@ -113,9 +113,148 @@ pub enum Length {
     },
 }
 
+impl Dimension {
+    /// Resolve against a reference length (usually the containing block's
+    /// width or height). `auto` has no length and yields `None`.
+    ///
+    /// The result is **not** clamped: the caller decides whether a negative
+    /// value is legal (margins allow it, widths do not).
+    pub fn resolve(&self, reference: f32) -> Option<f32> {
+        match self {
+            Self::Auto => None,
+            Self::Px(px) => Some(*px),
+            Self::Percent(percent) => Some(reference * percent / 100.0),
+            Self::Calc { px, percent } => Some(px + reference * percent / 100.0),
+            Self::Extreme { kind, terms } => Some(extreme(*kind, terms, reference)),
+        }
+    }
+}
+
 impl Length {
     /// Zero length.
     pub const ZERO: Length = Length::Px(0.0);
+
+    /// Resolve against a reference length; the result is not clamped.
+    pub fn resolve(&self, reference: f32) -> f32 {
+        match self {
+            Self::Px(px) => *px,
+            Self::Percent(percent) => reference * percent / 100.0,
+            Self::Calc { px, percent } => px + reference * percent / 100.0,
+            Self::Extreme { kind, terms } => extreme(*kind, terms, reference),
+        }
+    }
+}
+
+/// Fold a deferred `min()`/`max()`/`clamp()` against a reference length.
+fn extreme(kind: Extreme, terms: &[CalcTerm], reference: f32) -> f32 {
+    let values: Vec<f32> = terms
+        .iter()
+        .map(|term| term.px + reference * term.percent / 100.0)
+        .collect();
+    match kind {
+        Extreme::Min => values.iter().copied().reduce(f32::min).unwrap_or(0.0),
+        Extreme::Max => values.iter().copied().reduce(f32::max).unwrap_or(0.0),
+        Extreme::Clamp => match values.as_slice() {
+            [min, value, max] => min.max(value.min(*max)),
+            _ => 0.0,
+        },
+    }
+}
+
+/// A parsed CSS gradient (`linear-gradient()` / `radial-gradient()`).
+#[derive(Clone, PartialEq, Debug)]
+pub struct Gradient {
+    /// Linear or radial.
+    pub kind: GradientKind,
+    /// Whether the stops repeat past the end of the line.
+    pub repeating: bool,
+    /// The colour stops, left to right.
+    pub stops: Vec<GradientStop>,
+}
+
+/// The geometry of a gradient.
+#[derive(Clone, PartialEq, Debug)]
+pub enum GradientKind {
+    /// A linear gradient.
+    Linear {
+        /// The gradient direction.
+        direction: LinearDirection,
+    },
+    /// A radial gradient.
+    Radial {
+        /// `circle` or `ellipse`.
+        shape: RadialShape,
+        /// How the ending shape is sized.
+        size: RadialSize,
+        /// The centre, as an offset from the box's top-left corner.
+        center: (Dimension, Dimension),
+    },
+}
+
+/// The direction of a linear gradient.
+///
+/// Corner directions are kept symbolic: the angle depends on the box's aspect
+/// ratio, so paint resolves them.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum LinearDirection {
+    /// An explicit CSS angle in degrees (`0` points up, `90` points right).
+    Angle(f32),
+    /// `to top`.
+    ToTop,
+    /// `to right`.
+    ToRight,
+    /// `to bottom`.
+    ToBottom,
+    /// `to left`.
+    ToLeft,
+    /// `to top right`.
+    ToTopRight,
+    /// `to bottom right`.
+    ToBottomRight,
+    /// `to bottom left`.
+    ToBottomLeft,
+    /// `to top left`.
+    ToTopLeft,
+}
+
+/// The ending shape of a radial gradient.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RadialShape {
+    /// A circle.
+    Circle,
+    /// An ellipse.
+    Ellipse,
+}
+
+/// How a radial gradient's ending shape is sized.
+#[derive(Clone, PartialEq, Debug)]
+pub enum RadialSize {
+    /// `closest-side`.
+    ClosestSide,
+    /// `farthest-side`.
+    FarthestSide,
+    /// `closest-corner`.
+    ClosestCorner,
+    /// `farthest-corner`.
+    FarthestCorner,
+    /// Explicit radii; `y` is `None` when only one radius was given (or for a
+    /// circle).
+    Explicit {
+        /// The horizontal radius.
+        x: Dimension,
+        /// The vertical radius.
+        y: Option<Dimension>,
+    },
+}
+
+/// One colour stop.
+#[derive(Clone, PartialEq, Debug)]
+pub struct GradientStop {
+    /// The stop colour.
+    pub color: Color,
+    /// Its position, as a length or percentage of the gradient line. `None`
+    /// means "interpolate evenly between the neighbours".
+    pub position: Option<Dimension>,
 }
 
 /// The four physical edges of a box.
@@ -378,6 +517,8 @@ pub struct ComputedStyle {
     pub color: Color,
     /// `background-color`.
     pub background_color: Color,
+    /// `background-image`, when it is a gradient.
+    pub background_image: Option<Gradient>,
     /// `font-size`, in pixels.
     pub font_size: f32,
     /// `font-weight`.
@@ -453,6 +594,7 @@ impl Default for ComputedStyle {
             position: Position::Static,
             color: Color::BLACK,
             background_color: Color::TRANSPARENT,
+            background_image: None,
             font_size: 16.0,
             font_weight: 400,
             font_style: FontStyle::Normal,

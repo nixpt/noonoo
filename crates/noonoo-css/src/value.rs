@@ -259,10 +259,27 @@ impl Value {
         }
     }
 
+    /// Whether this is a CSS gradient function.
+    pub fn is_gradient(&self) -> bool {
+        matches!(self, Self::Function { name, .. } if is_gradient_name(name))
+    }
+
     /// Whether this is a `calc()` function.
     pub fn is_calc(&self) -> bool {
         matches!(self, Self::Function { name, .. } if name.eq_ignore_ascii_case("calc"))
     }
+}
+
+/// Whether `name` is a CSS gradient function.
+pub fn is_gradient_name(name: &str) -> bool {
+    [
+        "linear-gradient",
+        "repeating-linear-gradient",
+        "radial-gradient",
+        "repeating-radial-gradient",
+    ]
+    .iter()
+    .any(|gradient| name.eq_ignore_ascii_case(gradient))
 }
 
 /// Parse a declaration value into its component values.

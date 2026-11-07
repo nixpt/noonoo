@@ -101,7 +101,12 @@ fn keyword(values: &[Value]) -> Option<&str> {
     }
 }
 
-fn dimension(values: &[Value], font_size: f32, root: f32, viewport: Viewport) -> Option<Dimension> {
+pub(crate) fn dimension(
+    values: &[Value],
+    font_size: f32,
+    root: f32,
+    viewport: Viewport,
+) -> Option<Dimension> {
     if let Some((name, args)) = math_fn(values) {
         let value = calc::evaluate_function(name, args, font_size, root, viewport)?;
         return calc_dimension(value);
@@ -353,6 +358,10 @@ pub(crate) fn apply(
         Property::ColumnGap => set_px(&mut style.column_gap, values, font_size, root, viewport),
         Property::Color => set_first(&mut style.color, color(values)),
         Property::BackgroundColor => set_first(&mut style.background_color, color(values)),
+        Property::BackgroundImage => {
+            style.background_image =
+                crate::gradient::parse(values, font_size, root, viewport, style.color);
+        }
         Property::FontWeight => set_font_weight(&mut style.font_weight, values),
         Property::FontStyle => {
             if let Some(k) = keyword(values) {
@@ -639,6 +648,7 @@ fn copy_property(dst: &mut ComputedStyle, src: &ComputedStyle, property: &Proper
         Property::ColumnGap => dst.column_gap = src.column_gap,
         Property::Color => dst.color = src.color,
         Property::BackgroundColor => dst.background_color = src.background_color,
+        Property::BackgroundImage => dst.background_image = src.background_image.clone(),
         Property::FontSize => dst.font_size = src.font_size,
         Property::FontWeight => dst.font_weight = src.font_weight,
         Property::FontStyle => dst.font_style = src.font_style,

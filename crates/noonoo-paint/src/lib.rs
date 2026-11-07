@@ -1,10 +1,14 @@
 //! # noonoo-paint
 //!
-//! Turn a [`LayoutTree`] into a backend-neutral **command stream**: fill a box,
-//! draw a border side, draw a text run and its decoration bars, and clip a
-//! subtree — walking each box's children in stacking order. The stream is the
-//! artifact — it can be diffed (as JSON), fed to a GPU rasterizer, or recorded
-//! by a test without a screen.
+//! Turn a [`LayoutTree`] into a backend-neutral **command stream**: fill a box
+//! (flat or gradient), draw a border side, draw a text run and its decoration
+//! bars, and clip a subtree — walking each box's children in stacking order.
+//! The stream is the artifact — it can be diffed (as JSON), fed to a GPU
+//! rasterizer, or recorded by a test without a screen.
+//!
+//! Gradients are resolved here into window-space geometry ([`GradientGeometry`])
+//! with CSS stop fix-up ([`GradientStop`]), so a backend receives concrete
+//! points, radii, and offsets rather than CSS syntax.
 //!
 //! Text sits behind the [`Glyphs`] seam: [`paint`] draws runs with [`TextRuns`],
 //! while [`paint_with`] takes a renderer — e.g. `noonoo-ttf`'s `OutlineGlyphs`,
@@ -23,7 +27,35 @@ pub use noonoo_css::Color;
 use noonoo_geometry::{Point, Rect};
 use noonoo_json::Json;
 use noonoo_layout::{BoxKind, LayoutBox, LayoutTree};
-use noonoo_style::{Styles, TextDecoration};
+use noonoo_style::{Gradient, LinearDirection, RadialShape, RadialSize, Styles, TextDecoration};
+
+/// One colour stop of a gradient fill.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct GradientStop {
+    /// The offset along the gradient line (`0` = start, `1` = end).
+    pub offset: f32,
+    /// The colour at the offset.
+    pub color: Color,
+}
+
+/// The geometry of a gradient fill, resolved in window space.
+#[derive(Clone, PartialEq, Debug)]
+pub enum GradientGeometry {
+    /// A linear gradient from `from` to `to`.
+    Linear {
+        /// The start of the gradient line.
+        from: Point,
+        /// The end of the gradient line.
+        to: Point,
+    },
+    /// A radial gradient; the two radii are equal for a circle.
+    Radial {
+        /// The centre.
+        center: Point,
+        /// The `(x, y)` radii of the ending shape.
+        radius: (f32, f32),
+    },
+}
 
 /// A single drawing instruction.
 #[derive(Clone, PartialEq, Debug)]
@@ -34,6 +66,17 @@ pub enum Command {
         rect: Rect,
         /// The fill colour.
         color: Color,
+    },
+    /// Fill a rectangle with a gradient.
+    FillGradient {
+        /// The filled rectangle.
+        rect: Rect,
+        /// The resolved geometry.
+        geometry: GradientGeometry,
+        /// The colour stops, sorted by non-decreasing offset.
+        stops: Vec<GradientStop>,
+        /// Whether the stops repeat past the end of the line.
+        repeating: bool,
     },
     /// Fill a polygon (at least three points, in order).
     FillPolygon {
@@ -165,13 +208,17 @@ fn paint_box(
     // Background and borders belong to element boxes; a text run draws only text
     // (it shares its element's style, which was already painted).
     if b.kind != BoxKind::Text {
-        if let Some(style) = style
-            && style.background_color.a > 0
-        {
-            out.0.push(Command::FillRect {
-                rect,
-                color: style.background_color,
-            });
+        if let Some(style) = style {
+            if style.background_color.a > 0 {
+                out.0.push(Command::FillRect {
+                    rect,
+                    color: style.background_color,
+                });
+            }
+            // The background image paints over the background colour.
+            if let Some(gradient) = &style.background_image {
+                paint_gradient(gradient, rect, out);
+            }
         }
 
         for (band, width, color) in border_sides(rect, b, style) {
@@ -306,6 +353,54 @@ fn command_json(command: &Command) -> Json {
             ("font_size", Json::Number(*font_size as f64)),
             ("color", Json::String(color_hex(*color))),
         ]),
+        Command::FillGradient {
+            rect,
+            geometry,
+            stops,
+            repeating,
+        } => {
+            let mut pairs = vec![
+                ("op", Json::String("fill-gradient".into())),
+                ("x", Json::Number(rect.x as f64)),
+                ("y", Json::Number(rect.y as f64)),
+                ("width", Json::Number(rect.width as f64)),
+                ("height", Json::Number(rect.height as f64)),
+            ];
+            match geometry {
+                GradientGeometry::Linear { from, to } => {
+                    pairs.push(("kind", Json::String("linear".into())));
+                    pairs.push(("from", point_json(*from)));
+                    pairs.push(("to", point_json(*to)));
+                }
+                GradientGeometry::Radial { center, radius } => {
+                    pairs.push(("kind", Json::String("radial".into())));
+                    pairs.push(("center", point_json(*center)));
+                    pairs.push((
+                        "radius",
+                        Json::Object(vec![
+                            ("x".to_owned(), Json::Number(radius.0 as f64)),
+                            ("y".to_owned(), Json::Number(radius.1 as f64)),
+                        ]),
+                    ));
+                }
+            }
+            pairs.push((
+                "stops",
+                Json::Array(
+                    stops
+                        .iter()
+                        .map(|stop| {
+                            Json::Object(vec![
+                                ("offset".to_owned(), Json::Number(stop.offset as f64)),
+                                ("color".to_owned(), Json::String(color_hex(stop.color))),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ));
+            pairs.push(("repeating", Json::Bool(*repeating)));
+            object(pairs)
+        }
         Command::PushClip { rect } => object(vec![
             ("op", Json::String("push-clip".into())),
             ("x", Json::Number(rect.x as f64)),
@@ -324,6 +419,202 @@ fn object(pairs: Vec<(&str, Json)>) -> Json {
             .map(|(key, value)| (key.to_owned(), value))
             .collect(),
     )
+}
+
+fn point_json(point: Point) -> Json {
+    Json::Object(vec![
+        ("x".to_owned(), Json::Number(point.x as f64)),
+        ("y".to_owned(), Json::Number(point.y as f64)),
+    ])
+}
+
+/// Translate a computed gradient into window-space geometry and stops.
+///
+/// Percentages resolve against the gradient line's length (the gradient line
+/// for a linear gradient, the horizontal radius for a radial one); lengths are
+/// distances along the same line. The CSS implicit-position fix-up (first stop
+/// at `0`, last at `100%`, even spacing for unstated positions, and clamping to
+/// be non-decreasing) happens here, once the reference length is known.
+fn paint_gradient(gradient: &Gradient, rect: Rect, out: &mut CommandList) {
+    let (geometry, reference) = match &gradient.kind {
+        noonoo_style::GradientKind::Linear { direction } => {
+            let angle = linear_angle(*direction, rect.width, rect.height).to_radians();
+            let (sin, cos) = angle.sin_cos();
+            // The line spans the box's diagonal band along the direction, so
+            // the opposite corners sit exactly at 0% and 100%.
+            let length = (rect.width * sin.abs() + rect.height * cos.abs()).max(1.0);
+            let (dx, dy) = (sin, -cos);
+            let center = Point::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+            let half = length / 2.0;
+            (
+                GradientGeometry::Linear {
+                    from: Point::new(center.x - dx * half, center.y - dy * half),
+                    to: Point::new(center.x + dx * half, center.y + dy * half),
+                },
+                length,
+            )
+        }
+        noonoo_style::GradientKind::Radial {
+            shape,
+            size,
+            center,
+        } => {
+            let center = Point::new(
+                rect.x + center.0.resolve(rect.width).unwrap_or(rect.width / 2.0),
+                rect.y + center.1.resolve(rect.height).unwrap_or(rect.height / 2.0),
+            );
+            let radius = radial_radii(*shape, size, center, rect);
+            (
+                GradientGeometry::Radial { center, radius },
+                radius.0.max(1.0),
+            )
+        }
+    };
+    out.0.push(Command::FillGradient {
+        rect,
+        geometry,
+        stops: resolve_stops(&gradient.stops, reference),
+        repeating: gradient.repeating,
+    });
+}
+
+/// The CSS angle (degrees; `0` points up, `90` points right) of a direction.
+///
+/// Corner directions are perpendicular to the diagonal between their two
+/// neighbouring corners, so a corner keyword depends on the box's aspect ratio.
+fn linear_angle(direction: LinearDirection, width: f32, height: f32) -> f32 {
+    match direction {
+        LinearDirection::Angle(angle) => angle,
+        LinearDirection::ToTop => 0.0,
+        LinearDirection::ToRight => 90.0,
+        LinearDirection::ToBottom => 180.0,
+        LinearDirection::ToLeft => 270.0,
+        LinearDirection::ToTopRight => height.atan2(width).to_degrees(),
+        LinearDirection::ToBottomRight => 180.0 - height.atan2(width).to_degrees(),
+        LinearDirection::ToBottomLeft => 180.0 + height.atan2(width).to_degrees(),
+        LinearDirection::ToTopLeft => 360.0 - height.atan2(width).to_degrees(),
+    }
+}
+
+/// The ending shape's `(x, y)` radii for a radial gradient.
+fn radial_radii(shape: RadialShape, size: &RadialSize, center: Point, rect: Rect) -> (f32, f32) {
+    let cx = center.x - rect.x;
+    let cy = center.y - rect.y;
+    let (width, height) = (rect.width.max(0.0), rect.height.max(0.0));
+    let circle = shape == RadialShape::Circle;
+    match size {
+        RadialSize::ClosestSide => {
+            let (dx, dy) = (cx.min(width - cx).max(0.0), cy.min(height - cy).max(0.0));
+            if circle {
+                let radius = dx.min(dy);
+                (radius, radius)
+            } else {
+                (dx, dy)
+            }
+        }
+        RadialSize::FarthestSide => {
+            let (dx, dy) = (cx.max(width - cx).max(0.0), cy.max(height - cy).max(0.0));
+            if circle {
+                let radius = dx.max(dy);
+                (radius, radius)
+            } else {
+                (dx, dy)
+            }
+        }
+        RadialSize::ClosestCorner => {
+            let (dx, dy) = (cx.min(width - cx).max(0.0), cy.min(height - cy).max(0.0));
+            if circle {
+                let radius = (dx * dx + dy * dy).sqrt();
+                (radius, radius)
+            } else {
+                (dx, dy)
+            }
+        }
+        RadialSize::FarthestCorner => {
+            let (dx, dy) = (cx.max(width - cx).max(0.0), cy.max(height - cy).max(0.0));
+            if circle {
+                let radius = (dx * dx + dy * dy).sqrt();
+                (radius, radius)
+            } else {
+                (dx, dy)
+            }
+        }
+        RadialSize::Explicit { x, y } => {
+            let radius_x = x.resolve(width).unwrap_or(width).max(0.0);
+            let radius_y = y
+                .as_ref()
+                .map(|radius| radius.resolve(height).unwrap_or(height).max(0.0))
+                .unwrap_or(radius_x);
+            if circle {
+                (radius_x, radius_x)
+            } else {
+                (radius_x, radius_y)
+            }
+        }
+    }
+}
+
+/// Resolve stop positions against `reference` and apply the CSS fix-up:
+/// clamp into `[0, 1]`, keep offsets non-decreasing, default the first to `0`
+/// and the last to `1`, and space unstated stops evenly between their stated
+/// neighbours.
+fn resolve_stops(stops: &[noonoo_style::GradientStop], reference: f32) -> Vec<GradientStop> {
+    let reference = if reference > 0.0 { reference } else { 1.0 };
+    let mut offsets: Vec<Option<f32>> = stops
+        .iter()
+        .map(|stop| {
+            stop.position.as_ref().map(|position| {
+                (position.resolve(reference).unwrap_or(0.0) / reference).clamp(0.0, 1.0)
+            })
+        })
+        .collect();
+    if offsets.len() < 2 {
+        return Vec::new();
+    }
+    if offsets[0].is_none() {
+        offsets[0] = Some(0.0);
+    }
+    let last = offsets.len() - 1;
+    if offsets[last].is_none() {
+        offsets[last] = Some(1.0);
+    }
+
+    // Keep offsets non-decreasing.
+    let mut previous = 0.0;
+    for offset in offsets.iter_mut().flatten() {
+        *offset = offset.max(previous);
+        previous = *offset;
+    }
+
+    // Distribute runs of unstated positions evenly.
+    let mut index = 0;
+    while index < offsets.len() {
+        if offsets[index].is_none() {
+            let start = index;
+            while index < offsets.len() && offsets[index].is_none() {
+                index += 1;
+            }
+            let (left, right) = (
+                offsets[start - 1].unwrap_or(0.0),
+                offsets[index.min(last)].unwrap_or(1.0),
+            );
+            let count = (index - start + 1) as f32;
+            for (step, slot) in (start..index).enumerate() {
+                offsets[slot] = Some(left + (right - left) * (step + 1) as f32 / count);
+            }
+        } else {
+            index += 1;
+        }
+    }
+
+    stops
+        .iter()
+        .zip(offsets)
+        .map(|(stop, offset)| GradientStop {
+            offset: offset.unwrap_or(0.0),
+            color: stop.color,
+        })
+        .collect()
 }
 
 fn color_hex(color: Color) -> String {
@@ -385,6 +676,188 @@ mod tests {
             .filter(|c| matches!(c, Command::FillRect { .. }))
             .count();
         assert_eq!(fills, 5);
+    }
+
+    #[test]
+    fn paints_a_linear_gradient() {
+        let list = render(
+            r#"<div id="a"></div>"#,
+            "#a { width: 400px; height: 100px; background: linear-gradient(to right, red, blue) }",
+        );
+        let gradients: Vec<_> = list
+            .commands()
+            .iter()
+            .filter_map(|c| match c {
+                Command::FillGradient {
+                    rect,
+                    geometry,
+                    stops,
+                    ..
+                } => Some((*rect, geometry.clone(), stops.clone())),
+                _ => None,
+            })
+            .collect();
+        let [(rect, geometry, stops)] = gradients.as_slice() else {
+            panic!("expected one gradient");
+        };
+        // A 400x100 box: `to right` runs left edge to right edge at mid-height.
+        assert_eq!((rect.width, rect.height), (400.0, 100.0));
+        let GradientGeometry::Linear { from, to } = geometry else {
+            panic!("expected a linear geometry");
+        };
+        assert_eq!((from.x, to.x), (0.0, 400.0));
+        assert!(
+            (from.y - to.y).abs() < 1e-3,
+            "horizontal line: {from:?} vs {to:?}"
+        );
+        assert_eq!(
+            stops.as_slice(),
+            &[
+                GradientStop {
+                    offset: 0.0,
+                    color: Color::rgb(255, 0, 0)
+                },
+                GradientStop {
+                    offset: 1.0,
+                    color: Color::rgb(0, 0, 255)
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn a_corner_direction_depends_on_the_aspect_ratio() {
+        let list = render(
+            r#"<div id="a"></div>"#,
+            "#a { width: 200px; height: 100px; background: linear-gradient(to top right, red, blue) }",
+        );
+        let Some(Command::FillGradient { geometry, .. }) = list
+            .commands()
+            .iter()
+            .find(|c| matches!(c, Command::FillGradient { .. }))
+        else {
+            panic!("expected a gradient");
+        };
+        let GradientGeometry::Linear { from, to } = geometry else {
+            panic!("expected a linear geometry");
+        };
+        // CSS angle atan2(h, w) = 26.57 degrees from *up*, i.e. 63.43 degrees
+        // above the horizontal: on a wide box, `to top right` is steep, because
+        // the line perpendicular to the gradient must pass through the two
+        // neighbouring corners (the box's main diagonal).
+        let angle = (to.y - from.y).atan2(to.x - from.x).to_degrees();
+        assert!((angle + 63.43).abs() < 0.1, "got {angle}");
+    }
+
+    #[test]
+    fn stop_positions_fix_up_like_css() {
+        let cases = [
+            ("linear-gradient(red, blue)", vec![(0.0, 255), (1.0, 0)]),
+            (
+                "linear-gradient(red 25%, blue)",
+                vec![(0.25, 255), (1.0, 0)],
+            ),
+            (
+                "linear-gradient(red, blue 75%)",
+                vec![(0.0, 255), (0.75, 0)],
+            ),
+            // Clamped: an out-of-order pair becomes equal.
+            (
+                "linear-gradient(red 50%, blue 25%)",
+                vec![(0.5, 255), (0.5, 0)],
+            ),
+            // Even spacing between stated neighbours.
+            (
+                "linear-gradient(red, blue, green 80%)",
+                vec![(0.0, 255), (0.4, 0), (0.8, 0)],
+            ),
+        ];
+        for (css, expected) in cases {
+            let list = render(
+                r#"<div id="a"></div>"#,
+                &format!("#a {{ background: {css} }}"),
+            );
+            let Some(Command::FillGradient { stops, .. }) = list
+                .commands()
+                .iter()
+                .find(|c| matches!(c, Command::FillGradient { .. }))
+            else {
+                panic!("expected a gradient for {css}");
+            };
+            let offsets: Vec<(f64, u8)> =
+                stops.iter().map(|s| (s.offset as f64, s.color.r)).collect();
+            assert_eq!(offsets.len(), expected.len(), "for {css}");
+            for ((offset, red), (expected_offset, expected_red)) in offsets.iter().zip(&expected) {
+                assert_eq!(red, expected_red, "for {css}");
+                assert!(
+                    (offset - expected_offset).abs() < 1e-6,
+                    "offset {offset} != {expected_offset} for {css}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn paints_a_radial_gradient() {
+        let list = render(
+            r#"<div id="a"></div>"#,
+            "#a { width: 200px; height: 100px; background: radial-gradient(circle 50px at 10px 10px, red, blue) }",
+        );
+        let Some(Command::FillGradient {
+            geometry,
+            repeating,
+            ..
+        }) = list
+            .commands()
+            .iter()
+            .find(|c| matches!(c, Command::FillGradient { .. }))
+        else {
+            panic!("expected a gradient");
+        };
+        assert!(!repeating);
+        let GradientGeometry::Radial { center, radius } = geometry else {
+            panic!("expected a radial geometry");
+        };
+        assert_eq!((center.x, center.y), (10.0, 10.0));
+        assert_eq!(*radius, (50.0, 50.0));
+    }
+
+    #[test]
+    fn radial_sizes_resolve_against_the_box() {
+        let list = render(
+            r#"<div id="a"></div>"#,
+            "#a { width: 200px; height: 100px; background: radial-gradient(ellipse closest-side, red, blue) }",
+        );
+        let Some(Command::FillGradient { geometry, .. }) = list
+            .commands()
+            .iter()
+            .find(|c| matches!(c, Command::FillGradient { .. }))
+        else {
+            panic!("expected a gradient");
+        };
+        let GradientGeometry::Radial { center, radius } = geometry else {
+            panic!("expected a radial geometry");
+        };
+        // Centered: closest side is half the width / half the height.
+        assert_eq!((center.x, center.y), (100.0, 50.0));
+        assert_eq!(*radius, (100.0, 50.0));
+    }
+
+    #[test]
+    fn a_background_gradient_paints_over_the_colour() {
+        let list = render(
+            r#"<div id="a"></div>"#,
+            "#a { background: linear-gradient(red, blue) #123456 }",
+        );
+        let commands = list.commands();
+        let fill_index = commands
+            .iter()
+            .position(|c| matches!(c, Command::FillRect { color, .. } if *color == Color::rgb(0x12, 0x34, 0x56)))
+            .expect("background colour behind the gradient");
+        assert!(matches!(
+            commands.get(fill_index + 1),
+            Some(Command::FillGradient { .. })
+        ));
     }
 
     #[test]

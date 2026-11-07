@@ -111,6 +111,8 @@ pub enum Property {
     Color,
     /// `background-color`.
     BackgroundColor,
+    /// `background-image`.
+    BackgroundImage,
     /// `font-size`.
     FontSize,
     /// `font-weight`.
@@ -203,6 +205,7 @@ impl Property {
             "column-gap" | "grid-column-gap" => Self::ColumnGap,
             "color" => Self::Color,
             "background-color" => Self::BackgroundColor,
+            "background-image" => Self::BackgroundImage,
             "font-size" => Self::FontSize,
             "font-weight" => Self::FontWeight,
             "font-style" => Self::FontStyle,
@@ -282,6 +285,7 @@ impl Property {
             Self::ColumnGap => "column-gap",
             Self::Color => "color",
             Self::BackgroundColor => "background-color",
+            Self::BackgroundImage => "background-image",
             Self::FontSize => "font-size",
             Self::FontWeight => "font-weight",
             Self::FontStyle => "font-style",
@@ -625,10 +629,11 @@ fn expand_border_side(values: Vec<Value>, important: bool, index: usize) -> Vec<
     out
 }
 
-/// `background: …` → `background-color`, the only part Noonoo models.
+/// `background: …` → `background-color` and `background-image`.
 ///
-/// The shorthand resets `background-color` to the colour it names, or to
-/// `transparent` when it names none.
+/// The shorthand resets both longhands: the colour it names (or `transparent`),
+/// and the gradient it names (or `none`). Other image kinds (`url()`) are not
+/// modelled and leave `background-image: none`.
 fn expand_background(values: Vec<Value>, important: bool) -> Vec<Declaration> {
     let color = values
         .iter()
@@ -643,7 +648,15 @@ fn expand_background(values: Vec<Value>, important: bool) -> Vec<Declaration> {
             }
         })
         .unwrap_or_else(|| Value::Keyword("transparent".into()));
-    vec![decl(Property::BackgroundColor, vec![color], important)]
+    let image = values
+        .iter()
+        .find(|value| value.is_gradient())
+        .cloned()
+        .unwrap_or_else(|| Value::Keyword("none".into()));
+    vec![
+        decl(Property::BackgroundColor, vec![color], important),
+        decl(Property::BackgroundImage, vec![image], important),
+    ]
 }
 
 /// `font: [style] [weight] <size>[/<line-height>] <family>` → the longhands
@@ -897,18 +910,39 @@ mod tests {
     }
 
     #[test]
-    fn background_extracts_the_colour() {
+    fn background_extracts_the_colour_and_image() {
         let decls =
             parse_declaration("background", "#eeeeee url(bg.png) no-repeat", false).unwrap();
-        assert_eq!(props(&decls), vec!["background-color"]);
+        assert_eq!(props(&decls), vec!["background-color", "background-image"]);
         assert_eq!(
             decls[0].values,
             vec![Value::Color(Color::rgb(0xee, 0xee, 0xee))]
         );
+        // `url()` images are not modelled, so the image longhand resets.
+        assert_eq!(decls[1].values, vec![Value::Keyword("none".into())]);
 
         // A shorthand that names no colour resets to transparent.
         let none = parse_declaration("background", "none", false).unwrap();
         assert_eq!(none[0].values, vec![Value::Keyword("transparent".into())]);
+    }
+
+    #[test]
+    fn background_shorthand_keeps_a_gradient_image() {
+        let decls = parse_declaration(
+            "background",
+            "linear-gradient(to right, red, blue) #fff",
+            false,
+        )
+        .unwrap();
+        assert_eq!(props(&decls), vec!["background-color", "background-image"]);
+        assert_eq!(
+            decls[0].values,
+            vec![Value::Color(Color::rgb(255, 255, 255))]
+        );
+        let [Value::Function { name, .. }] = decls[1].values.as_slice() else {
+            panic!("expected a gradient function");
+        };
+        assert_eq!(name, "linear-gradient");
     }
 
     #[test]

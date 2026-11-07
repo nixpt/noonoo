@@ -13,6 +13,7 @@
 //! | Noonoo command | Vello |
 //! |---|---|
 //! | `FillRect` | `Scene::fill` a `kurbo::Rect` |
+//! | `FillGradient` | `Scene::fill` a `kurbo::Rect` with a `peniko::Gradient` (elliptical radial gradients use a brush transform) |
 //! | `FillPolygon` | `Scene::fill` a closed `kurbo::BezPath` |
 //! | `PushClip` / `PopClip` | `Scene::push_layer` / `pop_layer` |
 //! | `DrawText` | *not drawn* — Noonoo renders text as glyph outlines (`noonoo-ttf`'s `OutlineGlyphs`), so a bare text run has no paths for Vello |
@@ -30,10 +31,10 @@
 #![warn(missing_docs)]
 
 use noonoo_geometry::Point;
-use noonoo_paint::{Command, CommandList};
+use noonoo_paint::{Command, CommandList, GradientGeometry};
 use vello::Scene;
 use vello::kurbo::{Affine, BezPath, Rect};
-use vello::peniko::{BlendMode, Color, Fill};
+use vello::peniko::{BlendMode, Color, ColorStop, Extend, Fill, Gradient};
 
 /// Build a fresh Vello scene from a Noonoo command stream.
 pub fn scene(commands: &CommandList) -> Scene {
@@ -49,6 +50,34 @@ pub fn draw(scene: &mut Scene, commands: &CommandList) {
             Command::FillRect { rect, color } => {
                 let shape = kurbo_rect(*rect);
                 scene.fill(Fill::NonZero, Affine::IDENTITY, brush(*color), None, &shape);
+            }
+            Command::FillGradient {
+                rect,
+                geometry,
+                stops,
+                repeating,
+            } => {
+                if stops.is_empty() {
+                    continue;
+                }
+                let brush = gradient(geometry, *repeating, stops);
+                // Vello's radial brush is a circle; an ellipse scales it about
+                // its centre through the brush transform.
+                let brush_transform = match geometry {
+                    GradientGeometry::Radial { center, radius: (rx, ry) }
+                        if *rx > 0.0 && (*ry - *rx).abs() > f32::EPSILON =>
+                    {
+                        let (cx, cy) = (center.x as f64, center.y as f64);
+                        Some(
+                            Affine::translate((cx, cy))
+                                * Affine::scale_non_uniform(1.0, (*ry / *rx) as f64)
+                                * Affine::translate((-cx, -cy)),
+                        )
+                    }
+                    _ => None,
+                };
+                let shape = kurbo_rect(*rect);
+                scene.fill(Fill::NonZero, Affine::IDENTITY, &brush, brush_transform, &shape);
             }
             Command::FillPolygon { points, color } => {
                 if points.len() >= 3 {
@@ -72,6 +101,43 @@ pub fn draw(scene: &mut Scene, commands: &CommandList) {
             Command::PopClip => scene.pop_layer(),
         }
     }
+}
+
+/// A Noonoo gradient into a Vello/peniko brush.
+fn gradient(
+    geometry: &GradientGeometry,
+    repeating: bool,
+    stops: &[noonoo_paint::GradientStop],
+) -> Gradient {
+    let mut gradient = match geometry {
+        GradientGeometry::Linear { from, to } => Gradient::new_linear(
+            (from.x as f64, from.y as f64),
+            (to.x as f64, to.y as f64),
+        ),
+        GradientGeometry::Radial { center, radius } => {
+            // A zero radius draws nothing; keep it a hair above zero so the
+            // encoder sees a usable extent.
+            Gradient::new_radial(
+                (center.x as f64, center.y as f64),
+                radius.0.max(1.0 / 256.0),
+            )
+        }
+    };
+    gradient.extend = if repeating {
+        Extend::Repeat
+    } else {
+        Extend::Pad
+    };
+    gradient.stops = stops
+        .iter()
+        .map(|stop| ColorStop {
+            offset: stop.offset,
+            color: brush(stop.color).into(),
+        })
+        .collect::<Vec<ColorStop>>()
+        .as_slice()
+        .into();
+    gradient
 }
 
 /// Noonoo's 8-bit RGBA into a Vello/peniko colour.

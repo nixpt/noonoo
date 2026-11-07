@@ -1,43 +1,14 @@
 //! Resolving computed values (percentages included) against a containing block.
 
-use noonoo_style::{
-    CalcTerm, ComputedStyle, Dimension, Edges, Extreme, Length, LengthOrAuto, Overflow,
-};
-
-/// Resolve a deferred `min()`/`max()`/`clamp()` against a reference length.
-fn extreme(kind: Extreme, terms: &[CalcTerm], reference: f32) -> f32 {
-    let values: Vec<f32> = terms
-        .iter()
-        .map(|term| term.px + reference * term.percent / 100.0)
-        .collect();
-    match kind {
-        Extreme::Min => values.iter().copied().reduce(f32::min).unwrap_or(0.0),
-        Extreme::Max => values.iter().copied().reduce(f32::max).unwrap_or(0.0),
-        Extreme::Clamp => match values.as_slice() {
-            [min, value, max] => min.max(value.min(*max)),
-            _ => 0.0,
-        },
-    }
-}
+use noonoo_style::{ComputedStyle, Dimension, Edges, Length, LengthOrAuto, Overflow};
 
 /// Resolve a dimension against a reference length; `auto` is `None`.
 pub fn dimension(value: Dimension, reference: f32) -> Option<f32> {
-    match value {
-        Dimension::Auto => None,
-        Dimension::Px(px) => Some(px.max(0.0)),
-        Dimension::Percent(percent) => Some((reference * percent / 100.0).max(0.0)),
-        Dimension::Calc { px, percent } => Some((px + reference * percent / 100.0).max(0.0)),
-        Dimension::Extreme { kind, terms } => Some(extreme(kind, &terms, reference).max(0.0)),
-    }
+    value.resolve(reference).map(|value| value.max(0.0))
 }
 
 fn length(value: Length, reference: f32) -> f32 {
-    match value {
-        Length::Px(px) => px,
-        Length::Percent(percent) => reference * percent / 100.0,
-        Length::Calc { px, percent } => (px + reference * percent / 100.0).max(0.0),
-        Length::Extreme { kind, terms } => extreme(kind, &terms, reference).max(0.0),
-    }
+    value.resolve(reference)
 }
 
 /// Resolve margins against the containing block's width.
@@ -45,13 +16,7 @@ fn length(value: Length, reference: f32) -> f32 {
 /// Unlike [`dimension`], margins may be negative, so no clamp is applied;
 /// `auto` resolves to zero.
 pub fn margins(edges: &Edges<LengthOrAuto>, reference: f32) -> Edges<f32> {
-    let resolve = |value: &Dimension| match value {
-        Dimension::Auto => 0.0,
-        Dimension::Px(px) => *px,
-        Dimension::Percent(percent) => reference * percent / 100.0,
-        Dimension::Calc { px, percent } => px + reference * percent / 100.0,
-        Dimension::Extreme { kind, terms } => extreme(*kind, terms, reference),
-    };
+    let resolve = |value: &Dimension| value.resolve(reference).unwrap_or(0.0);
     Edges {
         top: resolve(&edges.top),
         right: resolve(&edges.right),
@@ -111,13 +76,7 @@ pub fn borders(style: &ComputedStyle) -> Edges<f32> {
 /// both axes, a documented approximation (CSS resolves the vertical pair
 /// against the containing block's height).
 pub fn insets(edges: &Edges<Dimension>, reference: f32) -> Edges<Option<f32>> {
-    let resolve = |value: &Dimension| match value {
-        Dimension::Auto => None,
-        Dimension::Px(px) => Some(*px),
-        Dimension::Percent(percent) => Some(reference * percent / 100.0),
-        Dimension::Calc { px, percent } => Some(px + reference * percent / 100.0),
-        Dimension::Extreme { kind, terms } => Some(extreme(*kind, terms, reference)),
-    };
+    let resolve = |value: &Dimension| value.resolve(reference);
     Edges {
         top: resolve(&edges.top),
         right: resolve(&edges.right),
