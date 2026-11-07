@@ -189,8 +189,8 @@ pub(crate) fn shrink_to_fit(ctx: &Ctx<'_>, node: NodeId, available: f32) -> f32 
     preferred_width(ctx, node).min(available).max(0.0)
 }
 
-/// The border-box width a float would take with unwrapped content.
-fn preferred_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
+/// The border-box width a box would take with unwrapped content (max-content).
+pub(crate) fn preferred_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
     let style = ctx.style(node);
     // Percentages are unmeasurable without a reference; they count as zero.
     let padding = resolve::paddings(&style.padding, 0.0);

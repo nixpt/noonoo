@@ -23,6 +23,10 @@ pub enum Display {
     Flex,
     /// `inline-flex`.
     InlineFlex,
+    /// `grid`.
+    Grid,
+    /// `inline-grid`.
+    InlineGrid,
     /// `list-item`.
     ListItem,
 }
@@ -190,6 +194,52 @@ pub enum GradientKind {
         /// The centre, as an offset from the box's top-left corner.
         center: (Dimension, Dimension),
     },
+}
+
+/// One track of a grid template.
+#[derive(Clone, PartialEq, Debug)]
+pub enum Track {
+    /// `auto`: sized to the content, stretching with leftover space.
+    Auto,
+    /// A length or percentage (including `calc()`), resolved against the
+    /// relevant axis of the grid container.
+    Length(Dimension),
+    /// A flexible fraction of the leftover space.
+    Fr(f32),
+}
+
+/// One side of a `grid-column`/`grid-row` placement.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum GridLine {
+    /// `auto`: placed by auto-placement.
+    #[default]
+    Auto,
+    /// A line number (1-based, from the start edge).
+    Line(u16),
+    /// `span N` tracks wide (default 1).
+    Span(u16),
+}
+
+/// A `grid-column`/`grid-row` placement: a start line and an end (or span).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct GridRange {
+    /// The start line.
+    pub start: GridLine,
+    /// The end line or span.
+    pub end: GridLine,
+}
+
+impl GridRange {
+    /// The span this range asks for, when resolvable from `auto`-free
+    /// endpoints: `1 / 3` spans two tracks.
+    pub fn span(&self) -> Option<u16> {
+        match (self.start, self.end) {
+            (GridLine::Line(start), GridLine::Line(end)) if end > start => Some(end - start),
+            (GridLine::Line(_), GridLine::Span(span)) => Some(span),
+            (GridLine::Span(span), _) => Some(span),
+            _ => None,
+        }
+    }
 }
 
 /// The direction of a linear gradient.
@@ -544,6 +594,18 @@ pub struct ComputedStyle {
     pub float: Float,
     /// `clear`.
     pub clear: Clear,
+    /// `grid-template-columns`.
+    pub grid_template_columns: Vec<Track>,
+    /// `grid-template-rows`.
+    pub grid_template_rows: Vec<Track>,
+    /// `grid-auto-rows`, for implicit rows.
+    pub grid_auto_rows: Vec<Track>,
+    /// `grid-auto-columns`, for implicit columns.
+    pub grid_auto_columns: Vec<Track>,
+    /// `grid-column` placement.
+    pub grid_column: GridRange,
+    /// `grid-row` placement.
+    pub grid_row: GridRange,
     /// `color`.
     pub color: Color,
     /// `background-color`.
@@ -625,6 +687,12 @@ impl Default for ComputedStyle {
             position: Position::Static,
             float: Float::None,
             clear: Clear::None,
+            grid_template_columns: Vec::new(),
+            grid_template_rows: Vec::new(),
+            grid_auto_rows: Vec::new(),
+            grid_auto_columns: Vec::new(),
+            grid_column: GridRange::default(),
+            grid_row: GridRange::default(),
             color: Color::BLACK,
             background_color: Color::TRANSPARENT,
             background_image: None,

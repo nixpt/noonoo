@@ -214,6 +214,8 @@ pub(crate) fn apply(
                     "inline-block" => Display::InlineBlock,
                     "flex" => Display::Flex,
                     "inline-flex" => Display::InlineFlex,
+                    "grid" => Display::Grid,
+                    "inline-grid" => Display::InlineGrid,
                     "list-item" => Display::ListItem,
                     _ => style.display,
                 };
@@ -248,6 +250,36 @@ pub(crate) fn apply(
                     "both" => Clear::Both,
                     _ => Clear::None,
                 };
+            }
+        }
+        Property::GridTemplateColumns => {
+            if let Some(tracks) = crate::grid::tracks(values, font_size, root, viewport) {
+                style.grid_template_columns = tracks;
+            }
+        }
+        Property::GridTemplateRows => {
+            if let Some(tracks) = crate::grid::tracks(values, font_size, root, viewport) {
+                style.grid_template_rows = tracks;
+            }
+        }
+        Property::GridAutoRows => {
+            if let Some(tracks) = crate::grid::tracks(values, font_size, root, viewport) {
+                style.grid_auto_rows = tracks;
+            }
+        }
+        Property::GridAutoColumns => {
+            if let Some(tracks) = crate::grid::tracks(values, font_size, root, viewport) {
+                style.grid_auto_columns = tracks;
+            }
+        }
+        Property::GridColumn => {
+            if let Some(range) = crate::grid::placement(values) {
+                style.grid_column = range;
+            }
+        }
+        Property::GridRow => {
+            if let Some(range) = crate::grid::placement(values) {
+                style.grid_row = range;
             }
         }
         Property::Width => set_first(
@@ -630,6 +662,14 @@ fn copy_property(dst: &mut ComputedStyle, src: &ComputedStyle, property: &Proper
         Property::Position => dst.position = src.position,
         Property::Float => dst.float = src.float,
         Property::Clear => dst.clear = src.clear,
+        Property::GridTemplateColumns => {
+            dst.grid_template_columns = src.grid_template_columns.clone()
+        }
+        Property::GridTemplateRows => dst.grid_template_rows = src.grid_template_rows.clone(),
+        Property::GridAutoRows => dst.grid_auto_rows = src.grid_auto_rows.clone(),
+        Property::GridAutoColumns => dst.grid_auto_columns = src.grid_auto_columns.clone(),
+        Property::GridColumn => dst.grid_column = src.grid_column,
+        Property::GridRow => dst.grid_row = src.grid_row,
         Property::Width => dst.width = src.width.clone(),
         Property::Height => dst.height = src.height.clone(),
         Property::Top => dst.inset.top = src.inset.top.clone(),

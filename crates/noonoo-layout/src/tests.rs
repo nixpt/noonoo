@@ -206,6 +206,153 @@ fn a_float_among_inline_content_shapes_the_lines() {
 }
 
 #[test]
+fn grid_columns_share_the_free_space() {
+    let (doc, tree) = page(
+        r#"<div id="parent"><div id="a"></div><div id="b"></div></div>"#,
+        "#parent { display: grid; grid-template-columns: 1fr 1fr }
+         #a, #b { height: 20px }",
+        400.0,
+    );
+    let a = tree.get(id(&doc, "a")).unwrap();
+    let b = tree.get(id(&doc, "b")).unwrap();
+    assert_eq!((a.rect.x, a.rect.width), (0.0, 200.0));
+    assert_eq!((b.rect.x, b.rect.width), (200.0, 200.0));
+    assert_eq!(a.rect.y, b.rect.y);
+}
+
+#[test]
+fn fixed_and_fr_tracks_split_the_width() {
+    let (doc, tree) = page(
+        r#"<div id="parent"><div id="a"></div><div id="b"></div></div>"#,
+        "#parent { display: grid; grid-template-columns: 150px 1fr }
+         #a, #b { height: 20px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.width, 150.0);
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.width, 250.0);
+}
+
+#[test]
+fn auto_placement_wraps_to_the_next_row() {
+    let (doc, tree) = page(
+        r#"<div id="parent"><div id="a"></div><div id="b"></div><div id="c"></div></div>"#,
+        "#parent { display: grid; grid-template-columns: 1fr 1fr }
+         #a, #b, #c { height: 10px }",
+        400.0,
+    );
+    let c = tree.get(id(&doc, "c")).unwrap();
+    assert_eq!((c.rect.x, c.rect.y, c.rect.width), (0.0, 10.0, 200.0));
+}
+
+#[test]
+fn explicit_placement_positions_items() {
+    let (doc, tree) = page(
+        r#"<div id="parent"><div id="a"></div><div id="b"></div></div>"#,
+        "#parent { display: grid; grid-template-columns: 100px 100px;
+                  grid-template-rows: auto auto }
+         #a { height: 10px }
+         #b { grid-column: 2; grid-row: 2; height: 10px }",
+        400.0,
+    );
+    let b = tree.get(id(&doc, "b")).unwrap();
+    assert_eq!((b.rect.x, b.rect.y), (100.0, 10.0));
+}
+
+#[test]
+fn an_item_spans_tracks() {
+    let (doc, tree) = page(
+        r#"<div id="parent"><div id="a"></div><div id="b"></div></div>"#,
+        "#parent { display: grid; grid-template-columns: 100px 1fr }
+         #a { grid-column: 1 / 3; height: 10px }
+         #b { height: 10px }",
+        400.0,
+    );
+    let a = tree.get(id(&doc, "a")).unwrap();
+    assert_eq!((a.rect.x, a.rect.width), (0.0, 400.0));
+    // `b` auto-places into row 2 (row 1 is fully occupied).
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.y, 10.0);
+}
+
+#[test]
+fn rows_size_to_their_tallest_item() {
+    let (doc, tree) = page(
+        r#"<div id="parent"><div id="a"></div><div id="b"></div><div id="c"></div></div>"#,
+        "#parent { display: grid; grid-template-columns: 1fr 1fr }
+         #a { height: 20px } #b { height: 50px } #c { height: 10px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.y, 50.0);
+    // The container's height covers the tallest row.
+    assert_eq!(tree.get(id(&doc, "parent")).unwrap().rect.height, 60.0);
+}
+
+#[test]
+fn gaps_separate_tracks() {
+    let (doc, tree) = page(
+        r#"<div id="parent"><div id="a"></div><div id="b"></div><div id="c"></div></div>"#,
+        "#parent { display: grid; grid-template-columns: 1fr 1fr;
+                  column-gap: 20px; row-gap: 10px }
+         #a, #b, #c { height: 10px }",
+        400.0,
+    );
+    let a = tree.get(id(&doc, "a")).unwrap();
+    let b = tree.get(id(&doc, "b")).unwrap();
+    let c = tree.get(id(&doc, "c")).unwrap();
+    assert_eq!((a.rect.x, a.rect.width), (0.0, 190.0));
+    assert_eq!((b.rect.x, b.rect.width), (210.0, 190.0));
+    assert_eq!(c.rect.y, 20.0);
+}
+
+#[test]
+fn implicit_rows_use_grid_auto_rows() {
+    let (doc, tree) = page(
+        r#"<div id="parent"><div id="a"></div><div id="b"></div><div id="c"></div><div id="d"></div><div id="e"></div></div>"#,
+        "#parent { display: grid; grid-template-columns: 1fr 1fr;
+                  grid-auto-rows: 40px }
+         #a, #b, #c, #d, #e { height: 10px }",
+        400.0,
+    );
+    // With no template rows every row is implicit and 40px tall: rows 1 and 2
+    // put the 5th item at 40 + 40.
+    assert_eq!(tree.get(id(&doc, "e")).unwrap().rect.y, 80.0);
+}
+
+#[test]
+fn a_percentage_column_resolves_against_the_container() {
+    let (doc, tree) = page(
+        r#"<div id="parent"><div id="a"></div><div id="b"></div></div>"#,
+        "#parent { display: grid; grid-template-columns: 50% 1fr }
+         #a, #b { height: 10px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.width, 200.0);
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.width, 200.0);
+}
+
+#[test]
+fn repeat_expands_tracks() {
+    let (doc, tree) = page(
+        r#"<div id="parent"><div id="a"></div><div id="b"></div></div>"#,
+        "#parent { display: grid; grid-template-columns: repeat(2, 1fr) }
+         #a, #b { height: 10px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.width, 200.0);
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.x, 200.0);
+}
+
+#[test]
+fn a_grid_container_heights_to_its_rows() {
+    let (doc, tree) = page(
+        r#"<div id="parent"><div id="a"></div><div id="b"></div></div>"#,
+        "#parent { display: grid; grid-template-columns: 1fr 1fr }
+         #a { height: 30px } #b { height: 10px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "parent")).unwrap().rect.height, 30.0);
+}
+
+#[test]
 fn calc_mixes_percentage_and_pixels_against_the_containing_block() {
     let (doc, tree) = page(
         r#"<div id="a"></div>"#,

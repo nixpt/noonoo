@@ -22,6 +22,14 @@
 //!   a container's auto height includes its own floats' bottoms. Boxes that
 //!   establish a formatting context (clipping boxes, floats, flex, out-of-flow)
 //!   isolate their floats.
+//! - **Grid** — `display: grid` with track lists (`<length-percentage>`,
+//!   `auto`, `<fr>`, and `repeat()`), `column-gap`/`row-gap`, line-number and
+//!   `span N` placement, sparse row-major auto-placement, implicit tracks
+//!   sized by `grid-auto-rows`/`grid-auto-columns`, and a container whose auto
+//!   height is its rows. Columns size against the definite width (fixed first,
+//!   `fr` shares the leftover, otherwise `auto` tracks stretch); rows size to
+//!   content. Items fill their area on the inline axis and sit at its top;
+//!   loose text in a grid container is dropped (no anonymous items yet).
 //! - **Vertical margin collapsing** — adjacent siblings share the larger of
 //!   their facing margins; a block collapses its top/bottom margin through its
 //!   first/last child when no border or padding separates them; and an empty
@@ -41,12 +49,14 @@
 //!
 //! ## What it does not (yet)
 //!
-//! `grid`, full stacking contexts (a positioned box is ordered within its
+//! Full stacking contexts (a positioned box is ordered within its
 //! parent, not hoisted), scrollbar *rendering* (content scrolls; no bars are
-//! drawn), and writing modes. Floats are ignored for flex items, per CSS. Absolute boxes whose width or height is `auto` fall
+//! drawn), `align-items`/`justify-items` positioning in grid areas, and writing
+//! modes. Floats are ignored for flex and grid items, per CSS. Percentage
+//! tracks on an indefinite axis behave as `auto`. Absolute boxes whose width or height is `auto` fall
 //! back to the containing block when only the trailing inset (`right`/`bottom`)
-//! is set. Text is measured through the [`Shaper`] seam — a heuristic stands in
-//! until `noonoo-text` brings real shaping (`docs/ROADMAP.md` Phase C).
+//! is set. Text is measured through the [`Shaper`] seam — the heuristic
+//! `MetricShaper` stands in unless the host provides real font metrics.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -54,6 +64,7 @@
 mod block;
 mod flex;
 mod float;
+mod grid;
 mod margin;
 mod resolve;
 
@@ -74,6 +85,8 @@ pub enum BoxKind {
     Inline,
     /// A flex container.
     Flex,
+    /// A grid container.
+    Grid,
     /// A text run.
     Text,
 }
@@ -664,13 +677,24 @@ impl Ctx<'_> {
         let establishes_bfc = clips
             || style.float != noonoo_style::Float::None
             || matches!(style.position, Position::Absolute | Position::Fixed)
-            || matches!(style.display, Display::Flex | Display::InlineFlex);
+            || matches!(
+                style.display,
+                Display::Flex | Display::InlineFlex | Display::Grid | Display::InlineGrid
+            );
         if establishes_bfc {
             self.push_bfc();
         }
 
         let (child_indices, content_height) = match style.display {
             Display::Flex | Display::InlineFlex => flex::layout_flex_children(
+                self,
+                &style,
+                &children_nodes,
+                content_x,
+                content_y,
+                content_width,
+            ),
+            Display::Grid | Display::InlineGrid => crate::grid::layout_grid_children(
                 self,
                 &style,
                 &children_nodes,
@@ -698,7 +722,9 @@ impl Ctx<'_> {
             self.pop_bfc();
         }
 
-        let border_box_height = match resolve::dimension(style.height.clone(), f32::INFINITY) {
+        // A percentage height has no definite containing-block height here
+        // (the container is still being sized), so it behaves as `auto`.
+        let border_box_height = match resolve::definite(&style.height) {
             Some(height) => height + vertical,
             None => content_height + vertical,
         };

@@ -7,6 +7,23 @@ pub fn dimension(value: Dimension, reference: f32) -> Option<f32> {
     value.resolve(reference).map(|value| value.max(0.0))
 }
 
+/// Resolve a dimension that must not depend on a percentage.
+///
+/// Used for heights, where the containing block's height is usually unknown
+/// while the box is being sized: a percentage — or a math result containing
+/// one — behaves as `auto`, per CSS for an indefinite containing block.
+pub fn definite(value: &Dimension) -> Option<f32> {
+    match value {
+        Dimension::Auto | Dimension::Percent(_) => None,
+        Dimension::Calc { px, percent } => (percent == &0.0).then_some(*px),
+        Dimension::Extreme { terms, .. } => terms
+            .iter()
+            .all(|term| term.percent == 0.0)
+            .then(|| value.resolve(0.0).unwrap_or(0.0)),
+        Dimension::Px(px) => Some(*px),
+    }
+}
+
 fn length(value: Length, reference: f32) -> f32 {
     value.resolve(reference)
 }

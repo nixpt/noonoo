@@ -19,6 +19,18 @@ pub enum Property {
     Float,
     /// `clear`.
     Clear,
+    /// `grid-template-columns`.
+    GridTemplateColumns,
+    /// `grid-template-rows`.
+    GridTemplateRows,
+    /// `grid-auto-rows`.
+    GridAutoRows,
+    /// `grid-auto-columns`.
+    GridAutoColumns,
+    /// `grid-column`.
+    GridColumn,
+    /// `grid-row`.
+    GridRow,
     /// `top`.
     Top,
     /// `right`.
@@ -162,6 +174,12 @@ impl Property {
             "display" => Self::Display,
             "position" => Self::Position,
             "float" => Self::Float,
+            "grid-template-columns" => Self::GridTemplateColumns,
+            "grid-template-rows" => Self::GridTemplateRows,
+            "grid-auto-rows" => Self::GridAutoRows,
+            "grid-auto-columns" => Self::GridAutoColumns,
+            "grid-column" => Self::GridColumn,
+            "grid-row" => Self::GridRow,
             "clear" => Self::Clear,
             "top" => Self::Top,
             "right" => Self::Right,
@@ -244,6 +262,12 @@ impl Property {
             Self::Display => "display",
             Self::Position => "position",
             Self::Float => "float",
+            Self::GridTemplateColumns => "grid-template-columns",
+            Self::GridTemplateRows => "grid-template-rows",
+            Self::GridAutoRows => "grid-auto-rows",
+            Self::GridAutoColumns => "grid-auto-columns",
+            Self::GridColumn => "grid-column",
+            Self::GridRow => "grid-row",
             Self::Clear => "clear",
             Self::Top => "top",
             Self::Right => "right",
@@ -910,11 +934,8 @@ mod tests {
         let custom = parse_declaration("--brand", "#ff0000", false).unwrap();
         assert_eq!(custom[0].property, Property::Custom("brand".into()));
 
-        let unknown = parse_declaration("grid-template-columns", "1fr 1fr", false).unwrap();
-        assert_eq!(
-            unknown[0].property,
-            Property::Unknown("grid-template-columns".into())
-        );
+        let unknown = parse_declaration("grid-area", "auto", false).unwrap();
+        assert_eq!(unknown[0].property, Property::Unknown("grid-area".into()));
     }
 
     #[test]
