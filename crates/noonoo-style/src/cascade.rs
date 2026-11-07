@@ -143,20 +143,47 @@ impl Element for DomView<'_> {
     }
 }
 
-/// Build the rule list: the UA sheet, then the author stylesheets.
-fn collect_rules(stylesheets: &[Stylesheet]) -> Vec<Rule> {
+/// Build the rule list: the UA sheet, then the author stylesheets. A
+/// `@media` rule whose prelude matches the viewport expands in place, so its
+/// rules keep their source order in the cascade; a prelude that doesn't
+/// match (or a malformed block) contributes nothing.
+fn collect_rules(stylesheets: &[Stylesheet], viewport: &Viewport) -> Vec<Rule> {
     let mut rules = Vec::new();
     let mut order = 0u32;
     let ua = Stylesheet::parse(UA_STYLESHEET).unwrap_or_default();
-    push_sheet(&ua, Origin::Ua, &mut rules, &mut order);
+    push_sheet(&ua, Origin::Ua, viewport, &mut rules, &mut order);
     for sheet in stylesheets {
-        push_sheet(sheet, Origin::Author, &mut rules, &mut order);
+        push_sheet(sheet, Origin::Author, viewport, &mut rules, &mut order);
     }
     rules
 }
 
-fn push_sheet(sheet: &Stylesheet, origin: Origin, rules: &mut Vec<Rule>, order: &mut u32) {
+fn push_sheet(
+    sheet: &Stylesheet,
+    origin: Origin,
+    viewport: &Viewport,
+    rules: &mut Vec<Rule>,
+    order: &mut u32,
+) {
     for rule in &sheet.rules {
+        // `@media`: a rule whose prelude matches recurses into the block's
+        // parsed rules; anything else (other at-rules, a non-matching
+        // prelude, a malformed block) contributes nothing here.
+        if let noonoo_css::Rule::At {
+            name,
+            prelude,
+            block,
+        } = rule
+            && name.eq_ignore_ascii_case("media")
+        {
+            if crate::media::matches(prelude, viewport)
+                && let Some(block) = block
+                && let Ok(inner) = Stylesheet::parse(block)
+            {
+                push_sheet(&inner, origin, viewport, rules, order);
+            }
+            continue;
+        }
         let noonoo_css::Rule::Qualified {
             selector,
             declarations,
@@ -265,7 +292,7 @@ pub(crate) fn compute(
     viewport: Viewport,
     interaction: Interaction,
 ) -> Vec<Option<ComputedStyle>> {
-    let rules = collect_rules(stylesheets);
+    let rules = collect_rules(stylesheets, &viewport);
     let mut out: Vec<Option<ComputedStyle>> = vec![None; doc.tree().len()];
     let mut custom: Vec<CustomProperties> = vec![CustomProperties::new(); doc.tree().len()];
     let mut root_font_size = 16.0_f32;

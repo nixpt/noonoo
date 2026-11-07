@@ -53,6 +53,7 @@ mod cascade;
 pub mod computed;
 mod gradient;
 mod grid;
+mod media;
 pub mod ua;
 mod vars;
 
@@ -166,6 +167,48 @@ mod tests {
         let sheet = Stylesheet::parse(css).unwrap();
         let styles = compute_with(&doc, &[sheet], viewport);
         (doc, styles)
+    }
+
+    #[test]
+    fn media_rules_apply_when_the_viewport_matches() {
+        // Finding 4 of docs/REVIEW-2026-11-07.md: the at-rule was captured
+        // verbatim and never evaluated. The review's exact reproduction is
+        // the first case.
+        let (doc, styles) = styled_at(
+            r#"<p class="m">H</p>"#,
+            "@media (min-width:100px){.m{color:blue}}",
+            Viewport {
+                width: 800.0,
+                height: 600.0,
+            },
+        );
+        let m = doc.get_elements_by_tag_name("p")[0];
+        assert_eq!(styles.get(m).unwrap().color, Color::rgb(0, 0, 255));
+
+        // The same sheet at a viewport the condition rejects contributes
+        // nothing — the UA default stays.
+        let (doc, styles) = styled_at(
+            r#"<p class="m">H</p>"#,
+            "@media (min-width:100px){.m{color:blue}}",
+            Viewport {
+                width: 50.0,
+                height: 600.0,
+            },
+        );
+        let m = doc.get_elements_by_tag_name("p")[0];
+        assert_eq!(styles.get(m).unwrap().color, Color::BLACK);
+
+        // A matching media rule and a plain rule cascade in source order.
+        let (doc, styles) = styled_at(
+            r#"<p class="m">H</p>"#,
+            "@media (min-width:100px){.m{color:blue}} .m { color: red }",
+            Viewport {
+                width: 800.0,
+                height: 600.0,
+            },
+        );
+        let m = doc.get_elements_by_tag_name("p")[0];
+        assert_eq!(styles.get(m).unwrap().color, Color::rgb(255, 0, 0));
     }
 
     #[test]
