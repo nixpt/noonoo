@@ -154,4 +154,20 @@ mod tests {
         assert_eq!(s.inset.left, Dimension::Auto);
         assert_eq!(s.inset.bottom, Dimension::Auto);
     }
+
+    #[test]
+    fn shorthands_reach_computed_style() {
+        let (doc, styles) = styled(
+            r#"<div class="card">x</div>"#,
+            ".card { background: #123456; font: italic bold 20px/1.4 serif }",
+        );
+        let card = doc.get_elements_by_tag_name("div")[0];
+        let s = styles.get(card).unwrap();
+        assert_eq!(s.background_color, Color::rgb(0x12, 0x34, 0x56));
+        assert_eq!(s.font_style, FontStyle::Italic);
+        assert_eq!(s.font_weight, 700);
+        assert_eq!(s.font_size, 20.0);
+        assert_eq!(s.line_height, 28.0);
+        assert_eq!(s.font_family, vec!["serif".to_owned()]);
+    }
 }

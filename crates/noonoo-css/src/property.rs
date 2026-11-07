@@ -417,6 +417,12 @@ pub fn parse_declaration(
         "flex" => Some(expand_flex(values.clone(), important)),
         "flex-flow" => Some(expand_flex_flow(values.clone(), important)),
         "border" => Some(expand_border(values.clone(), important)),
+        "border-top" => Some(expand_border_side(values.clone(), important, 0)),
+        "border-right" => Some(expand_border_side(values.clone(), important, 1)),
+        "border-bottom" => Some(expand_border_side(values.clone(), important, 2)),
+        "border-left" => Some(expand_border_side(values.clone(), important, 3)),
+        "background" => Some(expand_background(values.clone(), important)),
+        "font" => Some(expand_font(values.clone(), important)),
         _ => None,
     };
 
@@ -515,8 +521,8 @@ fn expand_flex(values: Vec<Value>, important: bool) -> Vec<Declaration> {
     }
 }
 
-/// `border: <width> <style> <color>` → width/style/color on all four sides.
-fn expand_border(values: Vec<Value>, important: bool) -> Vec<Declaration> {
+/// Classify the `<width> <style> <color>` tokens of a border shorthand.
+fn classify_border(values: Vec<Value>) -> (Option<Value>, Option<Value>, Option<Value>) {
     let mut width = None;
     let mut style = None;
     let mut color = None;
@@ -537,6 +543,12 @@ fn expand_border(values: Vec<Value>, important: bool) -> Vec<Declaration> {
             color = Some(value);
         }
     }
+    (width, style, color)
+}
+
+/// `border: <width> <style> <color>` → width/style/color on all four sides.
+fn expand_border(values: Vec<Value>, important: bool) -> Vec<Declaration> {
+    let (width, style, color) = classify_border(values);
 
     let mut out = Vec::new();
     for (value, properties) in [
@@ -574,6 +586,151 @@ fn expand_border(values: Vec<Value>, important: bool) -> Vec<Declaration> {
             out.extend(decls);
         }
     }
+    out
+}
+
+/// `border-<side>: <width> <style> <color>` → that one side's three longhands.
+fn expand_border_side(values: Vec<Value>, important: bool, index: usize) -> Vec<Declaration> {
+    let (width, style, color) = classify_border(values);
+    let widths = sides(
+        Property::BorderTopWidth,
+        Property::BorderRightWidth,
+        Property::BorderBottomWidth,
+        Property::BorderLeftWidth,
+    );
+    let styles = sides(
+        Property::BorderTopStyle,
+        Property::BorderRightStyle,
+        Property::BorderBottomStyle,
+        Property::BorderLeftStyle,
+    );
+    let colors = sides(
+        Property::BorderTopColor,
+        Property::BorderRightColor,
+        Property::BorderBottomColor,
+        Property::BorderLeftColor,
+    );
+
+    let mut out = Vec::new();
+    for (value, property) in [
+        (width, widths[index].clone()),
+        (style, styles[index].clone()),
+        (color, colors[index].clone()),
+    ] {
+        if let Some(value) = value {
+            out.push(decl(property, vec![value], important));
+        }
+    }
+    out
+}
+
+/// `background: …` → `background-color`, the only part Noonoo models.
+///
+/// The shorthand resets `background-color` to the colour it names, or to
+/// `transparent` when it names none.
+fn expand_background(values: Vec<Value>, important: bool) -> Vec<Declaration> {
+    let color = values
+        .iter()
+        .find_map(|value| {
+            if value.as_color().is_some() {
+                Some(value.clone())
+            } else {
+                value.as_keyword().and_then(|name| {
+                    (name.eq_ignore_ascii_case("transparent") || Color::named(name).is_some())
+                        .then(|| value.clone())
+                })
+            }
+        })
+        .unwrap_or_else(|| Value::Keyword("transparent".into()));
+    vec![decl(Property::BackgroundColor, vec![color], important)]
+}
+
+/// `font: [style] [weight] <size>[/<line-height>] <family>` → the longhands
+/// Noonoo models.
+fn expand_font(values: Vec<Value>, important: bool) -> Vec<Declaration> {
+    // A system-font keyword cannot be expanded without the system's metrics.
+    if let [Value::Keyword(keyword)] = values.as_slice()
+        && matches!(
+            keyword.to_ascii_lowercase().as_str(),
+            "caption" | "icon" | "menu" | "message-box" | "small-caption" | "status-bar"
+        )
+    {
+        return Vec::new();
+    }
+
+    let mut out = Vec::new();
+    let mut i = 0;
+
+    // Leading style/weight tokens, in any order.
+    while i < values.len() {
+        match &values[i] {
+            Value::Keyword(keyword)
+                if matches!(keyword.to_ascii_lowercase().as_str(), "italic" | "oblique") =>
+            {
+                out.push(decl(
+                    Property::FontStyle,
+                    vec![values[i].clone()],
+                    important,
+                ));
+                i += 1;
+            }
+            Value::Keyword(keyword)
+                if matches!(
+                    keyword.to_ascii_lowercase().as_str(),
+                    "bold" | "bolder" | "lighter"
+                ) =>
+            {
+                out.push(decl(
+                    Property::FontWeight,
+                    vec![values[i].clone()],
+                    important,
+                ));
+                i += 1;
+            }
+            Value::Number(number) if (100.0..=900.0).contains(number) => {
+                out.push(decl(
+                    Property::FontWeight,
+                    vec![values[i].clone()],
+                    important,
+                ));
+                i += 1;
+            }
+            // `normal`, `small-caps`, and stretch keywords are tolerated but
+            // dropped: Noonoo models neither.
+            Value::Keyword(keyword)
+                if matches!(
+                    keyword.to_ascii_lowercase().as_str(),
+                    "normal" | "small-caps"
+                ) =>
+            {
+                i += 1;
+            }
+            _ => break,
+        }
+    }
+
+    // The size, and an optional `/ line-height`.
+    if i < values.len() {
+        out.push(decl(Property::FontSize, vec![values[i].clone()], important));
+        i += 1;
+        if matches!(values.get(i), Some(Value::Slash)) {
+            i += 1;
+            if i < values.len() {
+                out.push(decl(
+                    Property::LineHeight,
+                    vec![values[i].clone()],
+                    important,
+                ));
+                i += 1;
+            }
+        }
+    }
+
+    // Everything left is the family list.
+    if i < values.len() {
+        out.push(decl(Property::FontFamily, values[i..].to_vec(), important));
+    }
+
     out
 }
 
@@ -701,5 +858,65 @@ mod tests {
             unknown[0].property,
             Property::Unknown("grid-template-columns".into())
         );
+    }
+
+    #[test]
+    fn background_extracts_the_colour() {
+        let decls =
+            parse_declaration("background", "#eeeeee url(bg.png) no-repeat", false).unwrap();
+        assert_eq!(props(&decls), vec!["background-color"]);
+        assert_eq!(
+            decls[0].values,
+            vec![Value::Color(Color::rgb(0xee, 0xee, 0xee))]
+        );
+
+        // A shorthand that names no colour resets to transparent.
+        let none = parse_declaration("background", "none", false).unwrap();
+        assert_eq!(none[0].values, vec![Value::Keyword("transparent".into())]);
+    }
+
+    #[test]
+    fn font_shorthand_expands() {
+        let decls =
+            parse_declaration("font", r#"italic bold 16px/1.5 "Helvetica", serif"#, false).unwrap();
+        assert_eq!(
+            props(&decls),
+            vec![
+                "font-style",
+                "font-weight",
+                "font-size",
+                "line-height",
+                "font-family"
+            ]
+        );
+        assert_eq!(decls[0].values, vec![Value::Keyword("italic".into())]);
+        assert_eq!(decls[1].values, vec![Value::Keyword("bold".into())]);
+        assert_eq!(
+            decls[2].values,
+            vec![Value::Length(Length::new(16.0, LengthUnit::Px))]
+        );
+        assert_eq!(decls[3].values, vec![Value::Number(1.5)]);
+        assert!(decls[4].values.len() >= 2, "the family list survives");
+    }
+
+    #[test]
+    fn a_system_font_keyword_is_left_alone() {
+        let decls = parse_declaration("font", "caption", false).unwrap();
+        assert!(decls.is_empty());
+    }
+
+    #[test]
+    fn border_side_shorthand_sets_one_side() {
+        let decls = parse_declaration("border-top", "2px dashed blue", false).unwrap();
+        assert_eq!(
+            props(&decls),
+            vec!["border-top-width", "border-top-style", "border-top-color"]
+        );
+        assert_eq!(
+            decls[0].values,
+            vec![Value::Length(Length::new(2.0, LengthUnit::Px))]
+        );
+        assert_eq!(decls[1].values, vec![Value::Keyword("dashed".into())]);
+        assert_eq!(decls[2].values, vec![Value::Keyword("blue".into())]);
     }
 }

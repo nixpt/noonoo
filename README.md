@@ -25,7 +25,7 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | --- | --- |
 | [`noonoo-parse`](crates/noonoo-parse) | Shared parsing primitives: spans, positions, errors, cursor |
 | [`noonoo-json`](crates/noonoo-json) | JSON parser, value model, and writer |
-| [`noonoo-css`](crates/noonoo-css) | CSS: tokenizer, rule splitter, value/property model |
+| [`noonoo-css`](crates/noonoo-css) | CSS: tokenizer, rule splitter, value/property model, shorthand expansion |
 | [`noonoo-selectors`](crates/noonoo-selectors) | CSS selectors: parse, specificity, matching |
 | [`noonoo-caison`](crates/noonoo-caison) | CAISON parse and its JSON projection |
 | [`noonoo-html`](crates/noonoo-html) | HTML tokenizer and tree builder into `noonoo-dom` |
