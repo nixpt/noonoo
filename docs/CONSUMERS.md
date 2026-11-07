@@ -7,7 +7,7 @@ are **out of scope here** and carry their own tickets (see the note at the end).
 
 Canonical engine today: `nixpt/bliss-engine` (`/workspace/projects/libs/bliss-engine`),
 published to crates.io as `bliss-*` **0.3.x** (umbrella package `arniko-bliss`).
-Both consumers pin `^0.3`, resolved to **0.3.1**, and neither patches — a clean
+Both consumers pin `^0.3` — arniko's `Cargo.lock` resolves to **0.3.3** (shipped 2026-11-07); surfer was not rechecked — and neither patches: a clean
 registry dependency.
 
 ---

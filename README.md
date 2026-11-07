@@ -70,14 +70,33 @@ capability-gated DOM. See
 
 **Working engine, pre-alpha API.** The whole pipeline runs on owned code —
 parse → cascade → layout → paint — with **zero third-party dependencies** in
-the engine's lockfile. Layout covers block, inline, flex, grid, and floats;
-the cascade covers custom properties, the math functions, viewport units, and
-gradients; fonts load via `@font-face`; `:hover`/`:focus`/`:active` style for
-real; and the accessibility tree is owned and on by default (`noonoo-a11y`),
+the engine's lockfile. Layout covers block, inline, flex, grid, tables (auto
+subset), and floats; the cascade covers custom properties, the math
+functions, viewport units, `@media`, and gradients; character references
+(`&amp;`, numeric) decode in text and attributes; `<br>` breaks lines;
+fonts load via `@font-face`; `:hover`/`:focus`/`:active` style for real;
+and the accessibility tree is owned and on by default (`noonoo-a11y`),
 with the AccessKit bridge opt-in and the Linux window pass activating AT-SPI
 without consumer re-enabling. The GPU and window backends are opt-in
 integrations outside the workspace (`docs/BACKEND.md`). The API is pre-1.0 and
 still moving.
+
+**Known gaps** — ordinary HTML that this engine will not render correctly
+yet:
+
+- **`transform` is unsupported.** No `transform`/`transform-origin` code
+  exists in style, layout, or paint; a `transform` declaration is ignored
+  and the box lays out untransformed. Hosts must not rely on it (they also
+  lose `translate`/`rotate`-based centering tricks inside `position`).
+- Tables: only the auto-layout subset — `border-spacing`, captions,
+  `table-layout: fixed`, and the anonymous-cell fixup are not modelled, and
+  a `colspan` cell's demand spreads evenly across its columns.
+- `@media` evaluates the common subset (comma alternatives, `and`,
+  `not`/`only`, `screen`/`all`, and the `min/max`-width/height features in
+  `px`); other features and the range syntax fail the condition.
+- `position: sticky` lays out like `relative` (no scroll offsets);
+  `@keyframes` animations and `::before`/`::after` are not implemented.
+
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Building

@@ -5,7 +5,7 @@ lands behind a stub that pretends to work. The compatibility track
 ([`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md)) runs alongside: the reference
 API snapshots are captured early, and the port is measured against them.
 
-## Slice 0 — Scaffold *(this slice)*
+## Slice 0 — Scaffold *(done)*
 
 A workspace of small crates, decomposed along the boundaries in
 [`ARCHITECTURE.md`](ARCHITECTURE.md), design docs, CI, and a compiling,
@@ -38,8 +38,10 @@ structure with no screenshot. *(met)*
 
 ## Slice 3 — Style
 
-Wire `stylo` behind `noonoo-style`: parse a stylesheet, cascade, expose Noonoo-shaped
-computed values. Incremental restyle is the default.
+*Done without `stylo` — the README replaced it with the owned engine (see Phase A
+below; `stylo` was never added).* Owned parse (`noonoo-css`), cascade, and
+Noonoo-shaped computed values in `noonoo-style`: custom properties, the math
+functions, viewport units, `@media`, gradients, `@font-face`.
 
 **Done when:** a fixture's computed `color`/`display` are asserted from a test,
 and a second edit restyles incrementally.

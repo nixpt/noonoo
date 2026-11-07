@@ -18,7 +18,7 @@ Cargo lets a dependency key differ from the package name:
 bliss-dom = { version = "0.3", optional = true }
 
 # after — same import path in every source file
-bliss-dom = { package = "noonoo-dom", version = "0.1", optional = true }
+bliss-dom = { package = "noonoo-dom", version = "0.20", optional = true }
 ```
 
 The dependency **key** (`bliss-dom`) is the extern-crate name, so
