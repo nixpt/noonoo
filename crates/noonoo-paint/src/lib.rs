@@ -91,17 +91,24 @@ pub fn paint(styles: &Styles, layout: &LayoutTree) -> CommandList {
     let mut roots = layout.root_indices().to_vec();
     roots.sort_by_key(|&root| (boxes[root].z_tier, boxes[root].z_index));
     for root in roots {
-        paint_box(root, boxes, styles, 0.0, &mut list);
+        paint_box(root, boxes, styles, 0.0, 0.0, &mut list);
     }
     list
 }
 
-/// `ty` is the accumulated vertical scroll of enclosing scroll containers: a
-/// box's content is drawn `ty` pixels higher than it is laid out.
-fn paint_box(index: usize, boxes: &[LayoutBox], styles: &Styles, ty: f32, out: &mut CommandList) {
+/// `tx`/`ty` are the accumulated horizontal/vertical scroll of enclosing scroll
+/// containers: a box's content is drawn shifted by them.
+fn paint_box(
+    index: usize,
+    boxes: &[LayoutBox],
+    styles: &Styles,
+    tx: f32,
+    ty: f32,
+    out: &mut CommandList,
+) {
     let b = &boxes[index];
     let style = styles.get(b.style_node);
-    let rect = b.rect.translate(0.0, -ty);
+    let rect = b.rect.translate(-tx, -ty);
 
     // Background and borders belong to element boxes; a text run draws only text
     // (it shares its element's style, which was already painted).
@@ -160,16 +167,16 @@ fn paint_box(index: usize, boxes: &[LayoutBox], styles: &Styles, ty: f32, out: &
     // content up by its offset.
     if b.clips {
         out.0.push(Command::PushClip {
-            rect: b.padding_box().translate(0.0, -ty),
+            rect: b.padding_box().translate(-tx, -ty),
         });
     }
-    let child_ty = ty + b.scroll;
+    let (child_tx, child_ty) = (tx + b.scroll_x, ty + b.scroll_y);
     // Paint children in stacking order: negative `z-index` first, then in-flow
     // content, then positioned boxes by `z-index`.
     let mut children = b.children.clone();
     children.sort_by_key(|&child| (boxes[child].z_tier, boxes[child].z_index));
     for child in children {
-        paint_box(child, boxes, styles, child_ty, out);
+        paint_box(child, boxes, styles, child_tx, child_ty, out);
     }
     if b.clips {
         out.0.push(Command::PopClip);
@@ -409,6 +416,36 @@ mod tests {
             .find_map(|c| match c {
                 Command::FillRect { rect, color } if *color == Color::rgb(255, 0, 0) => {
                     Some(rect.y)
+                }
+                _ => None,
+            })
+            .expect("a red rect")
+    }
+
+    #[test]
+    fn horizontal_scroll_shifts_content_in_the_command_stream() {
+        let doc = noonoo_html::parse(r#"<div id="strip"><div id="wide"></div></div>"#);
+        let sheet = noonoo_css::Stylesheet::parse(
+            "#strip { width: 50px; height: 20px; overflow-x: auto } \
+             #wide { width: 200px; height: 10px; background-color: #ff0000 }",
+        )
+        .unwrap();
+        let styles = noonoo_style::compute(&doc, &[sheet]);
+        let mut layout =
+            noonoo_layout::layout(&doc, &styles, Size::new(400.0, 300.0), &MetricShaper);
+        let strip = doc.get_element_by_id("strip").unwrap();
+
+        assert_eq!(red_rect_x(&paint(&styles, &layout)), 0.0);
+        layout.scroll_by_x(strip, 30.0);
+        assert_eq!(red_rect_x(&paint(&styles, &layout)), -30.0);
+    }
+
+    fn red_rect_x(list: &CommandList) -> f32 {
+        list.commands()
+            .iter()
+            .find_map(|c| match c {
+                Command::FillRect { rect, color } if *color == Color::rgb(255, 0, 0) => {
+                    Some(rect.x)
                 }
                 _ => None,
             })

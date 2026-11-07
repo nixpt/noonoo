@@ -439,3 +439,17 @@ fn z_index_orders_hit_testing() {
     // #b (z 2) is on top, so a point inside both selects it.
     assert_eq!(tree.hit_test(Point::new(10.0, 10.0)), Some(id(&doc, "b")));
 }
+
+#[test]
+fn overflow_x_computes_a_horizontal_scroll_range() {
+    let (doc, mut tree) = page(
+        r#"<div id="strip"><div id="wide"></div></div>"#,
+        "#strip { width: 50px; height: 20px; overflow-x: auto } \
+         #wide { width: 200px; height: 10px }",
+        400.0,
+    );
+    let strip = id(&doc, "strip");
+    assert_eq!(tree.scroll_max_x(strip), 150.0);
+    assert_eq!(tree.scroll_by_x(strip, 400.0), 150.0);
+    assert_eq!(tree.scroll_offset_x(strip), 150.0);
+}

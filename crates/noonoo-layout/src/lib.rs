@@ -87,11 +87,15 @@ pub struct LayoutBox {
     pub border: Edges<f32>,
     /// Whether this box clips its content (a non-`visible` `overflow`).
     pub clips: bool,
-    /// The maximum vertical scroll for this box (its content bottom minus its
-    /// padding box bottom, floored at zero). Zero when it does not scroll.
-    pub scroll_max: f32,
+    /// The maximum horizontal scroll for this box (its content right minus its
+    /// padding box right, floored at zero). Zero when it does not scroll.
+    pub scroll_max_x: f32,
+    /// The maximum vertical scroll for this box.
+    pub scroll_max_y: f32,
+    /// The current horizontal scroll offset.
+    pub scroll_x: f32,
     /// The current vertical scroll offset.
-    pub scroll: f32,
+    pub scroll_y: f32,
     /// The box's paint tier within its parent: `0` for a negative-`z-index`
     /// positioned box, `1` for in-flow content, `2` for a positioned box with
     /// `z-index: 0`/`auto`/positive.
@@ -171,7 +175,7 @@ impl LayoutTree {
         let mut roots = self.roots.clone();
         roots.sort_by_key(|&root| (self.boxes[root].z_tier, self.boxes[root].z_index));
         for root in roots {
-            self.hit_box(root, point, 0, None, 0.0, &mut best);
+            self.hit_box(root, point, 0, None, Point::ZERO, &mut best);
         }
         best.map(|(_, node)| node)
     }
@@ -182,7 +186,7 @@ impl LayoutTree {
         point: Point,
         depth: usize,
         clip: Option<Rect>,
-        scroll: f32,
+        scroll: Point,
         best: &mut Option<(usize, NodeId)>,
     ) {
         // A point outside a clipping ancestor's box reaches nothing inside it.
@@ -190,9 +194,9 @@ impl LayoutTree {
             return;
         }
         let box_ = &self.boxes[index];
-        // `point` is in window space and content is shifted up by any ancestor
+        // `point` is in window space and content is shifted by any ancestor
         // scroll offsets, so test the box in its own (content) space.
-        let content = Point::new(point.x, point.y + scroll);
+        let content = Point::new(point.x + scroll.x, point.y + scroll.y);
         // A positioned child may sit outside its parent's box, so we always
         // descend; we only *record* a box whose rect actually contains the point.
         if box_.rect.contains(content)
@@ -207,11 +211,11 @@ impl LayoutTree {
             }
         }
         let child_clip = if box_.clips {
-            Some(box_.padding_box().translate(0.0, -scroll))
+            Some(box_.padding_box().translate(-scroll.x, -scroll.y))
         } else {
             clip
         };
-        let child_scroll = scroll + box_.scroll;
+        let child_scroll = Point::new(scroll.x + box_.scroll_x, scroll.y + box_.scroll_y);
         // Visit children in paint order, so the topmost (last-painted) box wins
         // the depth tie-break below.
         let mut children = box_.children.clone();
@@ -225,7 +229,15 @@ impl LayoutTree {
     pub fn scroll_offset(&self, node: NodeId) -> f32 {
         self.index
             .get(&node)
-            .map(|&i| self.boxes[i].scroll)
+            .map(|&i| self.boxes[i].scroll_y)
+            .unwrap_or(0.0)
+    }
+
+    /// The current horizontal scroll offset of `node`.
+    pub fn scroll_offset_x(&self, node: NodeId) -> f32 {
+        self.index
+            .get(&node)
+            .map(|&i| self.boxes[i].scroll_x)
             .unwrap_or(0.0)
     }
 
@@ -233,19 +245,40 @@ impl LayoutTree {
     pub fn scroll_max(&self, node: NodeId) -> f32 {
         self.index
             .get(&node)
-            .map(|&i| self.boxes[i].scroll_max)
+            .map(|&i| self.boxes[i].scroll_max_y)
             .unwrap_or(0.0)
     }
 
-    /// Scroll `node` by `dy`, clamped to its range; returns the amount consumed.
+    /// The maximum horizontal scroll of `node`.
+    pub fn scroll_max_x(&self, node: NodeId) -> f32 {
+        self.index
+            .get(&node)
+            .map(|&i| self.boxes[i].scroll_max_x)
+            .unwrap_or(0.0)
+    }
+
+    /// Scroll `node` vertically by `dy`, clamped to its range; returns the amount
+    /// consumed.
     pub fn scroll_by(&mut self, node: NodeId, dy: f32) -> f32 {
         let Some(&i) = self.index.get(&node) else {
             return 0.0;
         };
-        let max = self.boxes[i].scroll_max;
-        let before = self.boxes[i].scroll;
+        let max = self.boxes[i].scroll_max_y;
+        let before = self.boxes[i].scroll_y;
         let after = (before + dy).clamp(0.0, max);
-        self.boxes[i].scroll = after;
+        self.boxes[i].scroll_y = after;
+        after - before
+    }
+
+    /// Scroll `node` horizontally by `dx`, clamped to its range.
+    pub fn scroll_by_x(&mut self, node: NodeId, dx: f32) -> f32 {
+        let Some(&i) = self.index.get(&node) else {
+            return 0.0;
+        };
+        let max = self.boxes[i].scroll_max_x;
+        let before = self.boxes[i].scroll_x;
+        let after = (before + dx).clamp(0.0, max);
+        self.boxes[i].scroll_x = after;
         after - before
     }
 
@@ -253,7 +286,7 @@ impl LayoutTree {
     pub fn scroll_chain(&self, point: Point) -> Vec<NodeId> {
         let mut indices = Vec::new();
         for &root in self.roots.iter().rev() {
-            self.collect_scroll(root, point, None, 0.0, &mut indices);
+            self.collect_scroll(root, point, None, 0.0, 0.0, &mut indices);
         }
         indices.reverse();
         indices
@@ -267,23 +300,24 @@ impl LayoutTree {
         index: usize,
         point: Point,
         clip: Option<Rect>,
-        scroll: f32,
+        sx: f32,
+        sy: f32,
         out: &mut Vec<usize>,
     ) {
         if clip.is_some_and(|rect| !rect.contains(point)) {
             return;
         }
         let box_ = &self.boxes[index];
-        let scrollport = box_.padding_box().translate(0.0, -scroll);
-        if box_.scroll_max > 0.0 && scrollport.contains(point) {
+        let scrollport = box_.padding_box().translate(-sx, -sy);
+        if box_.scroll_max_y > 0.0 && scrollport.contains(point) {
             out.push(index);
         }
         let child_clip = if box_.clips { Some(scrollport) } else { clip };
-        let child_scroll = scroll + box_.scroll;
+        let (child_sx, child_sy) = (sx + box_.scroll_x, sy + box_.scroll_y);
         let mut children = box_.children.clone();
         children.sort_by_key(|&child| (self.boxes[child].z_tier, self.boxes[child].z_index));
         for child in children {
-            self.collect_scroll(child, point, child_clip, child_scroll, out);
+            self.collect_scroll(child, point, child_clip, child_sx, child_sy, out);
         }
     }
 
@@ -313,8 +347,9 @@ impl LayoutTree {
             if let Some(node) = self.boxes[i].node
                 && let Some(&j) = previous.index.get(&node)
             {
-                let max = self.boxes[i].scroll_max;
-                self.boxes[i].scroll = previous.boxes[j].scroll.clamp(0.0, max);
+                let (max_x, max_y) = (self.boxes[i].scroll_max_x, self.boxes[i].scroll_max_y);
+                self.boxes[i].scroll_x = previous.boxes[j].scroll_x.clamp(0.0, max_x);
+                self.boxes[i].scroll_y = previous.boxes[j].scroll_y.clamp(0.0, max_y);
             }
         }
     }
@@ -464,27 +499,44 @@ impl Ctx<'_> {
         bottom
     }
 
-    /// The scroll range of a box whose children are `indices`: their lowest
-    /// bottom minus the padding box bottom, floored at zero. Zero unless the box
-    /// scrolls vertically.
+    /// The right edge of `index`'s box subtree.
+    fn subtree_right(&self, index: usize) -> f32 {
+        let box_ = &self.tree.boxes[index];
+        let mut right = box_.rect.right();
+        for &child in &box_.children {
+            right = right.max(self.subtree_right(child));
+        }
+        right
+    }
+
+    /// The `(x, y)` scroll range of a box whose children are `indices`: their
+    /// furthest extent minus the padding box, floored at zero per axis. An axis
+    /// is zero unless the box scrolls on it.
     fn scroll_max_for(
         &self,
         style: &ComputedStyle,
         indices: &[usize],
-        padding_box_bottom: f32,
-    ) -> f32 {
-        if !resolve::scrollable_y(style) {
-            return 0.0;
-        }
-        let content_bottom = indices
+        padding_box: Rect,
+    ) -> (f32, f32) {
+        let range = |scrollable: bool, extent: f32, edge: f32| {
+            if scrollable && extent.is_finite() {
+                (extent - edge).max(0.0)
+            } else {
+                0.0
+            }
+        };
+        let right = indices
+            .iter()
+            .map(|&child| self.subtree_right(child))
+            .fold(f32::NEG_INFINITY, f32::max);
+        let bottom = indices
             .iter()
             .map(|&child| self.subtree_bottom(child))
             .fold(f32::NEG_INFINITY, f32::max);
-        if content_bottom.is_finite() {
-            (content_bottom - padding_box_bottom).max(0.0)
-        } else {
-            0.0
-        }
+        (
+            range(resolve::scrollable_x(style), right, padding_box.right()),
+            range(resolve::scrollable_y(style), bottom, padding_box.bottom()),
+        )
     }
 
     /// Lay out one element's border box at `(border_x, border_y)` and return its
@@ -583,11 +635,13 @@ impl Ctx<'_> {
             None => content_height + vertical,
         };
 
-        let scroll_max = self.scroll_max_for(
-            &style,
-            &child_indices,
-            border_y + border_box_height - border.bottom,
+        let padding_box = Rect::new(
+            border_x + border.left,
+            border_y + border.top,
+            (border_box_width - border.left - border.right).max(0.0),
+            (border_box_height - border.top - border.bottom).max(0.0),
         );
+        let (scroll_max_x, scroll_max_y) = self.scroll_max_for(&style, &child_indices, padding_box);
         let (z_tier, z_index) = paint_key(&style);
 
         let index = self.push(LayoutBox {
@@ -604,8 +658,10 @@ impl Ctx<'_> {
             padding,
             border,
             clips,
-            scroll_max,
-            scroll: 0.0,
+            scroll_max_x,
+            scroll_max_y,
+            scroll_x: 0.0,
+            scroll_y: 0.0,
             z_tier,
             z_index,
             children: child_indices,
@@ -728,11 +784,13 @@ impl Ctx<'_> {
             None => content_height + vertical,
         };
 
-        let scroll_max = self.scroll_max_for(
-            &style,
-            &child_indices,
-            border_y + border_height - border.bottom,
+        let padding_box = Rect::new(
+            border_x + border.left,
+            border_y + border.top,
+            (border_width - border.left - border.right).max(0.0),
+            (border_height - border.top - border.bottom).max(0.0),
         );
+        let (scroll_max_x, scroll_max_y) = self.scroll_max_for(&style, &child_indices, padding_box);
         let (z_tier, z_index) = paint_key(&style);
 
         let index = self.push(LayoutBox {
@@ -749,8 +807,10 @@ impl Ctx<'_> {
             padding,
             border,
             clips: resolve::clips(&style),
-            scroll_max,
-            scroll: 0.0,
+            scroll_max_x,
+            scroll_max_y,
+            scroll_x: 0.0,
+            scroll_y: 0.0,
             z_tier,
             z_index,
             children: child_indices,

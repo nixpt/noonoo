@@ -56,6 +56,11 @@ pub(crate) fn scrollable_y(style: &ComputedStyle) -> bool {
     matches!(style.overflow_y, Overflow::Scroll | Overflow::Auto)
 }
 
+/// Whether a box scrolls horizontally (`overflow-x: auto` / `scroll`).
+pub(crate) fn scrollable_x(style: &ComputedStyle) -> bool {
+    matches!(style.overflow_x, Overflow::Scroll | Overflow::Auto)
+}
+
 /// Resolve border widths, collapsing hidden borders to zero.
 pub fn borders(style: &ComputedStyle) -> Edges<f32> {
     let width = |width: f32, visible: bool| if visible { width } else { 0.0 };
