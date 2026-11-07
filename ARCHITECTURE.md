@@ -77,7 +77,7 @@ Seventeen crates in five tiers. Arrows point *downward only*.
 | `noonoo-ini` | INI → value model (JSON) | — (owned) |
 | `noonoo-toml` | TOML (subset) → value model (JSON) | — (owned) |
 | `noonoo-xml` | XML → DOM (strict nesting, entities, CDATA) | — (owned) |
-| `noonoo-ttf` | TrueType/OpenType metrics, `cmap`, glyph outlines, and a `Shaper` | — (owned; shaping stays borrowed) |
+| `noonoo-ttf` | TrueType/OpenType metrics, `cmap`, outlines, kerning, and a `Shaper`/`Glyphs` | — (owned; modern shaping stays borrowed) |
 | `noonoo-svg` | SVG subset → paint commands | — (owned) |
 | `noonoo-hx` | htmx-like `hx-*` attributes → fetch + DOM swap | — (owned) |
 | `noonoo-caps` | capability gating: scopes, policy seam, gated DOM | — (owned); XIP via the opt-in `noonoo-xip` |

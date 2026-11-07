@@ -17,14 +17,14 @@ fn push_u32(out: &mut Vec<u8>, value: u32) {
     out.extend_from_slice(&value.to_be_bytes());
 }
 
-fn head() -> Vec<u8> {
+fn head(units_per_em: u16) -> Vec<u8> {
     let mut t = Vec::new();
     push_u32(&mut t, 0x0001_0000); // version
     push_u32(&mut t, 0x0001_0000); // fontRevision
     push_u32(&mut t, 0); // checkSumAdjustment
     push_u32(&mut t, 0x5F0F_3CF5); // magicNumber
     push_u16(&mut t, 0); // flags
-    push_u16(&mut t, 1000); // unitsPerEm
+    push_u16(&mut t, units_per_em); // unitsPerEm
     t.extend_from_slice(&[0u8; 8]); // created
     t.extend_from_slice(&[0u8; 8]); // modified
     push_i16(&mut t, 0); // xMin
@@ -205,8 +205,13 @@ fn build(tables: &[([u8; 4], Vec<u8>)]) -> Vec<u8> {
 }
 
 fn minimal_font() -> Vec<u8> {
+    minimal_font_with_em(1000)
+}
+
+/// The same fixture, at a chosen `unitsPerEm`, so two faces are distinguishable.
+fn minimal_font_with_em(units_per_em: u16) -> Vec<u8> {
     build(&[
-        (*b"head", head()),
+        (*b"head", head(units_per_em)),
         (*b"maxp", maxp()),
         (*b"hhea", hhea()),
         (*b"hmtx", hmtx()),
@@ -307,6 +312,64 @@ fn reads_legacy_kerning() {
     // Kerning is directional, and unlisted pairs are zero.
     assert_eq!(font.kern(2, 1), 0);
     assert_eq!(font.kern(0, 0), 0);
+}
+
+#[test]
+fn selects_a_face_by_weight_and_style() {
+    let regular = Font::parse(&minimal_font_with_em(1000)).unwrap();
+    let bold = Font::parse(&minimal_font_with_em(2000)).unwrap();
+    let italic = Font::parse(&minimal_font_with_em(3000)).unwrap();
+    let mut set = FontSet::new();
+    set.add("Demo", 400, false, &regular);
+    set.add("Demo", 700, false, &bold);
+    set.add("Demo", 400, true, &italic);
+    assert_eq!(set.len(), 3);
+
+    let em = |font: &Font| font.units_per_em();
+    // Exact matches.
+    assert_eq!(em(set.select("Demo", 400, false).unwrap()), 1000);
+    assert_eq!(em(set.select("Demo", 700, false).unwrap()), 2000);
+    // Style wins over weight.
+    assert_eq!(em(set.select("Demo", 400, true).unwrap()), 3000);
+    // Nearest weight.
+    assert_eq!(em(set.select("Demo", 500, false).unwrap()), 1000);
+    // Case-insensitive family; unknown is `None`; empty matches any.
+    assert_eq!(em(set.select("demo", 700, false).unwrap()), 2000);
+    assert!(set.select("Other", 400, false).is_none());
+    assert!(set.select("", 400, false).is_some());
+}
+
+#[test]
+fn font_set_shaper_picks_the_bold_face() {
+    let regular = Font::parse(&minimal_font_with_em(1000)).unwrap();
+    let bold = Font::parse(&minimal_font_with_em(2000)).unwrap();
+    let mut set = FontSet::new();
+    set.add("Demo", 400, false, &regular);
+    set.add("Demo", 700, false, &bold);
+
+    let shaper = FontSetShaper::new(&set, "Demo", 400, false);
+    // 1200 units over a 1000-unit em at 20px.
+    assert_eq!(shaper.advance("AB", 20.0, false), 24.0);
+    // The same units over a 2000-unit em (the bold face).
+    assert_eq!(shaper.advance("AB", 20.0, true), 12.0);
+    assert_eq!(shaper.line_height(20.0), 20.0);
+
+    // No matching family falls back to the deterministic heuristic.
+    let missing = FontSetShaper::new(&set, "Nope", 400, false);
+    assert_eq!(missing.advance("AB", 20.0, false), 20.0);
+    assert_eq!(missing.line_height(20.0), 24.0);
+}
+
+#[test]
+fn reports_outline_capability_and_bounds() {
+    let font = Font::parse(&minimal_font()).unwrap();
+    assert!(font.has_outlines());
+    assert_eq!(
+        font.outline(1).unwrap().bounds(),
+        Some((0.0, 0.0, 700.0, 700.0))
+    );
+    // An empty glyph has no bounds.
+    assert_eq!(font.outline(0).unwrap().bounds(), None);
 }
 
 #[test]

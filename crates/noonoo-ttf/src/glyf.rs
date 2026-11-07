@@ -58,6 +58,24 @@ impl Outline {
             .map(|contour| flatten_contour(&contour.points, steps.max(1)))
             .collect()
     }
+
+    /// The bounding box `(min_x, min_y, max_x, max_y)` of all points, in font
+    /// units, or `None` for an empty outline.
+    pub fn bounds(&self) -> Option<(f32, f32, f32, f32)> {
+        let mut points = self
+            .contours
+            .iter()
+            .flat_map(|contour| contour.points.iter());
+        let first = points.next()?;
+        let (mut min_x, mut min_y, mut max_x, mut max_y) = (first.x, first.y, first.x, first.y);
+        for point in points {
+            min_x = min_x.min(point.x);
+            min_y = min_y.min(point.y);
+            max_x = max_x.max(point.x);
+            max_y = max_y.max(point.y);
+        }
+        Some((min_x, min_y, max_x, max_y))
+    }
 }
 
 impl Font {

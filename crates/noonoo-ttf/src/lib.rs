@@ -21,7 +21,8 @@
 //!
 //! [`OutlineGlyphs`] implements `noonoo_paint::Glyphs`, drawing a run as filled
 //! glyph outlines — pair it with [`FontShaper`] over the same font to render
-//! vector text through the normal paint stream.
+//! vector text through the normal paint stream. [`FontSet`] + [`FontSetShaper`]
+//! select a face from several by family, weight, and style.
 //!
 //! ```
 //! # fn demo(bytes: &[u8]) -> noonoo_parse::ParseResult<()> {
@@ -41,11 +42,13 @@ mod glyf;
 mod kern;
 mod reader;
 mod render;
+mod set;
 mod shaper;
 
 pub use glyf::{Contour, Outline, Point};
 pub use render::OutlineGlyphs;
-pub use shaper::FontShaper;
+pub use set::FontSet;
+pub use shaper::{FontSetShaper, FontShaper};
 
 use noonoo_parse::ParseResult;
 use reader::{Reader, be_u16};
@@ -181,6 +184,14 @@ impl Font {
     /// The number of glyphs (`maxp.numGlyphs`).
     pub fn glyph_count(&self) -> u16 {
         self.num_glyphs
+    }
+
+    /// Whether this font carries TrueType outlines (`loca`/`glyf`).
+    ///
+    /// False for a CFF/OpenType font, whose outlines this crate does not read;
+    /// its metrics still parse.
+    pub fn has_outlines(&self) -> bool {
+        !self.loca.is_empty()
     }
 
     /// The typographic ascender, in font units (`hhea`).

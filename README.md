@@ -41,7 +41,7 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | [`noonoo-ini`](crates/noonoo-ini) | INI → value model (JSON) |
 | [`noonoo-toml`](crates/noonoo-toml) | TOML (subset) → value model (JSON) |
 | [`noonoo-xml`](crates/noonoo-xml) | XML → DOM (strict nesting, entities, CDATA) |
-| [`noonoo-ttf`](crates/noonoo-ttf) | TrueType/OpenType → metrics, `cmap`, and glyph outlines (and a `Shaper`) |
+| [`noonoo-ttf`](crates/noonoo-ttf) | TrueType/OpenType → metrics, `cmap`, outlines, kerning (a `Shaper` + `Glyphs`) |
 | [`noonoo-svg`](crates/noonoo-svg) | SVG subset → paint commands |
 | [`noonoo-hx`](crates/noonoo-hx) | htmx-like declarative attributes → fetch + DOM swap |
 | [`noonoo-caps`](crates/noonoo-caps) | Capability gating: scopes, the policy seam, a gated DOM |
@@ -117,6 +117,7 @@ The workspace MSRV is **1.89**. CI checks it explicitly.
 - [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) — the drop-in switch and the api-drift gate
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — slices
 - [`docs/FORMATS.md`](docs/FORMATS.md) — file formats: DOM vs. value model, and Markdown
+- [`docs/FONTS.md`](docs/FONTS.md) — the font layer: what Noonoo owns, the seams, what is borrowed
 - [`docs/XIP.md`](docs/XIP.md) — capability-gated DOM: the owned seam and the opt-in XIP adapter
 
 ## License
