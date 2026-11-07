@@ -200,6 +200,17 @@ struct Item {
 ///
 /// Float children among the inline nodes are laid out first (at `y`), so the
 /// lines that follow wrap around them.
+///
+/// A `<br>` element ends the current line: the items collected after it go
+/// into a separate group that starts on a fresh line. The approximations, in
+/// the spirit of a simplified line-box model (see the crate docs):
+///
+/// - an empty group between two breaks is one blank line whose height is the
+///   container's `line-height` (not the neighbouring lines' own heights);
+/// - the run's trailing break generates no extra line (`H<br>` stays one
+///   line tall), matching how browsers collapse the collapsed line box;
+/// - breaks are part of the flow they appear in, so `white-space: pre` lines
+///   from source text and `<br>` breaks do not interact (each just breaks).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn layout_inline_run(
     ctx: &mut Ctx<'_>,
@@ -219,7 +230,10 @@ pub(crate) fn layout_inline_run(
         ctx.shaper.line_height(request, font)
     };
 
-    let mut items: Vec<Item> = Vec::new();
+    // The run's items, split into groups at each `<br>`: a group starts a
+    // fresh line, and an empty group is the blank line between two breaks.
+    let mut groups: Vec<Vec<Item>> = vec![Vec::new()];
+    let mut had_break = false;
     for &node in nodes {
         if is_display_none(ctx, node) {
             continue;
@@ -231,17 +245,25 @@ pub(crate) fn layout_inline_run(
         match ctx.document.node(node) {
             Some(NodeData::Text(text)) => {
                 for word in text.split_whitespace() {
-                    items.push(Item {
-                        node,
-                        style_node: parent_node,
-                        kind: BoxKind::Text,
-                        text: word.to_owned(),
-                        width: ctx.shaper.advance(word, request, font),
-                        height: line_height,
-                    });
+                    groups
+                        .last_mut()
+                        .expect("the first group always exists")
+                        .push(Item {
+                            node,
+                            style_node: parent_node,
+                            kind: BoxKind::Text,
+                            text: word.to_owned(),
+                            width: ctx.shaper.advance(word, request, font),
+                            height: line_height,
+                        });
                 }
             }
-            Some(NodeData::Element(_)) => {
+            Some(NodeData::Element(element)) => {
+                if element.name == "br" {
+                    had_break = true;
+                    groups.push(Vec::new());
+                    continue;
+                }
                 let style = ctx.style(node).clone();
                 let content = ctx.document.text_content(node);
                 let height = if style.line_height > 0.0 {
@@ -250,85 +272,104 @@ pub(crate) fn layout_inline_run(
                     ctx.shaper
                         .line_height(style.font_request(), style.font_size)
                 };
-                items.push(Item {
-                    node,
-                    style_node: node,
-                    kind: BoxKind::Inline,
-                    width: ctx
-                        .shaper
-                        .advance(&content, style.font_request(), style.font_size),
-                    text: content,
-                    height,
-                });
+                groups
+                    .last_mut()
+                    .expect("the first group always exists")
+                    .push(Item {
+                        node,
+                        style_node: node,
+                        kind: BoxKind::Inline,
+                        width: ctx
+                            .shaper
+                            .advance(&content, style.font_request(), style.font_size),
+                        text: content,
+                        height,
+                    });
             }
             _ => {}
         }
     }
 
-    if items.is_empty() {
-        return (Vec::new(), 0.0);
+    if groups.iter().all(|group| group.is_empty()) {
+        // No content at all — but a lone `<br>` still generates one (empty)
+        // line box; that is the classic trick that gives an otherwise empty
+        // container a line's height.
+        return (Vec::new(), if had_break { line_height } else { 0.0 });
     }
 
     let alignment = map_align(parent_style.text_align);
     let mut indices = Vec::new();
     let mut cursor_y = y;
-    let mut start = 0;
 
-    // Lines wrap one at a time so each line's band reflects the floats that
-    // reach it: a float's bottom frees the width again for later lines. With
-    // no floats the band is the full content width, as before. (A line taller
-    // than `line_height` is not re-checked against the floats — an accepted
-    // approximation.)
-    while start < items.len() {
-        let (band_left, band_right) = ctx
-            .floats()
-            .band(x, width, cursor_y, cursor_y + line_height);
-        let band_width = (band_right - band_left).max(0.0);
-        let widths: Vec<f32> = items[start..].iter().map(|item| item.width).collect();
-        let wrapped = match parent_style.white_space {
-            WhiteSpace::NoWrap | WhiteSpace::Pre => {
-                vec![(0..widths.len()).collect::<Vec<usize>>()]
+    // An empty group between two breaks is a blank line — but only when
+    // content follows, so the run's trailing break collapses.
+    let last_holding = groups.iter().rposition(|group| !group.is_empty());
+
+    for (group_index, items) in groups.iter().enumerate() {
+        if items.is_empty() {
+            if last_holding.is_some_and(|last| last > group_index) {
+                cursor_y += line_height;
             }
-            _ => noonoo_text::wrap(&widths, space, band_width),
-        };
-        let line = &wrapped[0];
-
-        let used: f32 = line.iter().map(|&i| items[start + i].width).sum::<f32>()
-            + space * line.len().saturating_sub(1) as f32;
-        let free = (band_width - used).max(0.0);
-        let offset = noonoo_text::align(alignment, free, line.len());
-
-        let mut cursor_x = band_left + offset.start;
-        let mut line_h = line_height;
-        for (position, &i) in line.iter().enumerate() {
-            if position > 0 {
-                cursor_x += space + offset.gap;
-            }
-            let item = &items[start + i];
-            line_h = line_h.max(item.height);
-            let index = ctx.push(LayoutBox {
-                node: Some(item.node),
-                style_node: item.style_node,
-                kind: item.kind,
-                rect: Rect::new(cursor_x, cursor_y, item.width, item.height),
-                text: Some(item.text.clone()),
-                margin: no_edges(),
-                padding: no_edges(),
-                border: no_edges(),
-                clips: false,
-                scroll_max_x: 0.0,
-                scroll_max_y: 0.0,
-                scroll_x: 0.0,
-                scroll_y: 0.0,
-                z_tier: 1,
-                z_index: 0,
-                children: Vec::new(),
-            });
-            indices.push(index);
-            cursor_x += item.width;
+            continue;
         }
-        cursor_y += line_h;
-        start += line.len();
+        let mut start = 0;
+
+        // Lines wrap one at a time so each line's band reflects the floats
+        // that reach it: a float's bottom frees the width again for later
+        // lines. With no floats the band is the full content width, as
+        // before. (A line taller than `line_height` is not re-checked against
+        // the floats — an accepted approximation.)
+        while start < items.len() {
+            let (band_left, band_right) =
+                ctx.floats()
+                    .band(x, width, cursor_y, cursor_y + line_height);
+            let band_width = (band_right - band_left).max(0.0);
+            let widths: Vec<f32> = items[start..].iter().map(|item| item.width).collect();
+            let wrapped = match parent_style.white_space {
+                WhiteSpace::NoWrap | WhiteSpace::Pre => {
+                    vec![(0..widths.len()).collect::<Vec<usize>>()]
+                }
+                _ => noonoo_text::wrap(&widths, space, band_width),
+            };
+            let line = &wrapped[0];
+
+            let used: f32 = line.iter().map(|&i| items[start + i].width).sum::<f32>()
+                + space * line.len().saturating_sub(1) as f32;
+            let free = (band_width - used).max(0.0);
+            let offset = noonoo_text::align(alignment, free, line.len());
+
+            let mut cursor_x = band_left + offset.start;
+            let mut line_h = line_height;
+            for (position, &i) in line.iter().enumerate() {
+                if position > 0 {
+                    cursor_x += space + offset.gap;
+                }
+                let item = &items[start + i];
+                line_h = line_h.max(item.height);
+                let index = ctx.push(LayoutBox {
+                    node: Some(item.node),
+                    style_node: item.style_node,
+                    kind: item.kind,
+                    rect: Rect::new(cursor_x, cursor_y, item.width, item.height),
+                    text: Some(item.text.clone()),
+                    margin: no_edges(),
+                    padding: no_edges(),
+                    border: no_edges(),
+                    clips: false,
+                    scroll_max_x: 0.0,
+                    scroll_max_y: 0.0,
+                    scroll_x: 0.0,
+                    scroll_y: 0.0,
+                    z_tier: 1,
+                    z_index: 0,
+                    children: Vec::new(),
+                });
+                indices.push(index);
+                cursor_x += item.width;
+            }
+            cursor_y += line_h;
+            start += line.len();
+        }
     }
 
     (indices, cursor_y - y)

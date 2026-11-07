@@ -1051,3 +1051,75 @@ fn inline_flex_with_raw_text_lays_out() {
         .collect();
     assert_eq!(lines.len(), 1);
 }
+
+#[test]
+fn br_starts_a_fresh_line() {
+    // Finding 2 of docs/REVIEW-2026-11-07.md: `H<br>i` painted both words at
+    // the same y (with an empty box for the `<br>` itself).
+    let (_doc, tree) = page(r#"<p>H<br>i</p>"#, "p { margin: 0 }", 400.0);
+    let mut words: Vec<(f32, f32, &str)> = tree
+        .boxes()
+        .iter()
+        .filter(|b| b.kind == BoxKind::Text)
+        .map(|b| (b.rect.y, b.rect.x, b.text.as_deref().unwrap_or_default()))
+        .collect();
+    words.sort_by_key(|&(y, _, _)| (y * 1000.0) as i64);
+    assert_eq!(
+        words.len(),
+        2,
+        "no empty box for the break itself: {words:?}"
+    );
+    assert_eq!(words[0].2, "H");
+    assert_eq!(words[1].2, "i");
+    assert!(words[1].0 > words[0].0, "i sits on its own line: {words:?}");
+}
+
+#[test]
+fn lone_br_gives_an_empty_line_box() {
+    // The classic one-line-height trick: `<br>` alone still generates a
+    // line box with no content.
+    let (doc, tree) = page(
+        r#"<div id="d"><br></div>"#,
+        "#d { line-height: 20px }",
+        400.0,
+    );
+    let span = id(&doc, "d");
+    assert_eq!(tree.get(span).unwrap().rect.height, 20.0);
+}
+
+#[test]
+fn consecutive_breaks_leave_a_blank_line() {
+    let (_doc, tree) = page(
+        r#"<p>H<br><br>i</p>"#,
+        "p { margin: 0; line-height: 20px }",
+        400.0,
+    );
+    let mut ys: Vec<f32> = tree
+        .boxes()
+        .iter()
+        .filter(|b| b.kind == BoxKind::Text)
+        .map(|b| b.rect.y)
+        .collect();
+    ys.sort_by_key(|&y| (y * 1000.0) as i64);
+    // H on line 1, one blank line, i on line 3.
+    assert_eq!(ys.len(), 2, "only H and i draw text: {ys:?}");
+    assert!((ys[1] - ys[0] - 40.0).abs() < 0.01, "{ys:?}");
+}
+
+#[test]
+fn trailing_break_adds_no_line() {
+    let (_doc, tree) = page(
+        r#"<p>H<br></p>"#,
+        "p { margin: 0; line-height: 20px }",
+        400.0,
+    );
+    // The paragraph's height stays one line.
+    // Find it via its text box instead: the tree's text boxes are the
+    // paragraph content.
+    let text = tree
+        .boxes()
+        .iter()
+        .find(|b| b.kind == BoxKind::Text)
+        .expect("the H line box");
+    assert_eq!(text.rect.height, 20.0);
+}
