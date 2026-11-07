@@ -378,6 +378,22 @@ pub(crate) fn apply(
         Property::BorderRightColor => set_first(&mut style.border_color.right, color(values)),
         Property::BorderBottomColor => set_first(&mut style.border_color.bottom, color(values)),
         Property::BorderLeftColor => set_first(&mut style.border_color.left, color(values)),
+        Property::BorderTopLeftRadius => set_first(
+            &mut style.border_radius.top_left,
+            length(values, font_size, root, viewport),
+        ),
+        Property::BorderTopRightRadius => set_first(
+            &mut style.border_radius.top_right,
+            length(values, font_size, root, viewport),
+        ),
+        Property::BorderBottomRightRadius => set_first(
+            &mut style.border_radius.bottom_right,
+            length(values, font_size, root, viewport),
+        ),
+        Property::BorderBottomLeftRadius => set_first(
+            &mut style.border_radius.bottom_left,
+            length(values, font_size, root, viewport),
+        ),
         Property::BoxSizing => {
             if let Some(k) = keyword(values) {
                 style.box_sizing = match k {
@@ -716,6 +732,18 @@ fn copy_property(dst: &mut ComputedStyle, src: &ComputedStyle, property: &Proper
         Property::BorderRightColor => dst.border_color.right = src.border_color.right,
         Property::BorderBottomColor => dst.border_color.bottom = src.border_color.bottom,
         Property::BorderLeftColor => dst.border_color.left = src.border_color.left,
+        Property::BorderTopLeftRadius => {
+            dst.border_radius.top_left = src.border_radius.top_left.clone()
+        }
+        Property::BorderTopRightRadius => {
+            dst.border_radius.top_right = src.border_radius.top_right.clone()
+        }
+        Property::BorderBottomRightRadius => {
+            dst.border_radius.bottom_right = src.border_radius.bottom_right.clone()
+        }
+        Property::BorderBottomLeftRadius => {
+            dst.border_radius.bottom_left = src.border_radius.bottom_left.clone()
+        }
         Property::BoxSizing => dst.box_sizing = src.box_sizing,
         Property::FlexDirection => dst.flex_direction = src.flex_direction,
         Property::FlexWrap => dst.flex_wrap = src.flex_wrap,

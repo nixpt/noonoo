@@ -61,12 +61,16 @@ pub enum GradientGeometry {
 /// A single drawing instruction.
 #[derive(Clone, PartialEq, Debug)]
 pub enum Command {
-    /// Fill an axis-aligned rectangle.
+    /// Fill an axis-aligned rectangle, optionally with rounded corners
+    /// (`top-left`, `top-right`, `bottom-right`, `bottom-left` radii; all
+    /// zero for a sharp rectangle).
     FillRect {
         /// The rectangle.
         rect: Rect,
         /// The fill colour.
         color: Color,
+        /// The corner radii, clamped to the rectangle.
+        radius: (f32, f32, f32, f32),
     },
     /// Fill a rectangle with a gradient.
     FillGradient {
@@ -99,13 +103,17 @@ pub enum Command {
         /// Text colour.
         color: Color,
     },
-    /// Clip subsequent commands to a rectangle until the matching [`Command::PopClip`].
-    PushClip {
-        /// The clip rectangle (a clipping box's padding box).
-        rect: Rect,
+    /// Begin a compositing group: subsequent commands composite with `alpha`
+    /// (1.0 = fully opaque) and, when `clip` is given, clipped to it — until
+    /// the matching [`Command::PopLayer`]. Groups nest.
+    PushLayer {
+        /// The clip rectangle, if any.
+        clip: Option<Rect>,
+        /// The group's alpha.
+        alpha: f32,
     },
-    /// End the most recent clip.
-    PopClip,
+    /// End the most recent [`Command::PushLayer`].
+    PopLayer,
 }
 
 /// An ordered list of [`Command`]s.
@@ -209,6 +217,14 @@ fn paint_box(
     let b = &boxes[index];
     let style = styles.get(b.style_node);
     let rect = b.rect.translate(-tx, -ty);
+    // An `opacity` below 1 composites the box's whole subtree as one group.
+    let opacity = style.map(|style| style.opacity).unwrap_or(1.0);
+    if opacity < 1.0 {
+        out.0.push(Command::PushLayer {
+            clip: None,
+            alpha: opacity,
+        });
+    }
 
     // Background and borders belong to element boxes; a text run draws only text
     // (it shares its element's style, which was already painted).
@@ -218,6 +234,7 @@ fn paint_box(
                 out.0.push(Command::FillRect {
                     rect,
                     color: style.background_color,
+                    radius: corner_radii(style, rect),
                 });
             }
             // The background image paints over the background colour.
@@ -226,9 +243,15 @@ fn paint_box(
             }
         }
 
+        // Border bands stay rectangular: rounded *borders* are not painted
+        // yet (only the background rounds).
         for (band, width, color) in border_sides(rect, b, style) {
             if width > 0.0 {
-                out.0.push(Command::FillRect { rect: band, color });
+                out.0.push(Command::FillRect {
+                    rect: band,
+                    color,
+                    radius: (0.0, 0.0, 0.0, 0.0),
+                });
             }
         }
     }
@@ -257,6 +280,7 @@ fn paint_box(
                         out.0.push(Command::FillRect {
                             rect: Rect::new(rect.x, y, rect.width, thickness),
                             color,
+                            radius: (0.0, 0.0, 0.0, 0.0),
                         });
                     }
                 }
@@ -267,8 +291,9 @@ fn paint_box(
     // A clipping box clips its content; a scrolling box additionally shifts its
     // content up by its offset.
     if b.clips {
-        out.0.push(Command::PushClip {
-            rect: b.padding_box().translate(-tx, -ty),
+        out.0.push(Command::PushLayer {
+            clip: Some(b.padding_box().translate(-tx, -ty)),
+            alpha: 1.0,
         });
     }
     let (child_tx, child_ty) = (tx + b.scroll_x, ty + b.scroll_y);
@@ -280,7 +305,10 @@ fn paint_box(
         paint_box(child, boxes, styles, glyphs, child_tx, child_ty, out);
     }
     if b.clips {
-        out.0.push(Command::PopClip);
+        out.0.push(Command::PopLayer);
+    }
+    if opacity < 1.0 {
+        out.0.push(Command::PopLayer);
     }
 }
 
@@ -321,14 +349,32 @@ fn border_sides(
 
 fn command_json(command: &Command) -> Json {
     match command {
-        Command::FillRect { rect, color } => object(vec![
-            ("op", Json::String("fill-rect".into())),
-            ("x", Json::Number(rect.x as f64)),
-            ("y", Json::Number(rect.y as f64)),
-            ("width", Json::Number(rect.width as f64)),
-            ("height", Json::Number(rect.height as f64)),
-            ("color", Json::String(color_hex(*color))),
-        ]),
+        Command::FillRect {
+            rect,
+            color,
+            radius,
+        } => {
+            let mut pairs = vec![
+                ("op", Json::String("fill-rect".into())),
+                ("x", Json::Number(rect.x as f64)),
+                ("y", Json::Number(rect.y as f64)),
+                ("width", Json::Number(rect.width as f64)),
+                ("height", Json::Number(rect.height as f64)),
+                ("color", Json::String(color_hex(*color))),
+            ];
+            if radius.0 != 0.0 || radius.1 != 0.0 || radius.2 != 0.0 || radius.3 != 0.0 {
+                pairs.push((
+                    "radius",
+                    Json::Array(
+                        [radius.0, radius.1, radius.2, radius.3]
+                            .iter()
+                            .map(|r| Json::Number(*r as f64))
+                            .collect(),
+                    ),
+                ));
+            }
+            object(pairs)
+        }
         Command::FillPolygon { points, color } => object(vec![
             ("op", Json::String("fill-polygon".into())),
             (
@@ -409,14 +455,26 @@ fn command_json(command: &Command) -> Json {
             pairs.push(("repeating", Json::Bool(*repeating)));
             object(pairs)
         }
-        Command::PushClip { rect } => object(vec![
-            ("op", Json::String("push-clip".into())),
-            ("x", Json::Number(rect.x as f64)),
-            ("y", Json::Number(rect.y as f64)),
-            ("width", Json::Number(rect.width as f64)),
-            ("height", Json::Number(rect.height as f64)),
-        ]),
-        Command::PopClip => object(vec![("op", Json::String("pop-clip".into()))]),
+        Command::PushLayer { clip, alpha } => {
+            let pairs = vec![
+                ("op", Json::String("push-layer".into())),
+                (
+                    "clip",
+                    match clip {
+                        Some(rect) => Json::Object(vec![
+                            ("x".to_owned(), Json::Number(rect.x as f64)),
+                            ("y".to_owned(), Json::Number(rect.y as f64)),
+                            ("width".to_owned(), Json::Number(rect.width as f64)),
+                            ("height".to_owned(), Json::Number(rect.height as f64)),
+                        ]),
+                        None => Json::Null,
+                    },
+                ),
+                ("alpha", Json::Number(*alpha as f64)),
+            ];
+            object(pairs)
+        }
+        Command::PopLayer => object(vec![("op", Json::String("pop-layer".into()))]),
     }
 }
 
@@ -623,6 +681,33 @@ fn resolve_stops(stops: &[noonoo_style::GradientStop], reference: f32) -> Vec<Gr
             color: stop.color,
         })
         .collect()
+}
+
+/// The box's `border-radius`, resolved against `rect` and clamped per CSS:
+/// when the two radii on one side overlap, that side's pair scales down so
+/// adjacent curves never exceed the side.
+fn corner_radii(style: &noonoo_style::ComputedStyle, rect: Rect) -> (f32, f32, f32, f32) {
+    let resolve = |length: &noonoo_style::Length| length.resolve(rect.width).max(0.0);
+    let radii = &style.border_radius;
+    let (tl, tr, br, bl) = (
+        resolve(&radii.top_left),
+        resolve(&radii.top_right),
+        resolve(&radii.bottom_right),
+        resolve(&radii.bottom_left),
+    );
+    let scale = |a: f32, b: f32, side: f32| -> (f32, f32) {
+        let sum = a + b;
+        if sum > side && sum > 0.0 {
+            (a * side / sum, b * side / sum)
+        } else {
+            (a, b)
+        }
+    };
+    let (tl, tr) = scale(tl, tr, rect.width);
+    let (bl, br) = scale(bl, br, rect.width);
+    let (tl, bl) = scale(tl, bl, rect.height);
+    let (tr, br) = scale(tr, br, rect.height);
+    (tl, tr, br, bl)
 }
 
 fn color_hex(color: Color) -> String {
@@ -869,6 +954,61 @@ mod tests {
     }
 
     #[test]
+    fn opacity_composites_a_subtree_as_one_group() {
+        let list = render(
+            r#"<div id="a"><div id="b"></div></div>"#,
+            "#a { opacity: 0.5; background: red } #b { width: 10px; height: 10px; background: blue }",
+        );
+        let commands = list.commands();
+        let push = commands
+            .iter()
+            .position(|c| matches!(c, Command::PushLayer { clip: None, alpha } if (*alpha - 0.5).abs() < 1e-6))
+            .expect("an alpha group opens before the box");
+        let fill = commands
+            .iter()
+            .position(
+                |c| matches!(c, Command::FillRect { color, .. } if *color == Color::rgb(255, 0, 0)),
+            )
+            .expect("the box paints inside the group");
+        let pop = commands
+            .iter()
+            .skip(fill)
+            .position(|c| matches!(c, Command::PopLayer))
+            .expect("the group closes after the subtree");
+        assert!(push < fill);
+        assert!(pop > fill);
+    }
+
+    #[test]
+    fn border_radius_rounds_and_clamps() {
+        let list = render(
+            r#"<div id="a"></div>"#,
+            "#a { width: 100px; height: 50px; background: red; border-radius: 100px }",
+        );
+        let Some(Command::FillRect { radius, .. }) = list.commands().iter().find(
+            |c| matches!(c, Command::FillRect { color, .. } if *color == Color::rgb(255, 0, 0)),
+        ) else {
+            panic!("expected the background fill");
+        };
+        // CSS 5.5: adjacent radii may not exceed a side, so 100px scales to 50
+        // on the width and 25 on the height.
+        assert_eq!(*radius, (25.0, 25.0, 25.0, 25.0));
+    }
+
+    #[test]
+    fn json_carries_a_radius_only_when_rounded() {
+        let sharp = render(r#"<div id="a"></div>"#, "#a { background: red }");
+        assert!(!sharp.to_json().to_string().contains("radius"));
+
+        let round = render(
+            r#"<div id="a"></div>"#,
+            "#a { background: red; border-radius: 8px; height: 20px }",
+        );
+        let json = round.to_json().to_string();
+        assert!(json.contains("radius"));
+    }
+
+    #[test]
     fn json_is_stable() {
         let list = render(r#"<div>x</div>"#, "#a { }");
         let json = list.to_json().to_string();
@@ -892,6 +1032,7 @@ mod tests {
                 out.0.push(Command::FillRect {
                     rect: Rect::new(0.0, 0.0, 1.0, 1.0),
                     color,
+                    radius: (0.0, 0.0, 0.0, 0.0),
                 });
             }
         }
@@ -945,14 +1086,14 @@ mod tests {
         assert!(
             list.commands()
                 .iter()
-                .any(|c| matches!(c, Command::PushClip { .. }))
+                .any(|c| matches!(c, Command::PushLayer { clip: Some(_), .. }))
         );
         assert!(
             list.commands()
                 .iter()
-                .any(|c| matches!(c, Command::PopClip))
+                .any(|c| matches!(c, Command::PopLayer))
         );
-        assert!(list.to_json().to_string().contains("push-clip"));
+        assert!(list.to_json().to_string().contains("push-layer"));
     }
 
     #[test]
@@ -978,7 +1119,7 @@ mod tests {
         list.commands()
             .iter()
             .find_map(|c| match c {
-                Command::FillRect { rect, color } if *color == Color::rgb(255, 0, 0) => {
+                Command::FillRect { rect, color, .. } if *color == Color::rgb(255, 0, 0) => {
                     Some(rect.y)
                 }
                 _ => None,
@@ -1008,7 +1149,7 @@ mod tests {
         list.commands()
             .iter()
             .find_map(|c| match c {
-                Command::FillRect { rect, color } if *color == Color::rgb(255, 0, 0) => {
+                Command::FillRect { rect, color, .. } if *color == Color::rgb(255, 0, 0) => {
                     Some(rect.x)
                 }
                 _ => None,

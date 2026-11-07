@@ -18,10 +18,10 @@ a `vello::Scene`.
 
 | Noonoo command | Vello |
 |---|---|
-| `FillRect` | `Scene::fill` a `kurbo::Rect` |
+| `FillRect` | `Scene::fill` a `kurbo::Rect` (rounded corners become a Bézier path) |
 | `FillGradient` | `Scene::fill` a `kurbo::Rect` with a `peniko::Gradient` (`Extend::Repeat` for repeating; elliptical radial gradients via a brush transform) |
 | `FillPolygon` | `Scene::fill` a closed `kurbo::BezPath` |
-| `PushClip` / `PopClip` | `Scene::push_layer` / `pop_layer` |
+| `PushLayer` / `PopLayer` | `Scene::push_layer` (clip + alpha) / `pop_layer` |
 | `DrawText` | *not drawn* — text is rendered as glyph outlines, so a bare run has no paths |
 
 Depends on `vello` (`default-features = false` — no wgpu) plus the path
@@ -84,7 +84,7 @@ overlaps Noonoo's concerns; it sits *after* the GPU pass.
 
 Its region targeting lines up naturally with two Noonoo features:
 
-- **`PushClip` regions** become effect regions (a blurred or shadowed sub-tree).
+- **`PushLayer` regions** become effect regions (a blurred or shadowed sub-tree).
 - **XIP capability gating** (`noonoo-caps`) is a policy layer over the same
   regions — "hardware-level region gating for isolated components" is the same
   shape as a capability-gated DOM segment.

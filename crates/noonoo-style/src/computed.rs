@@ -308,6 +308,32 @@ pub struct GradientStop {
     pub position: Option<Dimension>,
 }
 
+/// The four corners of a box (`top-left`, `top-right`, `bottom-right`,
+/// `bottom-left`, CSS order).
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Corners<T> {
+    /// `top-left`.
+    pub top_left: T,
+    /// `top-right`.
+    pub top_right: T,
+    /// `bottom-right`.
+    pub bottom_right: T,
+    /// `bottom-left`.
+    pub bottom_left: T,
+}
+
+impl<T: Clone> Corners<T> {
+    /// The same value on all four corners.
+    pub fn all(value: T) -> Self {
+        Self {
+            top_left: value.clone(),
+            top_right: value.clone(),
+            bottom_right: value.clone(),
+            bottom_left: value,
+        }
+    }
+}
+
 /// The four physical edges of a box.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Edges<T> {
@@ -656,6 +682,8 @@ pub struct ComputedStyle {
     pub border_style: Edges<BorderStyle>,
     /// `border-color`.
     pub border_color: Edges<Color>,
+    /// `border-radius`.
+    pub border_radius: Corners<Length>,
     /// `box-sizing`.
     pub box_sizing: BoxSizing,
     /// `flex-direction`.
@@ -726,6 +754,7 @@ impl Default for ComputedStyle {
             border_width: Edges::all(0.0),
             border_style: Edges::all(BorderStyle::None),
             border_color: Edges::all(Color::BLACK),
+            border_radius: Corners::all(Length::ZERO),
             box_sizing: BoxSizing::ContentBox,
             flex_direction: FlexDirection::Row,
             flex_wrap: FlexWrap::NoWrap,

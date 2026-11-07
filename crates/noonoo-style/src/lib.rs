@@ -60,8 +60,8 @@ use noonoo_css::Stylesheet;
 use noonoo_dom::{Document, NodeId};
 
 pub use computed::{
-    AlignItems, BorderStyle, BoxSizing, CalcTerm, Clear, ComputedStyle, Cursor, Dimension, Display,
-    Edges, Extreme, FlexDirection, FlexWrap, Float, FontStyle, Gradient, GradientKind,
+    AlignItems, BorderStyle, BoxSizing, CalcTerm, Clear, ComputedStyle, Corners, Cursor, Dimension,
+    Display, Edges, Extreme, FlexDirection, FlexWrap, Float, FontStyle, Gradient, GradientKind,
     GradientStop, GridLine, GridRange, JustifyContent, Length, LengthOrAuto, LinearDirection,
     Overflow, Position, RadialShape, RadialSize, TextAlign, TextDecoration, Track, Visibility,
     WhiteSpace, ZIndex,
@@ -496,6 +496,20 @@ mod tests {
         assert_eq!(s.width, Dimension::Px(980.0));
         // Both arguments are absolute once `vw` resolves, so this folds here.
         assert_eq!(s.height, Dimension::Px(1000.0));
+    }
+
+    #[test]
+    fn border_radius_computes_per_corner() {
+        let (doc, styles) = styled(
+            "<p>x</p>",
+            "p { border-radius: 8px 4px 2px 1px; border-top-left-radius: 10% }",
+        );
+        let p = doc.get_elements_by_tag_name("p")[0];
+        let radius = &styles.get(p).unwrap().border_radius;
+        assert_eq!(radius.top_left, Length::Percent(10.0));
+        assert_eq!(radius.top_right, Length::Px(4.0));
+        assert_eq!(radius.bottom_right, Length::Px(2.0));
+        assert_eq!(radius.bottom_left, Length::Px(1.0));
     }
 
     #[test]

@@ -12,16 +12,17 @@
 //!
 //! | Noonoo command | Vello |
 //! |---|---|
-//! | `FillRect` | `Scene::fill` a `kurbo::Rect` |
+//! | `FillRect` | `Scene::fill` a `kurbo::Rect` (rounded corners become a path) |
 //! | `FillGradient` | `Scene::fill` a `kurbo::Rect` with a `peniko::Gradient` (elliptical radial gradients use a brush transform) |
 //! | `FillPolygon` | `Scene::fill` a closed `kurbo::BezPath` |
-//! | `PushClip` / `PopClip` | `Scene::push_layer` / `pop_layer` |
+//! | `PushLayer` / `PopLayer` | `Scene::push_layer` (alpha + clip) / `pop_layer` |
 //! | `DrawText` | *not drawn* — Noonoo renders text as glyph outlines (`noonoo-ttf`'s `OutlineGlyphs`), so a bare text run has no paths for Vello |
 //!
 //! ```
 //! let commands = noonoo_paint::CommandList(vec![noonoo_paint::Command::FillRect {
 //!     rect: noonoo_geometry::Rect::new(0.0, 0.0, 10.0, 10.0),
 //!     color: noonoo_paint::Color::rgb(255, 0, 0),
+//!     radius: (0.0, 0.0, 0.0, 0.0),
 //! }]);
 //! let scene = noonoo_vello::scene(&commands);
 //! assert!(!scene.encoding().path_tags.is_empty());
@@ -33,7 +34,7 @@
 use noonoo_geometry::Point;
 use noonoo_paint::{Command, CommandList, GradientGeometry};
 use vello::Scene;
-use vello::kurbo::{Affine, BezPath, Rect};
+use vello::kurbo::{self, Affine, BezPath, Rect as KRect};
 use vello::peniko::{BlendMode, Color, ColorStop, Extend, Fill, Gradient};
 
 /// Build a fresh Vello scene from a Noonoo command stream.
@@ -47,8 +48,20 @@ pub fn scene(commands: &CommandList) -> Scene {
 pub fn draw(scene: &mut Scene, commands: &CommandList) {
     for command in commands.commands() {
         match command {
-            Command::FillRect { rect, color } => {
-                let shape = kurbo_rect(*rect);
+            Command::FillRect {
+                rect,
+                color,
+                radius,
+            } => {
+                let shape = if radius.0 == 0.0
+                    && radius.1 == 0.0
+                    && radius.2 == 0.0
+                    && radius.3 == 0.0
+                {
+                    kurbo::Shape::into_path(kurbo_rect(*rect), 0.1)
+                } else {
+                    rounded_rect(*rect, *radius)
+                };
                 scene.fill(Fill::NonZero, Affine::IDENTITY, brush(*color), None, &shape);
             }
             Command::FillGradient {
@@ -95,17 +108,30 @@ pub fn draw(scene: &mut Scene, commands: &CommandList) {
             // A plain text run carries no outlines; use `OutlineGlyphs` so Vello
             // receives filled glyph polygons instead.
             Command::DrawText { .. } => {}
-            Command::PushClip { rect } => {
-                let shape = kurbo_rect(*rect);
+            Command::PushLayer { clip, alpha } => {
+                // No clip: an effectively infinite shape (Vello wants a shape
+                // per layer), so the group covers the whole frame.
+                let shape = match clip {
+                    Some(rect) => kurbo::Shape::into_path(kurbo_rect(*rect), 0.1),
+                    None => {
+    let mut shape = BezPath::new();
+    shape.move_to((-1.0e6, -1.0e6));
+    shape.line_to((2.0e6, -1.0e6));
+    shape.line_to((2.0e6, 2.0e6));
+    shape.line_to((-1.0e6, 2.0e6));
+    shape.close_path();
+    shape
+}
+                };
                 scene.push_layer(
                     Fill::NonZero,
                     BlendMode::default(),
-                    1.0,
+                    *alpha,
                     Affine::IDENTITY,
                     &shape,
                 );
             }
-            Command::PopClip => scene.pop_layer(),
+            Command::PopLayer => scene.pop_layer(),
         }
     }
 }
@@ -146,14 +172,78 @@ fn gradient(
     gradient
 }
 
+/// A rectangle with per-corner radii (`top-left`, `top-right`, `bottom-right`,
+/// `bottom-left`) as a Bézier path; sharp corners are straight lines and each
+/// rounded corner is a cubic approximation of a quarter arc.
+fn rounded_rect(rect: noonoo_geometry::Rect, radius: (f32, f32, f32, f32)) -> BezPath {
+    // The circular-arc cubic constant.
+    const K: f64 = 0.552_284_749_8;
+    let (r_tl, r_tr, r_br, r_bl) = (
+        f64::from(radius.0),
+        f64::from(radius.1),
+        f64::from(radius.2),
+        f64::from(radius.3),
+    );
+    let (x, y, w, h) = (
+        f64::from(rect.x),
+        f64::from(rect.y),
+        f64::from(rect.width),
+        f64::from(rect.height),
+    );
+    let (right, bottom) = (x + w, y + h);
+    let mut path = BezPath::new();
+    path.move_to((x + r_tl, y));
+    // top edge to the top-right corner
+    path.line_to((right - r_tr, y));
+    if r_tr > 0.0 {
+        path.curve_to(
+            (right - r_tr * (1.0 - K), y),
+            (right, y + r_tr - r_tr * K),
+            (right, y + r_tr),
+        );
+    }
+    // right edge to the bottom-right corner
+    path.line_to((right, bottom - r_br));
+    if r_br > 0.0 {
+        path.curve_to(
+            (right, bottom - r_br * (1.0 - K)),
+            (right - r_br + r_br * K, bottom),
+            (right - r_br, bottom),
+        );
+    }
+    // bottom edge to the bottom-left corner
+    path.line_to((x + r_bl, bottom));
+    if r_bl > 0.0 {
+        path.curve_to(
+            (x + r_bl - r_bl * K, bottom),
+            (x, bottom - r_bl + r_bl * K),
+            (x, bottom - r_bl),
+        );
+    }
+    // left edge to the top-left corner
+    path.line_to((x, y + r_tl));
+    if r_tl > 0.0 {
+        path.curve_to(
+            (x, y + r_tl - r_tl * K),
+            (x + r_tl - r_tl * K, y),
+            (x + r_tl, y),
+        );
+    }
+    path.close_path();
+    path
+}
+
+/// A rectangle with per-corner radii (`top-left`, `top-right`, `bottom-right`,
+/// `bottom-left`) as a Bézier path; sharp corners are straight lines and each
+/// rounded corner is a cubic approximation of a quarter arc.
 /// Noonoo's 8-bit RGBA into a Vello/peniko colour.
 fn brush(color: noonoo_paint::Color) -> Color {
     Color::from_rgba8(color.r, color.g, color.b, color.a)
 }
 
 /// Noonoo's `(x, y, width, height)` into kurbo's `(x0, y0, x1, y1)`.
-fn kurbo_rect(rect: noonoo_geometry::Rect) -> Rect {
-    Rect::new(
+fn kurbo_rect(rect: noonoo_geometry::Rect) -> KRect {
+    KRect::new(
         rect.x as f64,
         rect.y as f64,
         rect.right() as f64,
@@ -194,6 +284,7 @@ mod tests {
         let (paths, draws) = encodings(vec![Command::FillRect {
             rect: NRect::new(0.0, 0.0, 10.0, 10.0),
             color: Color::rgb(255, 0, 0),
+            radius: (0.0, 0.0, 0.0, 0.0),
         }]);
         assert!(paths > 0);
         assert!(draws >= 1);
@@ -228,20 +319,41 @@ mod tests {
     #[test]
     fn a_clip_wraps_the_content_as_a_layer() {
         let (_, with_clip) = encodings(vec![
-            Command::PushClip {
-                rect: NRect::new(0.0, 0.0, 10.0, 10.0),
+            Command::PushLayer {
+                clip: Some(NRect::new(0.0, 0.0, 10.0, 10.0)),
+                alpha: 1.0,
             },
             Command::FillRect {
                 rect: NRect::new(0.0, 0.0, 10.0, 10.0),
                 color: Color::rgb(0, 0, 255),
+                radius: (0.0, 0.0, 0.0, 0.0),
             },
-            Command::PopClip,
+            Command::PopLayer,
         ]);
         let (_, without_clip) = encodings(vec![Command::FillRect {
             rect: NRect::new(0.0, 0.0, 10.0, 10.0),
             color: Color::rgb(0, 0, 255),
+            radius: (0.0, 0.0, 0.0, 0.0),
         }]);
-        // The layer's begin/end clip are extra draw entries.
+        // The layer's begin/end are extra draw entries.
         assert!(with_clip > without_clip);
+    }
+
+    #[test]
+    fn a_rounded_fill_and_an_alpha_layer_add_paths() {
+        let (paths, draws) = encodings(vec![
+            Command::PushLayer {
+                clip: None,
+                alpha: 0.5,
+            },
+            Command::FillRect {
+                rect: NRect::new(0.0, 0.0, 10.0, 10.0),
+                color: Color::rgb(255, 0, 0),
+                radius: (2.0, 2.0, 2.0, 2.0),
+            },
+            Command::PopLayer,
+        ]);
+        assert!(paths > 0);
+        assert!(draws >= 3);
     }
 }
