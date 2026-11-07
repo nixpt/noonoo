@@ -161,29 +161,29 @@ dependencies = [
 
 [[package]]
 name = "noonoo-css"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "noonoo-parse",
 ]
 
 [[package]]
 name = "noonoo-dom"
-version = "0.6.0"
+version = "0.7.0"
 
 [[package]]
 name = "noonoo-geometry"
-version = "0.6.0"
+version = "0.7.0"
 
 [[package]]
 name = "noonoo-json"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "noonoo-parse",
 ]
 
 [[package]]
 name = "noonoo-layout"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "noonoo-dom",
  "noonoo-geometry",
@@ -193,7 +193,7 @@ dependencies = [
 
 [[package]]
 name = "noonoo-paint"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "noonoo-css",
  "noonoo-geometry",
@@ -204,11 +204,11 @@ dependencies = [
 
 [[package]]
 name = "noonoo-parse"
-version = "0.6.0"
+version = "0.7.0"
 
 [[package]]
 name = "noonoo-selectors"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "noonoo-css",
  "noonoo-parse",
@@ -216,7 +216,7 @@ dependencies = [
 
 [[package]]
 name = "noonoo-style"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "noonoo-css",
  "noonoo-dom",
@@ -225,11 +225,11 @@ dependencies = [
 
 [[package]]
 name = "noonoo-text"
-version = "0.6.0"
+version = "0.7.0"
 
 [[package]]
 name = "noonoo-vello"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "noonoo-geometry",
  "noonoo-paint",
