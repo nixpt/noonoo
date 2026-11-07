@@ -13,7 +13,10 @@
 //! instead of a fixed per-character guess.
 //!
 //! Metrics tables are shared by TrueType (`glyf`) and CFF/OpenType (`OTTO`), so
-//! measurement works for both; glyph *outlines* (`glyf`) are a later addition.
+//! measurement works for both. TrueType glyph *outlines* (`loca`/`glyf`, simple
+//! and composite) are parsed too — [`Font::outline`] returns contours in font
+//! units, and [`Outline::flatten`] turns them into polygons for the paint stream.
+//! CFF outlines are not parsed.
 //!
 //! ```
 //! # fn demo(bytes: &[u8]) -> noonoo_parse::ParseResult<()> {
@@ -29,9 +32,11 @@
 #![warn(missing_docs)]
 
 mod cmap;
+mod glyf;
 mod reader;
 mod shaper;
 
+pub use glyf::{Contour, Outline, Point};
 pub use shaper::FontShaper;
 
 use noonoo_parse::ParseResult;
@@ -49,6 +54,9 @@ pub struct Font {
     line_gap: i16,
     num_h_metrics: u16,
     hmtx_offset: usize,
+    /// Byte offsets into `glyf`, one per glyph plus an end sentinel.
+    loca: Vec<u32>,
+    glyf_offset: usize,
     cmap: Option<Cmap>,
 }
 
@@ -111,6 +119,25 @@ impl Font {
 
         let hmtx_offset = table(b"hmtx").ok_or_else(|| reader.error("missing hmtx table"))?;
 
+        // `head.indexToLocFormat` chooses the `loca` offset size; `loca` gives
+        // each glyph's byte range inside `glyf`.
+        reader.seek(head + 50);
+        let index_to_loc_format = reader.i16()?;
+        let glyf_offset = table(b"glyf").unwrap_or(0);
+        let mut loca = Vec::new();
+        if let Some(loca_offset) = table(b"loca") {
+            let mut loca_reader = Reader::new(data);
+            loca_reader.seek(loca_offset);
+            for _ in 0..num_glyphs as usize + 1 {
+                let offset = if index_to_loc_format == 0 {
+                    loca_reader.u16()? as u32 * 2
+                } else {
+                    loca_reader.u32()?
+                };
+                loca.push(offset);
+            }
+        }
+
         let cmap = match table(b"cmap") {
             Some(offset) => cmap::parse(data, offset)?,
             None => None,
@@ -125,6 +152,8 @@ impl Font {
             line_gap,
             num_h_metrics,
             hmtx_offset,
+            loca,
+            glyf_offset,
             cmap,
         })
     }

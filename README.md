@@ -41,7 +41,7 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | [`noonoo-ini`](crates/noonoo-ini) | INI → value model (JSON) |
 | [`noonoo-toml`](crates/noonoo-toml) | TOML (subset) → value model (JSON) |
 | [`noonoo-xml`](crates/noonoo-xml) | XML → DOM (strict nesting, entities, CDATA) |
-| [`noonoo-ttf`](crates/noonoo-ttf) | TrueType/OpenType → font metrics + `cmap` (and a `Shaper`) |
+| [`noonoo-ttf`](crates/noonoo-ttf) | TrueType/OpenType → metrics, `cmap`, and glyph outlines (and a `Shaper`) |
 | [`noonoo-svg`](crates/noonoo-svg) | SVG subset → paint commands |
 | [`noonoo-hx`](crates/noonoo-hx) | htmx-like declarative attributes → fetch + DOM swap |
 | [`noonoo-caps`](crates/noonoo-caps) | Capability gating: scopes, the policy seam, a gated DOM |

@@ -106,6 +106,58 @@ fn cmap() -> Vec<u8> {
     t
 }
 
+fn glyf() -> Vec<u8> {
+    // glyph 1: a triangle; glyph 2: a composite that references it.
+    let mut triangle = Vec::new();
+    push_i16(&mut triangle, 1); // numberOfContours
+    push_i16(&mut triangle, 0); // xMin
+    push_i16(&mut triangle, 0); // yMin
+    push_i16(&mut triangle, 700); // xMax
+    push_i16(&mut triangle, 700); // yMax
+    push_u16(&mut triangle, 2); // endPtsOfContours[0]
+    push_u16(&mut triangle, 0); // instructionLength
+    triangle.extend_from_slice(&[0x01, 0x01, 0x01]); // on-curve, long deltas
+    for dx in [0i16, 700, -700] {
+        push_i16(&mut triangle, dx);
+    }
+    for dy in [0i16, 0, 700] {
+        push_i16(&mut triangle, dy);
+    }
+    while triangle.len() % 2 != 0 {
+        triangle.push(0);
+    }
+
+    let mut composite = Vec::new();
+    push_i16(&mut composite, -1); // numberOfContours (composite)
+    push_i16(&mut composite, 0);
+    push_i16(&mut composite, 0);
+    push_i16(&mut composite, 800);
+    push_i16(&mut composite, 700);
+    push_u16(&mut composite, 0x0003); // words | xy values
+    push_u16(&mut composite, 1); // component glyph
+    push_i16(&mut composite, 100); // dx
+    push_i16(&mut composite, 0); // dy
+    while composite.len() % 2 != 0 {
+        composite.push(0);
+    }
+
+    let mut t = triangle;
+    t.extend_from_slice(&composite);
+    t
+}
+
+fn loca() -> Vec<u8> {
+    // Short format: byte offsets divided by two. glyph 0 is empty.
+    let triangle_len = 30u16;
+    let composite_len = 18u16;
+    let offsets = [0u16, 0, triangle_len, triangle_len + composite_len];
+    let mut t = Vec::new();
+    for offset in offsets {
+        push_u16(&mut t, offset / 2);
+    }
+    t
+}
+
 fn build(tables: &[([u8; 4], Vec<u8>)]) -> Vec<u8> {
     let mut offset = 12 + 16 * tables.len();
     let mut directory = Vec::new();
@@ -141,6 +193,8 @@ fn minimal_font() -> Vec<u8> {
         (*b"hhea", hhea()),
         (*b"hmtx", hmtx()),
         (*b"cmap", cmap()),
+        (*b"glyf", glyf()),
+        (*b"loca", loca()),
     ])
 }
 
@@ -180,4 +234,48 @@ fn font_shaper_uses_real_metrics() {
     assert_eq!(shaper.advance("AB", 20.0, false), 26.0);
     // Line height = (800 - (-200) + 0) units, scaled the same way.
     assert_eq!(shaper.line_height(20.0), 20.0);
+}
+
+#[test]
+fn reads_a_simple_glyph_outline() {
+    let font = Font::parse(&minimal_font()).unwrap();
+    let outline = font.outline(1).expect("glyph 1 has an outline");
+    assert_eq!(outline.contours.len(), 1);
+    let points = &outline.contours[0].points;
+    assert_eq!(points.len(), 3);
+    assert!(points.iter().all(|point| point.on_curve));
+
+    let polygon = &outline.flatten(4)[0];
+    assert_eq!(polygon.len(), 3);
+    assert_eq!(polygon[0], (0.0, 0.0));
+    assert_eq!(polygon[1], (700.0, 0.0));
+    assert_eq!(polygon[2], (0.0, 700.0));
+}
+
+#[test]
+fn resolves_a_composite_glyph() {
+    let font = Font::parse(&minimal_font()).unwrap();
+    let outline = font.outline(2).expect("glyph 2 is a composite");
+    assert_eq!(outline.contours.len(), 1);
+    let points = &outline.contours[0].points;
+    // The triangle, shifted by x = 100.
+    assert_eq!(points[0].x, 100.0);
+    assert_eq!(points[1].x, 800.0);
+}
+
+#[test]
+fn an_empty_glyph_has_no_outline() {
+    let font = Font::parse(&minimal_font()).unwrap();
+    assert!(font.outline(0).expect("glyph 0 exists").is_empty());
+}
+
+#[test]
+fn lays_out_text_as_polygons() {
+    let font = Font::parse(&minimal_font()).unwrap();
+    // At a 1000px size the scale is 1, so points are font units.
+    let polygons = font.text_polygons("AB", 1000.0);
+    assert_eq!(polygons.len(), 2);
+    assert_eq!(polygons[0][0], (0.0, 0.0));
+    // 'B' starts at 'A's advance (600) plus the composite offset (100).
+    assert_eq!(polygons[1][0], (700.0, 0.0));
 }

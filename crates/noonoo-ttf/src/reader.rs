@@ -30,6 +30,10 @@ impl<'a> Reader<'a> {
         Ok(slice)
     }
 
+    pub(crate) fn u8(&mut self) -> ParseResult<u8> {
+        Ok(self.take(1)?[0])
+    }
+
     pub(crate) fn u16(&mut self) -> ParseResult<u16> {
         let b = self.take(2)?;
         Ok(u16::from_be_bytes([b[0], b[1]]))
