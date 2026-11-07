@@ -30,8 +30,8 @@
 //!   height is its rows. Columns size against the definite width (fixed first,
 //!   `fr` shares the leftover, otherwise `auto` tracks stretch); rows size to
 //!   content. Items stretch to their area's height (`align-items`/`align-self`
-//!   position within it); loose text in a grid container is dropped (no
-//!   anonymous items yet).
+//!   position within it); loose text becomes anonymous items — runs of text
+//!   merge, inherit the container's style, and wrap in their cell.
 //! - **Vertical margin collapsing** — adjacent siblings share the larger of
 //!   their facing margins; a block collapses its top/bottom margin through its
 //!   first/last child when no border or padding separates them; and an empty
@@ -715,6 +715,7 @@ impl Ctx<'_> {
             ),
             Display::Grid | Display::InlineGrid => crate::grid::layout_grid_children(
                 self,
+                node,
                 &style,
                 &children_nodes,
                 content_x,

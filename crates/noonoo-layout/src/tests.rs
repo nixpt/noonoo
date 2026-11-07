@@ -283,6 +283,60 @@ fn grid_align_items_positions_within_the_area() {
 }
 
 #[test]
+fn loose_text_becomes_an_anonymous_grid_item() {
+    let (_doc, tree) = page(
+        r#"<div id="parent"><div id="a"></div>hello world</div>"#,
+        "#parent { display: grid; grid-template-columns: 100px 1fr; height: 20px }
+         #a { height: 20px }",
+        400.0,
+    );
+    // The text sits in row 1, column 2 — beside the element, not below it.
+    let runs: Vec<_> = tree
+        .boxes()
+        .iter()
+        .filter(|b| b.kind == BoxKind::Text)
+        .map(|b| (b.rect.x, b.rect.y, b.text.clone().unwrap_or_default()))
+        .collect();
+    assert!(
+        runs.contains(&(100.0, 0.0, "hello world".to_owned())),
+        "{runs:?}"
+    );
+}
+
+#[test]
+fn consecutive_text_merges_into_one_anonymous_item() {
+    let (_doc, tree) = page(
+        r#"<div id="parent">aa <b id="b">x</b> bb</div>"#,
+        "#parent { display: grid; grid-template-columns: 100px 100px }
+         #b { height: 10px }",
+        400.0,
+    );
+    // Items in order: "aa" (r1c1), the `b` element (r1c2), "bb" (r2c1) —
+    // three items, not five. Row 1 is as tall as "aa"'s line (19.2).
+    let bb: Vec<_> = tree
+        .boxes()
+        .iter()
+        .filter(|b| b.kind == BoxKind::Text && b.text.as_deref() == Some("bb"))
+        .map(|b| (b.rect.x, b.rect.y))
+        .collect();
+    assert_eq!(bb, vec![(0.0, 19.2)]);
+}
+
+#[test]
+fn anonymous_text_wraps_and_sizes_its_row() {
+    let (doc, tree) = page(
+        r#"<div id="parent">aaaa aaaa aaaa<div id="b"></div></div>"#,
+        "#parent { display: grid; grid-template-columns: 100px }
+         #b { height: 10px }",
+        400.0,
+    );
+    // The text wraps to two lines (2 * 19.2) in the 100px column, so the
+    // next row starts below the wrapped text.
+    let b = tree.get(id(&doc, "b")).unwrap();
+    assert!((b.rect.y - 38.4).abs() < 0.1, "got {}", b.rect.y);
+}
+
+#[test]
 fn grid_columns_share_the_free_space() {
     let (doc, tree) = page(
         r#"<div id="parent"><div id="a"></div><div id="b"></div></div>"#,

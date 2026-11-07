@@ -18,7 +18,7 @@ fn is_display_none(ctx: &Ctx<'_>, node: NodeId) -> bool {
         .is_some_and(|style| style.display == Display::None)
 }
 
-fn map_align(align: TextAlign) -> noonoo_text::Align {
+pub(crate) fn map_align(align: TextAlign) -> noonoo_text::Align {
     match align {
         TextAlign::Start | TextAlign::Left => noonoo_text::Align::Start,
         TextAlign::End | TextAlign::Right => noonoo_text::Align::End,

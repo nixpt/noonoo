@@ -18,22 +18,31 @@
 //!   column count; explicit placements may extend into implicit tracks sized
 //!   by `grid-auto-rows`/`grid-auto-columns`. An item's height distributes
 //!   equally across the rows it spans.
-//! - **Alignment**: items fill their area on the inline axis and sit at the
-//!   area's top on the block axis (`align-items` positioning lands with the
-//!   same machinery as flex's cross-axis stretch).
+//! - **Alignment**: items stretch to their area's height by default;
+//!   `align-items`/`align-self` position within it (`baseline` as `start`).
+//! - **Anonymous items**: loose text in the container merges into one
+//!   anonymous item per run, styled by the container, wrapped into line boxes
+//!   like block flow (`text-align` honoured for start/center/end; justify
+//!   behaves as start).
 
 use std::collections::HashSet;
 
 use noonoo_dom::NodeId;
-use noonoo_style::{AlignItems, ComputedStyle, GridLine, Track};
+use noonoo_geometry::Rect;
+use noonoo_style::{AlignItems, ComputedStyle, Edges, GridLine, Track};
 
-use crate::Ctx;
+use crate::block;
 use crate::float;
 use crate::resolve;
+use crate::{BoxKind, Ctx, LayoutBox};
 
 /// One item's resolved placement in the grid (0-based, half-open spans).
 struct Placed {
+    /// The element, or the first text node of an anonymous run.
     node: NodeId,
+    /// For an anonymous text item: the merged, whitespace-collapsed text,
+    /// styled by the container.
+    text: Option<String>,
     column: usize,
     column_span: usize,
     row: usize,
@@ -42,24 +51,48 @@ struct Placed {
 
 pub(crate) fn layout_grid_children(
     ctx: &mut Ctx<'_>,
+    parent: NodeId,
     style: &ComputedStyle,
     children: &[NodeId],
     content_x: f32,
     content_y: f32,
     content_width: f32,
 ) -> (Vec<usize>, f32) {
-    let mut items = Vec::new();
-    for &child in children {
-        // Grid items are elements; loose text would need an anonymous item,
-        // which is not modelled yet, so it is dropped.
-        if ctx.is_text(child) || ctx.is_hidden(child) {
+    // Elements are items directly; runs of loose text merge into one
+    // anonymous item (whitespace collapses to single spaces).
+    let mut items: Vec<(NodeId, Option<String>)> = Vec::new();
+    let mut index = 0;
+    while index < children.len() {
+        let child = children[index];
+        if ctx.is_hidden(child) {
+            index += 1;
             continue;
         }
         if ctx.is_out_of_flow(child) {
             ctx.pending.push(child);
+            index += 1;
             continue;
         }
-        items.push(child);
+        if ctx.is_text(child) {
+            let mut text = String::new();
+            while index < children.len() && ctx.is_text(children[index]) {
+                let chunk = ctx.document.text_content(children[index]);
+                let chunk = chunk.trim();
+                if !chunk.is_empty() {
+                    if !text.is_empty() {
+                        text.push(' ');
+                    }
+                    text.push_str(chunk);
+                }
+                index += 1;
+            }
+            if !text.is_empty() {
+                items.push((child, Some(text)));
+            }
+            continue;
+        }
+        items.push((child, None));
+        index += 1;
     }
     if items.is_empty() {
         return (Vec::new(), 0.0);
@@ -91,10 +124,17 @@ pub(crate) fn layout_grid_children(
     let (mut column_count, mut row_count) = (column_tracks.len(), row_tracks_template.len());
     let mut cursor = (0usize, 0usize);
 
-    for node in &items {
-        let item_style = ctx.style(*node);
-        let (column, column_span) = axis(&item_style.grid_column);
-        let (row, row_span) = axis(&item_style.grid_row);
+    for (node, text) in &items {
+        // Anonymous text is always auto-placed; only elements carry placement.
+        let (column, column_span, row, row_span) = match text {
+            Some(_) => (None, 1, None, 1),
+            None => {
+                let item_style = ctx.style(*node);
+                let (column, column_span) = axis(&item_style.grid_column);
+                let (row, row_span) = axis(&item_style.grid_row);
+                (column, column_span, row, row_span)
+            }
+        };
 
         let (column, row) = match (column, row) {
             (Some(column), Some(row)) => {
@@ -150,6 +190,7 @@ pub(crate) fn layout_grid_children(
         row_count = row_count.max(row + row_span);
         placements.push(Placed {
             node: *node,
+            text: text.clone(),
             column,
             column_span,
             row,
@@ -184,8 +225,13 @@ pub(crate) fn layout_grid_children(
     // (margins included, as track sizing counts the item's outer box).
     for placed in &placements {
         if placed.column_span == 1 && matches!(columns[placed.column], Track::Auto) {
-            let margins = resolve::margins(&ctx.style(placed.node).margin, content_width);
-            let preferred = float::preferred_width(ctx, placed.node) + margins.left + margins.right;
+            let preferred = match &placed.text {
+                Some(text) => float::text_width(ctx, text, style),
+                None => {
+                    let margins = resolve::margins(&ctx.style(placed.node).margin, content_width);
+                    float::preferred_width(ctx, placed.node) + margins.left + margins.right
+                }
+            };
             widths[placed.column] = widths[placed.column].max(preferred);
         }
     }
@@ -231,14 +277,20 @@ pub(crate) fn layout_grid_children(
     // --- row sizing (measure: real layout, thrown away) ----------------------
     let mut heights = Vec::with_capacity(placements.len());
     for placed in &placements {
-        let margins = resolve::margins(&ctx.style(placed.node).margin, content_width);
-        heights.push(ctx.measure_height(
-            placed.node,
-            column_x(placed.column) + margins.left,
-            content_y,
-            area_width(placed.column, placed.column_span),
-            None,
-        ));
+        let area = area_width(placed.column, placed.column_span);
+        heights.push(match &placed.text {
+            Some(text) => text_height(ctx, text, style, area),
+            None => {
+                let margins = resolve::margins(&ctx.style(placed.node).margin, content_width);
+                ctx.measure_height(
+                    placed.node,
+                    column_x(placed.column) + margins.left,
+                    content_y,
+                    area,
+                    None,
+                )
+            }
+        });
     }
     ctx.prune_pending();
 
@@ -277,21 +329,40 @@ pub(crate) fn layout_grid_children(
     };
     let mut indices = Vec::new();
     for (index, placed) in placements.iter().enumerate() {
+        let area = area_width(placed.column, placed.column_span);
+        if let Some(text) = &placed.text {
+            // An anonymous text item wraps into line boxes in its cell,
+            // aligned per the container's `text-align` (justify as start).
+            indices.extend(text_lines(
+                ctx,
+                placed.node,
+                parent,
+                text,
+                style,
+                column_x(placed.column),
+                row_y(placed.row),
+                area,
+            ));
+            continue;
+        }
         let item_style = ctx.style(placed.node);
         let align = item_style.align_self.unwrap_or(style.align_items);
         let margins = resolve::margins(&item_style.margin, content_width);
-        let area = area_height(placed.row, placed.row_span);
+        let area_height = area_height(placed.row, placed.row_span);
         let (y, definite) = match align {
-            AlignItems::Stretch => (row_y(placed.row), Some(area)),
+            AlignItems::Stretch => (row_y(placed.row), Some(area_height)),
             AlignItems::Start | AlignItems::Baseline => (row_y(placed.row), None),
-            AlignItems::Center => (row_y(placed.row) + (area - heights[index]) / 2.0, None),
-            AlignItems::End => (row_y(placed.row) + area - heights[index], None),
+            AlignItems::Center => (
+                row_y(placed.row) + (area_height - heights[index]) / 2.0,
+                None,
+            ),
+            AlignItems::End => (row_y(placed.row) + area_height - heights[index], None),
         };
         ctx.layout_element(
             placed.node,
             column_x(placed.column) + margins.left,
             y + margins.top,
-            area_width(placed.column, placed.column_span),
+            area,
             definite,
         );
         if let Some(index) = ctx.tree_index(placed.node) {
@@ -302,6 +373,84 @@ pub(crate) fn layout_grid_children(
     let grid_height =
         row_heights.iter().sum::<f32>() + row_gap * row_heights.len().saturating_sub(1) as f32;
     (indices, grid_height.max(0.0))
+}
+
+/// An anonymous text item's wrapped height in a cell of `available_width`.
+fn text_height(ctx: &Ctx<'_>, text: &str, style: &ComputedStyle, available_width: f32) -> f32 {
+    let request = style.font_request();
+    let space = ctx.shaper.advance(" ", request, style.font_size);
+    let line_height = if style.line_height > 0.0 {
+        style.line_height
+    } else {
+        ctx.shaper.line_height(request, style.font_size)
+    };
+    let widths: Vec<f32> = text
+        .split_whitespace()
+        .map(|word| ctx.shaper.advance(word, request, style.font_size))
+        .collect();
+    let lines = noonoo_text::wrap(&widths, space, available_width);
+    lines.len() as f32 * line_height
+}
+
+/// Lay an anonymous text item out as one [`BoxKind::Text`] box per wrapped
+/// line, at `(x, y)` inside a cell of `available_width`.
+#[allow(clippy::too_many_arguments)]
+fn text_lines(
+    ctx: &mut Ctx<'_>,
+    node: NodeId,
+    parent: NodeId,
+    text: &str,
+    style: &ComputedStyle,
+    x: f32,
+    y: f32,
+    available_width: f32,
+) -> Vec<usize> {
+    let request = style.font_request();
+    let font_size = style.font_size;
+    let space = ctx.shaper.advance(" ", request, font_size);
+    let line_height = if style.line_height > 0.0 {
+        style.line_height
+    } else {
+        ctx.shaper.line_height(request, font_size)
+    };
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let widths: Vec<f32> = words
+        .iter()
+        .map(|word| ctx.shaper.advance(word, request, font_size))
+        .collect();
+    let lines = noonoo_text::wrap(&widths, space, available_width);
+    let alignment = block::map_align(style.text_align);
+
+    let mut indices = Vec::new();
+    let mut cursor_y = y;
+    for line in &lines {
+        let used: f32 = line.iter().map(|&i| widths[i]).sum::<f32>()
+            + space * (line.len().saturating_sub(1)) as f32;
+        let free = (available_width - used).max(0.0);
+        let offset = noonoo_text::align(alignment, free, line.len());
+        let line_text = line.iter().map(|&i| words[i]).collect::<Vec<_>>().join(" ");
+        let index = ctx.push(LayoutBox {
+            node: Some(node),
+            style_node: parent,
+            kind: BoxKind::Text,
+            rect: Rect::new(x + offset.start, cursor_y, used, line_height),
+            text: Some(line_text),
+            margin: Edges::all(0.0),
+            padding: Edges::all(0.0),
+            border: Edges::all(0.0),
+            clips: false,
+            scroll_max_x: 0.0,
+            scroll_max_y: 0.0,
+            scroll_x: 0.0,
+            scroll_y: 0.0,
+            z_tier: 1,
+            z_index: 0,
+            children: Vec::new(),
+        });
+        indices.push(index);
+        cursor_y += line_height;
+    }
+    indices
 }
 
 /// One axis of a placement: `(start line 0-based, span)`, with `None` for an
