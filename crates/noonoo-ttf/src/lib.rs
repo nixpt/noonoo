@@ -6,11 +6,12 @@
 //! (advances and vertical metrics), and `cmap` (character → glyph).
 //!
 //! This is a **format parser**, in the same spirit as `noonoo-xml` and
-//! `noonoo-svg`: small, spec-shaped, and owned. It is deliberately *not* a
-//! shaping engine — kerning, ligatures, complex scripts, and BiDi are the 100k+
-//! LOC swamp the project keeps borrowed behind [`noonoo_text::Shaper`]. What this
-//! gives that layer is honest numbers: real advance widths and line metrics
-//! instead of a fixed per-character guess.
+//! `noonoo-svg`: small, spec-shaped, and owned. It is deliberately *not* a full
+//! shaping engine — ligatures, contextual substitution (GSUB), complex scripts,
+//! and BiDi are the 100k+ LOC swamp the project keeps borrowed behind
+//! [`noonoo_text::Shaper`]. What this gives that layer is honest numbers: real
+//! advance widths, line metrics, and the legacy `kern` pair adjustments, instead
+//! of a fixed per-character guess.
 //!
 //! Metrics tables are shared by TrueType (`glyf`) and CFF/OpenType (`OTTO`), so
 //! measurement works for both. TrueType glyph *outlines* (`loca`/`glyf`, simple
@@ -37,6 +38,7 @@
 
 mod cmap;
 mod glyf;
+mod kern;
 mod reader;
 mod render;
 mod shaper;
@@ -63,6 +65,8 @@ pub struct Font {
     /// Byte offsets into `glyf`, one per glyph plus an end sentinel.
     loca: Vec<u32>,
     glyf_offset: usize,
+    /// Legacy pair-kerning adjustments, sorted by `(left, right)`.
+    kern: Vec<kern::Pair>,
     cmap: Option<Cmap>,
 }
 
@@ -148,6 +152,10 @@ impl Font {
             Some(offset) => cmap::parse(data, offset)?,
             None => None,
         };
+        let kern = match table(b"kern") {
+            Some(offset) => kern::parse(data, offset)?,
+            None => Vec::new(),
+        };
 
         Ok(Font {
             data: data.to_vec(),
@@ -160,6 +168,7 @@ impl Font {
             hmtx_offset,
             loca,
             glyf_offset,
+            kern,
             cmap,
         })
     }
@@ -209,6 +218,28 @@ impl Font {
     pub fn advance_of_char(&self, character: char) -> u16 {
         self.glyph_for_char(character)
             .map_or_else(|| self.advance(0), |glyph| self.advance(glyph))
+    }
+
+    /// The glyph a character maps to, or `.notdef` (glyph 0) when it does not.
+    pub fn glyph_for_char_or_notdef(&self, character: char) -> u16 {
+        self.glyph_for_char(character).unwrap_or(0)
+    }
+
+    /// The legacy pair-kerning adjustment between two glyphs, in font units.
+    ///
+    /// Sums every matching format-0 pair (a font with a single `kern` subtable —
+    /// the common case — has at most one per pair). Zero when nothing matches, and
+    /// zero for a font with no `kern` table.
+    pub fn kern(&self, left: u16, right: u16) -> i16 {
+        let key = (left, right);
+        let start = self.kern.partition_point(|&(l, r, _)| (l, r) < key);
+        let mut total = 0i32;
+        let mut index = start;
+        while index < self.kern.len() && (self.kern[index].0, self.kern[index].1) == key {
+            total += self.kern[index].2 as i32;
+            index += 1;
+        }
+        total as i16
     }
 }
 

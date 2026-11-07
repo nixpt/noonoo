@@ -70,9 +70,10 @@ load-bearing for the engine's own formats.
 - **TOML** (`noonoo-toml`) projects into the JSON value model like INI and
   CAISON, so configuration has an owned parser with no incidental dependency.
 - **Fonts** (`noonoo-ttf`) parses TrueType/OpenType metrics (`head`, `maxp`,
-  `hhea`/`hmtx`, `cmap`) into real advance widths and line metrics, and TrueType
-  glyph outlines (`loca`/`glyf`, simple and composite) into flattened polygons —
-  so text can measure and render as vector paths without owning shaping.
+  `hhea`/`hmtx`, `cmap`) into real advance widths and line metrics, the legacy
+  `kern` table into pair kerning, and TrueType glyph outlines (`loca`/`glyf`,
+  simple and composite) into flattened polygons — so text can measure and render
+  as vector paths without owning modern shaping (GSUB/GPOS).
 - **CSS** (`noonoo-css` + `noonoo-style`) is **owned end to end** — tokens, selectors,
   the value/property model, and the cascade (`docs/DEPENDENCY-EXIT.md` Phase A).
   No `stylo`, no `cssparser`.

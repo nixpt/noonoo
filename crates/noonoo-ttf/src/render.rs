@@ -49,10 +49,13 @@ impl Glyphs for OutlineGlyphs<'_> {
     ) {
         let scale = font_size / self.font.units_per_em().max(1) as f32;
         let mut pen = x;
+        let mut previous = None;
         for character in text.chars() {
-            if let Some(glyph) = self.font.glyph_for_char(character)
-                && let Some(outline) = self.font.outline(glyph)
-            {
+            let glyph = self.font.glyph_for_char_or_notdef(character);
+            if let Some(left) = previous {
+                pen += self.font.kern(left, glyph) as f32 * scale;
+            }
+            if let Some(outline) = self.font.outline(glyph) {
                 for contour in outline.flatten(self.steps) {
                     let points: Vec<Point> = contour
                         .into_iter()
@@ -66,7 +69,8 @@ impl Glyphs for OutlineGlyphs<'_> {
                     }
                 }
             }
-            pen += self.font.advance_of_char(character) as f32 * scale;
+            pen += self.font.advance(glyph) as f32 * scale;
+            previous = Some(glyph);
         }
     }
 }

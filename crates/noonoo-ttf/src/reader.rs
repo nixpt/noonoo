@@ -17,6 +17,10 @@ impl<'a> Reader<'a> {
         self.pos = pos;
     }
 
+    pub(crate) fn position(&self) -> usize {
+        self.pos
+    }
+
     fn take(&mut self, n: usize) -> ParseResult<&'a [u8]> {
         let end = self
             .pos

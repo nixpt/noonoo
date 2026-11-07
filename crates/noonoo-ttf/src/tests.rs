@@ -158,6 +158,24 @@ fn loca() -> Vec<u8> {
     t
 }
 
+fn kern() -> Vec<u8> {
+    let mut t = Vec::new();
+    push_u16(&mut t, 0); // version
+    push_u16(&mut t, 1); // nTables
+    // One format-0, horizontal subtable with a single pair.
+    push_u16(&mut t, 0); // subtable version
+    push_u16(&mut t, 20); // length
+    push_u16(&mut t, 0x0001); // coverage: format 0, horizontal
+    push_u16(&mut t, 1); // nPairs
+    push_u16(&mut t, 6); // searchRange
+    push_u16(&mut t, 0); // entrySelector
+    push_u16(&mut t, 0); // rangeShift
+    push_u16(&mut t, 1); // left: glyph 'A'
+    push_u16(&mut t, 2); // right: glyph 'B'
+    push_i16(&mut t, -100); // value
+    t
+}
+
 fn build(tables: &[([u8; 4], Vec<u8>)]) -> Vec<u8> {
     let mut offset = 12 + 16 * tables.len();
     let mut directory = Vec::new();
@@ -195,6 +213,7 @@ fn minimal_font() -> Vec<u8> {
         (*b"cmap", cmap()),
         (*b"glyf", glyf()),
         (*b"loca", loca()),
+        (*b"kern", kern()),
     ])
 }
 
@@ -230,8 +249,8 @@ fn rejects_a_non_font() {
 fn font_shaper_uses_real_metrics() {
     let font = Font::parse(&minimal_font()).unwrap();
     let shaper = FontShaper::new(&font);
-    // "AB" = 600 + 700 units, at 20px over a 1000-unit em.
-    assert_eq!(shaper.advance("AB", 20.0, false), 26.0);
+    // "AB" = 600 + 700 units, minus the 100-unit kern pair, at 20px over 1000.
+    assert_eq!(shaper.advance("AB", 20.0, false), 24.0);
     // Line height = (800 - (-200) + 0) units, scaled the same way.
     assert_eq!(shaper.line_height(20.0), 20.0);
 }
@@ -276,8 +295,18 @@ fn lays_out_text_as_polygons() {
     let polygons = font.text_polygons("AB", 1000.0);
     assert_eq!(polygons.len(), 2);
     assert_eq!(polygons[0][0], (0.0, 0.0));
-    // 'B' starts at 'A's advance (600) plus the composite offset (100).
-    assert_eq!(polygons[1][0], (700.0, 0.0));
+    // 'B' starts at 'A's advance (600) plus its kerning (-100) plus the
+    // composite offset (100).
+    assert_eq!(polygons[1][0], (600.0, 0.0));
+}
+
+#[test]
+fn reads_legacy_kerning() {
+    let font = Font::parse(&minimal_font()).unwrap();
+    assert_eq!(font.kern(1, 2), -100);
+    // Kerning is directional, and unlisted pairs are zero.
+    assert_eq!(font.kern(2, 1), 0);
+    assert_eq!(font.kern(0, 0), 0);
 }
 
 #[test]

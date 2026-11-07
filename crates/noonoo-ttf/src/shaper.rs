@@ -36,10 +36,16 @@ impl<'a> FontShaper<'a> {
 
 impl Shaper for FontShaper<'_> {
     fn advance(&self, text: &str, font_size: f32, _bold: bool) -> f32 {
-        let units: u32 = text
-            .chars()
-            .map(|character| self.font.advance_of_char(character) as u32)
-            .sum();
+        let mut units = 0i32;
+        let mut previous = None;
+        for character in text.chars() {
+            let glyph = self.font.glyph_for_char_or_notdef(character);
+            units += self.font.advance(glyph) as i32;
+            if let Some(left) = previous {
+                units += self.font.kern(left, glyph) as i32;
+            }
+            previous = Some(glyph);
+        }
         units as f32 * self.scale(font_size)
     }
 

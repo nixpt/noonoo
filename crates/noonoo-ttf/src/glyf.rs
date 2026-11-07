@@ -75,11 +75,14 @@ impl Font {
     pub fn text_polygons(&self, text: &str, font_size: f32) -> Vec<Vec<(f32, f32)>> {
         let scale = font_size / self.units_per_em().max(1) as f32;
         let mut pen_x = 0.0;
+        let mut previous = None;
         let mut polygons = Vec::new();
         for character in text.chars() {
-            if let Some(glyph) = self.glyph_for_char(character)
-                && let Some(outline) = self.outline(glyph)
-            {
+            let glyph = self.glyph_for_char_or_notdef(character);
+            if let Some(left) = previous {
+                pen_x += self.kern(left, glyph) as f32 * scale;
+            }
+            if let Some(outline) = self.outline(glyph) {
                 for contour in outline.flatten(8) {
                     polygons.push(
                         contour
@@ -89,7 +92,8 @@ impl Font {
                     );
                 }
             }
-            pen_x += self.advance_of_char(character) as f32 * scale;
+            pen_x += self.advance(glyph) as f32 * scale;
+            previous = Some(glyph);
         }
         polygons
     }
