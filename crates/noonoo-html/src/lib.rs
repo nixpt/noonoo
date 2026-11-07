@@ -67,6 +67,41 @@ fn is_void(name: &str) -> bool {
     VOID_ELEMENTS.contains(&name)
 }
 
+/// Pop the open cell/row elements that a new element of `name` implicitly
+/// closes, following the spec's table insertion modes:
+///
+/// - a new cell (`td`/`th`) closes the open cell;
+/// - a new row (`tr`) or row group (`tbody`/`thead`/`tfoot`, also
+///   `caption`/`colgroup`) closes the open cell, and then the open row;
+/// - a new `table` closes the open row structure — but a nested table grows
+///   inside its open cell, so the cell stays.
+///
+/// An unclosed `<tr>`/`<td>` (the implied tbody/td closing) is therefore
+/// structured correctly by the tree builder without the full insertion-mode
+/// state machine. End tags already pop to their matching element.
+fn implied_table_close(stack: &mut Vec<noonoo_dom::NodeId>, doc: &Document, name: &str) {
+    loop {
+        let Some(&top) = stack.last() else { return };
+        let Some(element) = doc.element(top) else {
+            return;
+        };
+        let open = element.name.as_str();
+        match (name, open) {
+            // A nested `<table>` grows inside its open cell: the cell stays.
+            ("table", "td" | "th") => return,
+            (
+                "td" | "th" | "tr" | "tbody" | "thead" | "tfoot" | "caption" | "colgroup",
+                "td" | "th",
+            ) => {}
+            (
+                "tr" | "tbody" | "thead" | "tfoot" | "caption" | "colgroup" | "table",
+                "tr" | "tbody" | "thead" | "tfoot",
+            ) => {}
+            _ => return,
+        }
+        stack.pop();
+    }
+}
 /// Tokenize an HTML source.
 pub fn tokenize(source: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
@@ -292,6 +327,14 @@ pub fn parse(source: &str) -> Document {
                 attrs,
                 self_closing,
             } => {
+                // Inside a table, the spec's "in cell"/"in row" insertion modes
+                // close elements implicitly: a new `td` closes the open cell, a
+                // new row or section closes the open cell *and* row (the implied
+                // `<tbody>`/`<td>` closing). The stack builder normally relies on
+                // explicit end tags; these rules keep a subset of HTML5's
+                // table handling without the full insertion-mode state machine.
+                implied_table_close(&mut stack, &doc, &name);
+
                 let parent = *stack.last().unwrap();
                 let node = doc.create_element(name.clone());
                 for (attr, value) in attrs {
@@ -410,5 +453,42 @@ mod tests {
         let element = doc.element(a).unwrap();
         assert_eq!(element.attr("href"), Some("a"));
         assert_eq!(element.attr("download"), Some(""));
+    }
+
+    #[test]
+    fn unclosed_table_cells_and_rows_close_implied() {
+        // Finding 3's tree-builder half: `<td>a<td>b</tr>` must produce two
+        // (2) sibling cells, not a cell nested in a cell.
+        let doc = parse("<table><tr><td>a<td>b</tr><tr><td>c</table>");
+        let trs = doc.get_elements_by_tag_name("tr");
+        assert_eq!(trs.len(), 2, "two rows: {trs:?}");
+
+        let cells = |tr| -> Vec<_> {
+            doc.tree()
+                .children(tr)
+                .iter()
+                .filter_map(|&child| doc.element(child))
+                .map(|element| element.name.as_str())
+                .collect()
+        };
+        assert_eq!(cells(trs[0]), ["td", "td"]);
+        assert_eq!(cells(trs[1]), ["td"]);
+
+        // No `td` nests inside another.
+        let tds = doc.get_elements_by_tag_name("td");
+        assert_eq!(tds.len(), 3);
+        for td in &tds {
+            assert!(
+                !doc.tree()
+                    .children(*td)
+                    .iter()
+                    .any(|child| doc.element(*child).is_some_and(|e| e.name == "td")),
+                "no nested cell"
+            );
+        }
+        // The cell's attribute rides along.
+        let doc = parse("<table><tr><td colspan=2>a</table>");
+        let td = doc.get_elements_by_tag_name("td")[0];
+        assert_eq!(doc.element(td).unwrap().attr("colspan"), Some("2"));
     }
 }

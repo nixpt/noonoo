@@ -1141,3 +1141,51 @@ fn replaced_elements_show_their_placeholder_text() {
         .collect();
     assert_eq!(words, vec!["pic", "a"]);
 }
+
+#[test]
+fn table_cells_lay_out_in_rows_and_columns() {
+    // Finding 3 of docs/REVIEW-2026-11-07.md: cells painted together as one
+    // run (`bc`) because the table had no layout of its own. The review's
+    // table: row 1 is one colspan-2 cell, row 2 holds `b` and `c`.
+    let (doc, tree) = page(
+        r#"<table><tr><td colspan="2">a</td></tr><tr><td>b</td><td>c</td></tr></table>"#,
+        "table { border-collapse: collapse; width: 120px } \
+         td { border: 1px solid #000; padding: 4px; margin: 0 }",
+        400.0,
+    );
+    let cells: Vec<_> = doc
+        .get_elements_by_tag_name("td")
+        .iter()
+        .filter_map(|&node| tree.get(node))
+        .collect();
+    assert_eq!(cells.len(), 3, "three laid-out cell boxes");
+    let (a, b, c) = (cells[0], cells[1], cells[2]);
+
+    // `a` spans both columns of a 120px table, so its span is wide; `b` and
+    // `c` each take one below it.
+    assert!(a.rect.width > b.rect.width.max(c.rect.width));
+    // The spanning cell sits directly over the two beneath it.
+    assert!((b.rect.y - a.rect.bottom()).abs() < 0.01, "{a:?}");
+    assert!((c.rect.y - a.rect.bottom()).abs() < 0.01, "{a:?}");
+    // `c` starts where `b` ends: one column apart, same row.
+    assert!(c.rect.x > b.rect.x + b.rect.width - 1.0);
+    assert_eq!(c.rect.y, b.rect.y);
+    // The table's height covers both rows.
+}
+
+#[test]
+fn border_collapse_paints_a_shared_edge_once() {
+    let (doc, tree) = page(
+        r#"<table><tr><td id="a">a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>"#,
+        "table { border-collapse: collapse } td { border: 1px solid #000 }",
+        400.0,
+    );
+    let td = id(&doc, "a");
+    let border = tree.get(td).unwrap().border;
+    // `a` has a neighbour to its right and one below: it keeps only its own
+    // top and left — the shared edges belong to `b` and `c`.
+    assert_eq!(border.right, 0.0);
+    assert_eq!(border.bottom, 0.0);
+    assert_eq!(border.left, 1.0);
+    assert_eq!(border.top, 1.0);
+}

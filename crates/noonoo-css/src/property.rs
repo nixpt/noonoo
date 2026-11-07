@@ -143,6 +143,8 @@ pub enum Property {
     TextAlign,
     /// `text-decoration-line`.
     TextDecorationLine,
+    /// `border-collapse`.
+    BorderCollapse,
     /// `white-space`.
     WhiteSpace,
     /// `opacity`.
@@ -237,6 +239,7 @@ impl Property {
             "line-height" => Self::LineHeight,
             "text-align" => Self::TextAlign,
             "text-decoration-line" => Self::TextDecorationLine,
+            "border-collapse" => Self::BorderCollapse,
             "white-space" => Self::WhiteSpace,
             "opacity" => Self::Opacity,
             "overflow-x" => Self::OverflowX,
@@ -325,6 +328,7 @@ impl Property {
             Self::LineHeight => "line-height",
             Self::TextAlign => "text-align",
             Self::TextDecorationLine => "text-decoration-line",
+            Self::BorderCollapse => "border-collapse",
             Self::WhiteSpace => "white-space",
             Self::Opacity => "opacity",
             Self::OverflowX => "overflow-x",

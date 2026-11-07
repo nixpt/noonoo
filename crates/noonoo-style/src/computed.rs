@@ -9,6 +9,12 @@ use noonoo_css::Color;
 use noonoo_text::FontRequest;
 
 /// A `<display>` value (the subset Noonoo models).
+///
+/// The table values model the *structures* a configuration document uses:
+/// `table`, row groups, `table-row` and `table-cell`. The exotic parts of
+/// CSS Tables (anonymous-cell fixup beyond stray cells, `inline-table`,
+/// captions, fixed table layout, `border-spacing`) are not modelled; see
+/// `noonoo-layout/src/table.rs` for what layout does with them.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Display {
     /// `none`.
@@ -29,6 +35,25 @@ pub enum Display {
     InlineGrid,
     /// `list-item`.
     ListItem,
+    /// `table`.
+    Table,
+    /// `table-row-group` (also `thead`/`tbody`/`tfoot`).
+    TableRowGroup,
+    /// `table-row`.
+    TableRow,
+    /// `table-cell`.
+    TableCell,
+}
+
+/// `border-collapse`: whether adjacent cells' borders merge into one.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum BorderCollapse {
+    /// `separate` — each cell paints all of its borders (the initial value).
+    Separate,
+    /// `collapse` — a shared edge is painted once: the cell to the left of
+    /// (or above) the edge drops its right (or bottom) border, and the
+    /// table's own border paints the frame.
+    Collapse,
 }
 
 /// A `<position>` value.
@@ -614,6 +639,8 @@ pub enum Cursor {
 pub struct ComputedStyle {
     /// `display`.
     pub display: Display,
+    /// `border-collapse`.
+    pub border_collapse: BorderCollapse,
     /// `position`.
     pub position: Position,
     /// `float`.
@@ -720,6 +747,7 @@ impl Default for ComputedStyle {
     fn default() -> Self {
         Self {
             display: Display::Inline,
+            border_collapse: BorderCollapse::Separate,
             position: Position::Static,
             float: Float::None,
             clear: Clear::None,

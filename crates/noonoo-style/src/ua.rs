@@ -9,7 +9,11 @@
 pub const UA_STYLESHEET: &str = r#"
 html, body, div, p, section, article, header, footer, main, nav, aside,
 figure, figcaption, blockquote, pre, form, fieldset, ul, ol, dl, dt, dd,
-h1, h2, h3, h4, h5, h6, hr, table, thead, tbody, tfoot, tr { display: block }
+h1, h2, h3, h4, h5, h6, hr { display: block }
+table { display: table }
+thead, tbody, tfoot { display: table-row-group }
+tr { display: table-row }
+td, th { display: table-cell }
 li { display: list-item }
 head, title, meta, link, style, script, base, template { display: none }
 span, a, em, strong, b, i, u, small, code, kbd, samp, var, sub, sup, label,

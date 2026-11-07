@@ -75,6 +75,7 @@ mod grid;
 mod margin;
 mod resolve;
 mod runs;
+mod table;
 
 use std::collections::{HashMap, HashSet};
 
@@ -699,7 +700,11 @@ impl Ctx<'_> {
             || matches!(style.position, Position::Absolute | Position::Fixed)
             || matches!(
                 style.display,
-                Display::Flex | Display::InlineFlex | Display::Grid | Display::InlineGrid
+                Display::Flex
+                    | Display::InlineFlex
+                    | Display::Grid
+                    | Display::InlineGrid
+                    | Display::Table
             );
         if establishes_bfc {
             self.push_bfc();
@@ -718,6 +723,14 @@ impl Ctx<'_> {
             Display::Grid | Display::InlineGrid => crate::grid::layout_grid_children(
                 self,
                 node,
+                &style,
+                &children_nodes,
+                content_x,
+                content_y,
+                content_width,
+            ),
+            Display::Table => table::layout_table_children(
+                self,
                 &style,
                 &children_nodes,
                 content_x,
@@ -903,6 +916,14 @@ impl Ctx<'_> {
             Display::Flex | Display::InlineFlex => flex::layout_flex_children(
                 self,
                 node,
+                &style,
+                &children_nodes,
+                content_x,
+                content_y,
+                content_width,
+            ),
+            Display::Table => table::layout_table_children(
+                self,
                 &style,
                 &children_nodes,
                 content_x,

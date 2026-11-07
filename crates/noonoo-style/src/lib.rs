@@ -61,11 +61,11 @@ use noonoo_css::Stylesheet;
 use noonoo_dom::{Document, NodeId};
 
 pub use computed::{
-    AlignItems, BorderStyle, BoxSizing, CalcTerm, Clear, ComputedStyle, Corners, Cursor, Dimension,
-    Display, Edges, Extreme, FlexDirection, FlexWrap, Float, FontStyle, Gradient, GradientKind,
-    GradientStop, GridLine, GridRange, JustifyContent, Length, LengthOrAuto, LinearDirection,
-    Overflow, Position, RadialShape, RadialSize, TextAlign, TextDecoration, Track, Visibility,
-    WhiteSpace, ZIndex,
+    AlignItems, BorderCollapse, BorderStyle, BoxSizing, CalcTerm, Clear, ComputedStyle, Corners,
+    Cursor, Dimension, Display, Edges, Extreme, FlexDirection, FlexWrap, Float, FontStyle,
+    Gradient, GradientKind, GradientStop, GridLine, GridRange, JustifyContent, Length,
+    LengthOrAuto, LinearDirection, Overflow, Position, RadialShape, RadialSize, TextAlign,
+    TextDecoration, Track, Visibility, WhiteSpace, ZIndex,
 };
 
 /// Computed styles for a document, indexed by node.

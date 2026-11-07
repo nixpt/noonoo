@@ -217,7 +217,20 @@ pub(crate) fn apply(
                     "grid" => Display::Grid,
                     "inline-grid" => Display::InlineGrid,
                     "list-item" => Display::ListItem,
+                    "table" => Display::Table,
+                    "table-row-group" | "thead-body-group" => Display::TableRowGroup,
+                    "table-row" => Display::TableRow,
+                    "table-cell" => Display::TableCell,
                     _ => style.display,
+                };
+            }
+        }
+        Property::BorderCollapse => {
+            if let Some(k) = keyword(values) {
+                style.border_collapse = match k {
+                    "collapse" => BorderCollapse::Collapse,
+                    "separate" => BorderCollapse::Separate,
+                    _ => style.border_collapse,
                 };
             }
         }
@@ -691,6 +704,7 @@ fn is_inherited(property: &Property) -> bool {
 fn copy_property(dst: &mut ComputedStyle, src: &ComputedStyle, property: &Property) {
     match property {
         Property::Display => dst.display = src.display,
+        Property::BorderCollapse => dst.border_collapse = src.border_collapse,
         Property::Position => dst.position = src.position,
         Property::Float => dst.float = src.float,
         Property::Clear => dst.clear = src.clear,
