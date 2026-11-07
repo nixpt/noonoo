@@ -231,6 +231,25 @@ pub(crate) fn apply(
                 };
             }
         }
+        Property::Float => {
+            if let Some(k) = keyword(values) {
+                style.float = match k {
+                    "left" => Float::Left,
+                    "right" => Float::Right,
+                    _ => Float::None,
+                };
+            }
+        }
+        Property::Clear => {
+            if let Some(k) = keyword(values) {
+                style.clear = match k {
+                    "left" => Clear::Left,
+                    "right" => Clear::Right,
+                    "both" => Clear::Both,
+                    _ => Clear::None,
+                };
+            }
+        }
         Property::Width => set_first(
             &mut style.width,
             dimension(values, font_size, root, viewport),
@@ -609,6 +628,8 @@ fn copy_property(dst: &mut ComputedStyle, src: &ComputedStyle, property: &Proper
     match property {
         Property::Display => dst.display = src.display,
         Property::Position => dst.position = src.position,
+        Property::Float => dst.float = src.float,
+        Property::Clear => dst.clear = src.clear,
         Property::Width => dst.width = src.width.clone(),
         Property::Height => dst.height = src.height.clone(),
         Property::Top => dst.inset.top = src.inset.top.clone(),

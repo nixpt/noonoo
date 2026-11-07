@@ -79,6 +79,133 @@ fn viewport_units_track_the_layout_viewport() {
 }
 
 #[test]
+fn a_float_leaves_normal_flow_but_shapes_its_container() {
+    let (doc, tree) = page(
+        r#"<div id="parent"><div id="f"></div><div id="b"></div></div>"#,
+        "#parent { width: 400px }
+         #f { float: left; width: 100px; height: 50px }
+         #b { height: 20px }",
+        400.0,
+    );
+    let f = tree.get(id(&doc, "f")).unwrap();
+    // The float sits at the flow position, hugging the left edge.
+    assert_eq!(
+        (f.rect.x, f.rect.y, f.rect.width, f.rect.height),
+        (0.0, 0.0, 100.0, 50.0)
+    );
+    // A block sibling flows right past it: full width, unchanged position.
+    let b = tree.get(id(&doc, "b")).unwrap();
+    assert_eq!((b.rect.x, b.rect.y, b.rect.width), (0.0, 0.0, 400.0));
+    // …but the container's auto height includes the float's bottom.
+    let parent = tree.get(id(&doc, "parent")).unwrap();
+    assert_eq!(parent.rect.height, 50.0);
+}
+
+#[test]
+fn line_boxes_wrap_around_a_float() {
+    let (_doc, tree) = page(
+        r#"<div id="parent"><div id="f"></div><p>aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa</p></div>"#,
+        "#parent { width: 400px }
+         #f { float: left; width: 100px; height: 30px }
+         p { margin: 0 }",
+        400.0,
+    );
+    let runs: Vec<_> = tree
+        .boxes()
+        .iter()
+        .filter(|b| b.kind == BoxKind::Text)
+        .map(|b| (b.rect.x, b.rect.y))
+        .collect();
+    // The band beside the float is [100, 400]; seven 4-char words (32px + 8px
+    // space) fill it. Lines that start below the float's bottom are free again.
+    assert_eq!(runs[0].0, 100.0, "the first line starts beside the float");
+    assert!(
+        runs.iter().any(|&(x, y)| x == 0.0 && y >= 30.0),
+        "a line below the float spans the full width: {runs:?}"
+    );
+}
+
+#[test]
+fn clear_pushes_below_the_floats_it_names() {
+    let (doc, tree) = page(
+        r#"<div id="l"></div><div id="r"></div><div id="left-only"></div><div id="both"></div>"#,
+        "#l { float: left; width: 50px; height: 40px }
+         #r { float: right; width: 50px; height: 60px }
+         #both { clear: both; height: 10px }
+         #left-only { clear: left; height: 10px }",
+        400.0,
+    );
+    // `clear: both` sits below the deeper (right) float.
+    assert_eq!(tree.get(id(&doc, "both")).unwrap().rect.y, 60.0);
+    // `clear: left` only cares about the left float: above it is free.
+    assert_eq!(tree.get(id(&doc, "left-only")).unwrap().rect.y, 40.0);
+}
+
+#[test]
+fn floats_stack_beside_each_other_and_wrap() {
+    let (doc, tree) = page(
+        r#"<div id="a"></div><div id="b"></div><div id="c"></div>"#,
+        "#a, #b { float: left; width: 100px; height: 50px }
+         #c { float: left; width: 300px; height: 50px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.x, 0.0);
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.x, 100.0);
+    // A 300px float does not fit the remaining 200px band, so it drops below.
+    let c = tree.get(id(&doc, "c")).unwrap();
+    assert_eq!((c.rect.x, c.rect.y), (0.0, 50.0));
+}
+
+#[test]
+fn a_right_float_hugs_the_right_edge() {
+    let (doc, tree) = page(
+        r#"<div id="f"></div>"#,
+        "#f { float: right; width: 100px; height: 50px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.x, 300.0);
+}
+
+#[test]
+fn a_float_without_a_width_shrinks_to_fit() {
+    let (doc, tree) = page(r#"<div id="f">aaaa bb</div>"#, "#f { float: left }", 400.0);
+    // "aaaa bb" at 16px with the metric shaper: 7 chars * 0.5 * 16 = 56px.
+    assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 56.0);
+}
+
+#[test]
+fn a_float_resolves_percentages_against_its_container() {
+    let (doc, tree) = page(
+        r#"<div id="f"></div>"#,
+        "#f { float: left; width: 50%; height: 10px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 200.0);
+}
+
+#[test]
+fn a_float_among_inline_content_shapes_the_lines() {
+    let (doc, tree) = page(
+        r#"<p>aa <b id="f">x</b> bb</p>"#,
+        "p { margin: 0 } #f { float: left; width: 60px; height: 20px }",
+        400.0,
+    );
+    let f = tree.get(id(&doc, "f")).unwrap();
+    assert_eq!((f.rect.x, f.rect.y), (0.0, 0.0));
+    // Both words fit beside the 60px float, so the line starts at x = 60.
+    let runs: Vec<(f32, f32)> = tree
+        .boxes()
+        .iter()
+        .filter(|b| b.kind == BoxKind::Text)
+        .map(|b| (b.rect.x, b.rect.y))
+        .collect();
+    assert!(
+        runs.contains(&(60.0, 0.0)),
+        "text beside the float: {runs:?}"
+    );
+}
+
+#[test]
 fn calc_mixes_percentage_and_pixels_against_the_containing_block() {
     let (doc, tree) = page(
         r#"<div id="a"></div>"#,

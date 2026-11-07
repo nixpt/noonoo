@@ -4,6 +4,7 @@ use noonoo_dom::{NodeData, NodeId};
 use noonoo_geometry::Rect;
 use noonoo_style::{ComputedStyle, Display, Edges, TextAlign, WhiteSpace};
 
+use crate::float;
 use crate::margin;
 use crate::{BoxKind, Ctx, LayoutBox};
 
@@ -49,6 +50,8 @@ pub(crate) fn layout_block_children(
     let mut cursor = content_y;
     let mut pending: Option<f32> = None;
     let mut has_content = false;
+    // Only floats registered from here on belong to this container's height.
+    let float_base = ctx.floats().len();
     let mut i = 0;
 
     while i < children.len() {
@@ -59,6 +62,24 @@ pub(crate) fn layout_block_children(
         }
         if ctx.is_out_of_flow(child) {
             ctx.pending.push(child);
+            i += 1;
+            continue;
+        }
+        if ctx.is_float(child) {
+            // A float shapes its formatting context's lines and its container's
+            // height, but not the position of block siblings, so it never
+            // joins the flow cursor.
+            float::place(
+                ctx,
+                child,
+                content_x,
+                content_width,
+                cursor + pending.unwrap_or(0.0),
+            );
+            if let Some(index) = ctx.tree_index(child) {
+                indices.push(index);
+            }
+            has_content = true;
             i += 1;
             continue;
         }
@@ -105,6 +126,8 @@ pub(crate) fn layout_block_children(
         }
 
         let margin = margin::effective_margins(ctx, child, content_width);
+        // `clear` sits below the floats it names before anything else happens.
+        cursor = cursor.max(ctx.floats().clearance(ctx.style(child).clear, cursor));
 
         if margin.through {
             // A collapsed-through box adds its margin to the chain and occupies
@@ -150,7 +173,14 @@ pub(crate) fn layout_block_children(
         cursor += margin;
     }
 
-    (indices, cursor - content_y)
+    // Floats count toward the container's auto height even though block
+    // siblings flow right past them — but only this container's own floats,
+    // not ones inherited from the surrounding formatting context.
+    let flow_height = cursor - content_y;
+    (
+        indices,
+        flow_height.max(ctx.floats().depth_since(float_base, content_y)),
+    )
 }
 
 /// A word or atomic inline box, ready to be wrapped onto a line.
@@ -164,7 +194,12 @@ struct Item {
 }
 
 /// Lay out an inline formatting context: text and inline boxes wrapped into
-/// lines no wider than `width`, aligned per the container's `text-align`.
+/// lines inside the band the container's floats leave free, aligned per the
+/// container's `text-align`.
+///
+/// Float children among the inline nodes are laid out first (at `y`), so the
+/// lines that follow wrap around them.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn layout_inline_run(
     ctx: &mut Ctx<'_>,
     parent_node: NodeId,
@@ -186,6 +221,10 @@ pub(crate) fn layout_inline_run(
     let mut items: Vec<Item> = Vec::new();
     for &node in nodes {
         if is_display_none(ctx, node) {
+            continue;
+        }
+        if ctx.is_float(node) {
+            float::place(ctx, node, x, width, y);
             continue;
         }
         match ctx.document.node(node) {
@@ -229,29 +268,42 @@ pub(crate) fn layout_inline_run(
         return (Vec::new(), 0.0);
     }
 
-    let widths: Vec<f32> = items.iter().map(|item| item.width).collect();
-    let lines = match parent_style.white_space {
-        WhiteSpace::NoWrap | WhiteSpace::Pre => vec![(0..items.len()).collect::<Vec<usize>>()],
-        _ => noonoo_text::wrap(&widths, space, width),
-    };
-
     let alignment = map_align(parent_style.text_align);
     let mut indices = Vec::new();
     let mut cursor_y = y;
+    let mut start = 0;
 
-    for line in &lines {
-        let used: f32 = line.iter().map(|&i| items[i].width).sum::<f32>()
+    // Lines wrap one at a time so each line's band reflects the floats that
+    // reach it: a float's bottom frees the width again for later lines. With
+    // no floats the band is the full content width, as before. (A line taller
+    // than `line_height` is not re-checked against the floats — an accepted
+    // approximation.)
+    while start < items.len() {
+        let (band_left, band_right) = ctx
+            .floats()
+            .band(x, width, cursor_y, cursor_y + line_height);
+        let band_width = (band_right - band_left).max(0.0);
+        let widths: Vec<f32> = items[start..].iter().map(|item| item.width).collect();
+        let wrapped = match parent_style.white_space {
+            WhiteSpace::NoWrap | WhiteSpace::Pre => {
+                vec![(0..widths.len()).collect::<Vec<usize>>()]
+            }
+            _ => noonoo_text::wrap(&widths, space, band_width),
+        };
+        let line = &wrapped[0];
+
+        let used: f32 = line.iter().map(|&i| items[start + i].width).sum::<f32>()
             + space * line.len().saturating_sub(1) as f32;
-        let free = (width - used).max(0.0);
+        let free = (band_width - used).max(0.0);
         let offset = noonoo_text::align(alignment, free, line.len());
 
-        let mut cursor_x = x + offset.start;
+        let mut cursor_x = band_left + offset.start;
         let mut line_h = line_height;
         for (position, &i) in line.iter().enumerate() {
             if position > 0 {
                 cursor_x += space + offset.gap;
             }
-            let item = &items[i];
+            let item = &items[start + i];
             line_h = line_h.max(item.height);
             let index = ctx.push(LayoutBox {
                 node: Some(item.node),
@@ -275,6 +327,7 @@ pub(crate) fn layout_inline_run(
             cursor_x += item.width;
         }
         cursor_y += line_h;
+        start += line.len();
     }
 
     (indices, cursor_y - y)

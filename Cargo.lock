@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "noonoo"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "noonoo-caison",
  "noonoo-caps",
@@ -37,7 +37,7 @@ dependencies = [
 
 [[package]]
 name = "noonoo-caison"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "noonoo-json",
  "noonoo-parse",
@@ -45,7 +45,7 @@ dependencies = [
 
 [[package]]
 name = "noonoo-caps"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "noonoo-dom",
  "noonoo-html",
@@ -53,7 +53,7 @@ dependencies = [
 
 [[package]]
 name = "noonoo-css"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "noonoo-dom",
  "noonoo-parse",
@@ -61,15 +61,15 @@ dependencies = [
 
 [[package]]
 name = "noonoo-csv"
-version = "0.10.0"
+version = "0.11.0"
 
 [[package]]
 name = "noonoo-dom"
-version = "0.10.0"
+version = "0.11.0"
 
 [[package]]
 name = "noonoo-engine"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "noonoo-css",
  "noonoo-dom",
@@ -82,18 +82,18 @@ dependencies = [
 
 [[package]]
 name = "noonoo-events"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "noonoo-dom",
 ]
 
 [[package]]
 name = "noonoo-geometry"
-version = "0.10.0"
+version = "0.11.0"
 
 [[package]]
 name = "noonoo-headless"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "noonoo-dom",
  "noonoo-events",
@@ -102,7 +102,7 @@ dependencies = [
 
 [[package]]
 name = "noonoo-html"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "noonoo-dom",
  "noonoo-parse",
@@ -110,7 +110,7 @@ dependencies = [
 
 [[package]]
 name = "noonoo-hx"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "noonoo-dom",
  "noonoo-events",
@@ -120,21 +120,21 @@ dependencies = [
 
 [[package]]
 name = "noonoo-ini"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "noonoo-json",
 ]
 
 [[package]]
 name = "noonoo-json"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "noonoo-parse",
 ]
 
 [[package]]
 name = "noonoo-layout"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "noonoo-css",
  "noonoo-dom",
@@ -146,19 +146,19 @@ dependencies = [
 
 [[package]]
 name = "noonoo-markdown"
-version = "0.10.0"
+version = "0.11.0"
 
 [[package]]
 name = "noonoo-motion"
-version = "0.10.0"
+version = "0.11.0"
 
 [[package]]
 name = "noonoo-net"
-version = "0.10.0"
+version = "0.11.0"
 
 [[package]]
 name = "noonoo-paint"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "noonoo-css",
  "noonoo-geometry",
@@ -171,11 +171,11 @@ dependencies = [
 
 [[package]]
 name = "noonoo-parse"
-version = "0.10.0"
+version = "0.11.0"
 
 [[package]]
 name = "noonoo-selectors"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "noonoo-css",
  "noonoo-dom",
@@ -184,7 +184,7 @@ dependencies = [
 
 [[package]]
 name = "noonoo-shell"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "noonoo-dom",
  "noonoo-engine",
@@ -197,7 +197,7 @@ dependencies = [
 
 [[package]]
 name = "noonoo-style"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "noonoo-css",
  "noonoo-dom",
@@ -208,7 +208,7 @@ dependencies = [
 
 [[package]]
 name = "noonoo-svg"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "noonoo-css",
  "noonoo-dom",
@@ -219,11 +219,11 @@ dependencies = [
 
 [[package]]
 name = "noonoo-text"
-version = "0.10.0"
+version = "0.11.0"
 
 [[package]]
 name = "noonoo-toml"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "noonoo-json",
  "noonoo-parse",
@@ -231,7 +231,7 @@ dependencies = [
 
 [[package]]
 name = "noonoo-ttf"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "noonoo-geometry",
  "noonoo-paint",
@@ -241,7 +241,7 @@ dependencies = [
 
 [[package]]
 name = "noonoo-xml"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "noonoo-dom",
  "noonoo-parse",

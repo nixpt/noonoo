@@ -117,8 +117,8 @@ The borrowed engines are scored in `DEPENDENCY-EXIT.md`. The path to dropping
   *(A1 selectors ✅, A2 value/property model ✅, A3 cascade ✅ — done; `stylo` was never added)*
 - **Phase B — layout (drops `taffy`).** block + inline + flex over our values.
   *✅ (v1: block, inline, flex — row/column, grow/shrink, justify, gaps;
-  `position`; vertical margin collapsing; overflow clipping, two-axis scroll
-  containers, and `z-index` stacking order)*
+  `position`; floats + `clear`; vertical margin collapsing; overflow clipping,
+  two-axis scroll containers, and `z-index` stacking order)*
 - **Phase C — text (trims `parley`).** line-breaking + `text-align`; shaping
   stays borrowed.
   *✅ (line breaking, wrapping, and alignment owned; real font metrics via

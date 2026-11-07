@@ -15,6 +15,13 @@
 //!   siblings) and `position: absolute` / `fixed` (out of flow, placed against
 //!   the nearest positioned ancestor's padding box — the viewport for `fixed`).
 //!   `sticky` is treated as `relative`.
+//! - **Floats** — `float: left`/`right` shapes its block formatting context:
+//!   line boxes wrap around floats (including floats declared in sibling
+//!   blocks), floats stack beside each other and drop below when a band is too
+//!   narrow, `clear` sits below named sides, `width: auto` shrinks to fit, and
+//!   a container's auto height includes its own floats' bottoms. Boxes that
+//!   establish a formatting context (clipping boxes, floats, flex, out-of-flow)
+//!   isolate their floats.
 //! - **Vertical margin collapsing** — adjacent siblings share the larger of
 //!   their facing margins; a block collapses its top/bottom margin through its
 //!   first/last child when no border or padding separates them; and an empty
@@ -34,9 +41,9 @@
 //!
 //! ## What it does not (yet)
 //!
-//! Floats, `grid`, full stacking contexts (a positioned box is ordered within its
+//! `grid`, full stacking contexts (a positioned box is ordered within its
 //! parent, not hoisted), scrollbar *rendering* (content scrolls; no bars are
-//! drawn), and writing modes. Absolute boxes whose width or height is `auto` fall
+//! drawn), and writing modes. Floats are ignored for flex items, per CSS. Absolute boxes whose width or height is `auto` fall
 //! back to the containing block when only the trailing inset (`right`/`bottom`)
 //! is set. Text is measured through the [`Shaper`] seam — a heuristic stands in
 //! until `noonoo-text` brings real shaping (`docs/ROADMAP.md` Phase C).
@@ -46,6 +53,7 @@
 
 mod block;
 mod flex;
+mod float;
 mod margin;
 mod resolve;
 
@@ -372,8 +380,11 @@ pub fn layout(
         shaper,
         viewport,
         pending: Vec::new(),
+        floats: Vec::new(),
         tree: LayoutTree::default(),
     };
+    // The root's children share one block formatting context.
+    ctx.push_bfc();
 
     // Pass 1 — normal flow, collapsing vertical margins. The viewport is the
     // container: it has no margins, so a leading child margin is not collapsed
@@ -402,6 +413,7 @@ pub fn layout(
         ctx.layout_out_of_flow(node);
     }
 
+    ctx.pop_bfc();
     ctx.tree
 }
 
@@ -413,10 +425,35 @@ pub(crate) struct Ctx<'a> {
     pub viewport: Size,
     /// Out-of-flow nodes awaiting pass 2.
     pub pending: Vec<NodeId>,
+    /// The block formatting context stack; the top holds the floats visible to
+    /// the box being laid out.
+    pub floats: Vec<crate::float::Floats>,
     pub tree: LayoutTree,
 }
 
 impl Ctx<'_> {
+    /// The floats of the current block formatting context.
+    pub fn floats(&self) -> &crate::float::Floats {
+        self.floats.last().expect("a formatting context is open")
+    }
+
+    /// The floats of the current block formatting context, mutably.
+    pub fn floats_mut(&mut self) -> &mut crate::float::Floats {
+        self.floats
+            .last_mut()
+            .expect("a formatting context is open")
+    }
+
+    /// Open a fresh block formatting context (floats inside it do not escape,
+    /// and outer floats do not reach in).
+    pub fn push_bfc(&mut self) {
+        self.floats.push(crate::float::Floats::new());
+    }
+
+    pub fn pop_bfc(&mut self) {
+        self.floats.pop();
+    }
+
     pub fn style(&self, node: NodeId) -> &ComputedStyle {
         self.styles
             .get(node)
@@ -452,6 +489,18 @@ impl Ctx<'_> {
                 self.style(node).position,
                 Position::Absolute | Position::Fixed
             )
+    }
+
+    /// Whether `node` floats. Floats leave normal flow but shape their
+    /// container, so they are laid out during pass 1, not deferred like
+    /// out-of-flow boxes.
+    pub fn is_float(&self, node: NodeId) -> bool {
+        !self.is_text(node)
+            && !matches!(
+                self.style(node).position,
+                Position::Absolute | Position::Fixed
+            )
+            && self.style(node).float != noonoo_style::Float::None
     }
 
     /// The containing block for an out-of-flow `node`.
@@ -609,6 +658,17 @@ impl Ctx<'_> {
             && matches!(style.height, Dimension::Auto)
             && !clips;
 
+        // A new block formatting context isolates floats: clipping boxes,
+        // floats, flex containers, and out-of-flow boxes start fresh, and
+        // their own floats do not escape to their siblings.
+        let establishes_bfc = clips
+            || style.float != noonoo_style::Float::None
+            || matches!(style.position, Position::Absolute | Position::Fixed)
+            || matches!(style.display, Display::Flex | Display::InlineFlex);
+        if establishes_bfc {
+            self.push_bfc();
+        }
+
         let (child_indices, content_height) = match style.display {
             Display::Flex | Display::InlineFlex => flex::layout_flex_children(
                 self,
@@ -633,6 +693,10 @@ impl Ctx<'_> {
                 (indices, height)
             }
         };
+
+        if establishes_bfc {
+            self.pop_bfc();
+        }
 
         let border_box_height = match resolve::dimension(style.height.clone(), f32::INFINITY) {
             Some(height) => height + vertical,

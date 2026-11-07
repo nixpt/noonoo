@@ -15,6 +15,10 @@ pub enum Property {
     Display,
     /// `position`.
     Position,
+    /// `float`.
+    Float,
+    /// `clear`.
+    Clear,
     /// `top`.
     Top,
     /// `right`.
@@ -157,6 +161,8 @@ impl Property {
         match name.as_str() {
             "display" => Self::Display,
             "position" => Self::Position,
+            "float" => Self::Float,
+            "clear" => Self::Clear,
             "top" => Self::Top,
             "right" => Self::Right,
             "bottom" => Self::Bottom,
@@ -237,6 +243,8 @@ impl Property {
         match self {
             Self::Display => "display",
             Self::Position => "position",
+            Self::Float => "float",
+            Self::Clear => "clear",
             Self::Top => "top",
             Self::Right => "right",
             Self::Bottom => "bottom",

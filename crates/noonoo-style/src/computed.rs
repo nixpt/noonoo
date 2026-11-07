@@ -488,6 +488,32 @@ impl TextDecoration {
     }
 }
 
+/// `float`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Float {
+    /// `none` — normal flow.
+    #[default]
+    None,
+    /// `left`.
+    Left,
+    /// `right`.
+    Right,
+}
+
+/// `clear`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Clear {
+    /// `none`.
+    #[default]
+    None,
+    /// `left`.
+    Left,
+    /// `right`.
+    Right,
+    /// `both`.
+    Both,
+}
+
 /// `cursor`.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Cursor {
@@ -514,6 +540,10 @@ pub struct ComputedStyle {
     pub display: Display,
     /// `position`.
     pub position: Position,
+    /// `float`.
+    pub float: Float,
+    /// `clear`.
+    pub clear: Clear,
     /// `color`.
     pub color: Color,
     /// `background-color`.
@@ -593,6 +623,8 @@ impl Default for ComputedStyle {
         Self {
             display: Display::Inline,
             position: Position::Static,
+            float: Float::None,
+            clear: Clear::None,
             color: Color::BLACK,
             background_color: Color::TRANSPARENT,
             background_image: None,

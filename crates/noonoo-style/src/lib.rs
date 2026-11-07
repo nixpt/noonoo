@@ -55,10 +55,10 @@ use noonoo_css::Stylesheet;
 use noonoo_dom::{Document, NodeId};
 
 pub use computed::{
-    AlignItems, BorderStyle, BoxSizing, CalcTerm, ComputedStyle, Cursor, Dimension, Display, Edges,
-    Extreme, FlexDirection, FlexWrap, FontStyle, Gradient, GradientKind, GradientStop,
-    JustifyContent, Length, LengthOrAuto, LinearDirection, Overflow, Position, RadialShape,
-    RadialSize, TextAlign, TextDecoration, Visibility, WhiteSpace, ZIndex,
+    AlignItems, BorderStyle, BoxSizing, CalcTerm, Clear, ComputedStyle, Cursor, Dimension, Display,
+    Edges, Extreme, FlexDirection, FlexWrap, Float, FontStyle, Gradient, GradientKind,
+    GradientStop, JustifyContent, Length, LengthOrAuto, LinearDirection, Overflow, Position,
+    RadialShape, RadialSize, TextAlign, TextDecoration, Visibility, WhiteSpace, ZIndex,
 };
 
 /// Computed styles for a document, indexed by node.
