@@ -992,18 +992,18 @@ dependencies = [
 
 [[package]]
 name = "noonoo-css"
-version = "0.15.0"
+version = "0.18.0"
 dependencies = [
  "noonoo-parse",
 ]
 
 [[package]]
 name = "noonoo-dom"
-version = "0.15.0"
+version = "0.18.0"
 
 [[package]]
 name = "noonoo-engine"
-version = "0.15.0"
+version = "0.18.0"
 dependencies = [
  "noonoo-css",
  "noonoo-dom",
@@ -1016,18 +1016,18 @@ dependencies = [
 
 [[package]]
 name = "noonoo-events"
-version = "0.15.0"
+version = "0.18.0"
 dependencies = [
  "noonoo-dom",
 ]
 
 [[package]]
 name = "noonoo-geometry"
-version = "0.15.0"
+version = "0.18.0"
 
 [[package]]
 name = "noonoo-html"
-version = "0.15.0"
+version = "0.18.0"
 dependencies = [
  "noonoo-dom",
  "noonoo-parse",
@@ -1035,14 +1035,14 @@ dependencies = [
 
 [[package]]
 name = "noonoo-json"
-version = "0.15.0"
+version = "0.18.0"
 dependencies = [
  "noonoo-parse",
 ]
 
 [[package]]
 name = "noonoo-layout"
-version = "0.15.0"
+version = "0.18.0"
 dependencies = [
  "noonoo-dom",
  "noonoo-geometry",
@@ -1052,7 +1052,7 @@ dependencies = [
 
 [[package]]
 name = "noonoo-paint"
-version = "0.15.0"
+version = "0.18.0"
 dependencies = [
  "noonoo-css",
  "noonoo-geometry",
@@ -1064,11 +1064,11 @@ dependencies = [
 
 [[package]]
 name = "noonoo-parse"
-version = "0.15.0"
+version = "0.18.0"
 
 [[package]]
 name = "noonoo-selectors"
-version = "0.15.0"
+version = "0.18.0"
 dependencies = [
  "noonoo-css",
  "noonoo-parse",
@@ -1076,7 +1076,7 @@ dependencies = [
 
 [[package]]
 name = "noonoo-shell"
-version = "0.15.0"
+version = "0.18.0"
 dependencies = [
  "noonoo-dom",
  "noonoo-engine",
@@ -1089,7 +1089,7 @@ dependencies = [
 
 [[package]]
 name = "noonoo-style"
-version = "0.15.0"
+version = "0.18.0"
 dependencies = [
  "noonoo-css",
  "noonoo-dom",
@@ -1099,11 +1099,11 @@ dependencies = [
 
 [[package]]
 name = "noonoo-text"
-version = "0.15.0"
+version = "0.18.0"
 
 [[package]]
 name = "noonoo-vello"
-version = "0.15.0"
+version = "0.18.0"
 dependencies = [
  "noonoo-geometry",
  "noonoo-paint",
@@ -1112,7 +1112,7 @@ dependencies = [
 
 [[package]]
 name = "noonoo-winit"
-version = "0.15.0"
+version = "0.18.0"
 dependencies = [
  "noonoo-dom",
  "noonoo-engine",

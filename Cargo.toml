@@ -44,16 +44,18 @@ exclude = ["tools/api-snapshot", "integrations/noonoo-xip", "integrations/noonoo
     "integrations/noonoo-winit",]
 
 # Noonoo is a clean-room reimplementation. Nothing here depends on the code of
-# the engine it replaces (bliss-engine / upstream Blitz). Today the workspace
-# has **zero third-party dependencies**; the CSS layer (tokenizer, selectors,
-# value/property model, the cascade) is owned end to end. When the borrowed
-# engines arrive they are ordinary crates.io deps, pinned in one place and kept
-# behind bounded modules: `taffy` (layout), `parley` (text shaping), and — behind
-# features — an `anyrender`/`vello`/`wgpu` paint backend and `winit`. `stylo` is
-# deliberately *not* used. See ARCHITECTURE.md and docs/DEPENDENCIES.md.
+# the engine it replaces (bliss-engine / upstream Blitz), and the engines that
+# would have been borrowed were re-owned instead: the CSS layer (tokenizer,
+# selectors, value/property model, the cascade), layout (block, inline, flex,
+# grid, floats), text line-breaking, the paint command stream, and the font
+# file parser are all workspace crates. The workspace has **zero third-party
+# dependencies**; what is borrowed stays borrowed deliberately - GPU
+# rasterization (vello/wgpu) and windowing (winit) - behind the opt-in
+# integrations in `integrations/`, which are excluded above so the engine's
+# lockfile never carries them. See ARCHITECTURE.md and docs/DEPENDENCIES.md.
 
 [workspace.package]
-version = "0.17.0"
+version = "0.18.0"
 license = "MIT OR Apache-2.0"
 homepage = "https://github.com/nixpt/noonoo"
 repository = "https://github.com/nixpt/noonoo"
@@ -62,33 +64,33 @@ edition = "2024"
 rust-version = "1.89"
 
 [workspace.dependencies]
-noonoo-parse = { path = "crates/noonoo-parse", version = "0.17.0" }
-noonoo-json = { path = "crates/noonoo-json", version = "0.17.0" }
-noonoo-css = { path = "crates/noonoo-css", version = "0.17.0" }
-noonoo-selectors = { path = "crates/noonoo-selectors", version = "0.17.0" }
-noonoo-caison = { path = "crates/noonoo-caison", version = "0.17.0" }
-noonoo-dom = { path = "crates/noonoo-dom", version = "0.17.0" }
-noonoo-events = { path = "crates/noonoo-events", version = "0.17.0" }
-noonoo-text = { path = "crates/noonoo-text", version = "0.17.0" }
-noonoo-motion = { path = "crates/noonoo-motion", version = "0.17.0" }
-noonoo-geometry = { path = "crates/noonoo-geometry", version = "0.17.0" }
-noonoo-style = { path = "crates/noonoo-style", version = "0.17.0" }
-noonoo-layout = { path = "crates/noonoo-layout", version = "0.17.0" }
-noonoo-html = { path = "crates/noonoo-html", version = "0.17.0" }
-noonoo-markdown = { path = "crates/noonoo-markdown", version = "0.17.0" }
-noonoo-csv = { path = "crates/noonoo-csv", version = "0.17.0" }
-noonoo-ini = { path = "crates/noonoo-ini", version = "0.17.0" }
-noonoo-toml = { path = "crates/noonoo-toml", version = "0.17.0" }
-noonoo-xml = { path = "crates/noonoo-xml", version = "0.17.0" }
-noonoo-ttf = { path = "crates/noonoo-ttf", version = "0.17.0" }
-noonoo-svg = { path = "crates/noonoo-svg", version = "0.17.0" }
-noonoo-net = { path = "crates/noonoo-net", version = "0.17.0" }
-noonoo-engine = { path = "crates/noonoo-engine", version = "0.17.0" }
-noonoo-headless = { path = "crates/noonoo-headless", version = "0.17.0" }
-noonoo-hx = { path = "crates/noonoo-hx", version = "0.17.0" }
-noonoo-caps = { path = "crates/noonoo-caps", version = "0.17.0" }
-noonoo-paint = { path = "crates/noonoo-paint", version = "0.17.0" }
-noonoo-shell = { path = "crates/noonoo-shell", version = "0.17.0" }
+noonoo-parse = { path = "crates/noonoo-parse", version = "0.18.0" }
+noonoo-json = { path = "crates/noonoo-json", version = "0.18.0" }
+noonoo-css = { path = "crates/noonoo-css", version = "0.18.0" }
+noonoo-selectors = { path = "crates/noonoo-selectors", version = "0.18.0" }
+noonoo-caison = { path = "crates/noonoo-caison", version = "0.18.0" }
+noonoo-dom = { path = "crates/noonoo-dom", version = "0.18.0" }
+noonoo-events = { path = "crates/noonoo-events", version = "0.18.0" }
+noonoo-text = { path = "crates/noonoo-text", version = "0.18.0" }
+noonoo-motion = { path = "crates/noonoo-motion", version = "0.18.0" }
+noonoo-geometry = { path = "crates/noonoo-geometry", version = "0.18.0" }
+noonoo-style = { path = "crates/noonoo-style", version = "0.18.0" }
+noonoo-layout = { path = "crates/noonoo-layout", version = "0.18.0" }
+noonoo-html = { path = "crates/noonoo-html", version = "0.18.0" }
+noonoo-markdown = { path = "crates/noonoo-markdown", version = "0.18.0" }
+noonoo-csv = { path = "crates/noonoo-csv", version = "0.18.0" }
+noonoo-ini = { path = "crates/noonoo-ini", version = "0.18.0" }
+noonoo-toml = { path = "crates/noonoo-toml", version = "0.18.0" }
+noonoo-xml = { path = "crates/noonoo-xml", version = "0.18.0" }
+noonoo-ttf = { path = "crates/noonoo-ttf", version = "0.18.0" }
+noonoo-svg = { path = "crates/noonoo-svg", version = "0.18.0" }
+noonoo-net = { path = "crates/noonoo-net", version = "0.18.0" }
+noonoo-engine = { path = "crates/noonoo-engine", version = "0.18.0" }
+noonoo-headless = { path = "crates/noonoo-headless", version = "0.18.0" }
+noonoo-hx = { path = "crates/noonoo-hx", version = "0.18.0" }
+noonoo-caps = { path = "crates/noonoo-caps", version = "0.18.0" }
+noonoo-paint = { path = "crates/noonoo-paint", version = "0.18.0" }
+noonoo-shell = { path = "crates/noonoo-shell", version = "0.18.0" }
 
 [profile.release]
 lto = true

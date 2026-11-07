@@ -46,11 +46,13 @@ and a second edit restyles incrementally.
 
 ## Slice 4 — Text + layout
 
-Wire `parley` behind `noonoo-text`; wire `taffy` behind `noonoo-layout`, consuming
-`noonoo-style` + `noonoo-text`.
+Own the layers outright rather than wire them: `noonoo-text` owns line breaking
+(`Shaper` seam for metrics), `noonoo-layout` consumes `noonoo-style` + `noonoo-text`.
+*Done — and the "wire parley/taffy" framing above was superseded: both engines
+were replaced (see Phase B/C below).*
 
 **Done when:** a fixture yields expected box rectangles and line boxes, asserted
-numerically.
+numerically. ✅
 
 ## Slice 5 — Document + events
 

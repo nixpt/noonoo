@@ -68,7 +68,7 @@ a `Send` document and real sub-document support.
 | Document + trust context + sub-document orchestration | `noonoo-engine` | `Engine { dom, origin, subs }` |
 | Size a sub-document viewport from the host node's box | `noonoo-layout` | layout of an embedded viewport |
 | Paint a sub-document inline; render targets; overlays; dirty regions | `noonoo-paint` | `RenderTarget`, overlay/blit, `DirtyRegions` |
-| Host N documents; input routing, focus, IME, lifecycle | `noonoo-shell` | `WindowHost { chrome, content }` |
+| Host N documents; input routing, focus/hover/active, lifecycle | `noonoo-shell` | `Host { layers }` |
 | Navigation gated by a document's origin | `noonoo-net` | `navigation_allowed(origin, target)` |
 
 ## 4. Surface to add

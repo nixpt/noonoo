@@ -67,10 +67,10 @@ Seventeen crates in five tiers. Arrows point *downward only*.
 | `noonoo-html` | HTML tokenizer + tree builder → `noonoo-dom` | — (owned) |
 | `noonoo-dom` | tree, `NodeId`, checked mutation, queries | — |
 | `noonoo-events` | input model, dispatch + **bubbling** | — |
-| `noonoo-text` | line breaking + alignment (shaping behind `Shaper`) | `parley` (via the seam, not yet wired) |
+| `noonoo-text` | line breaking + alignment (shaping behind `Shaper`) | real font metrics arrive via `noonoo-ttf`'s shapers |
 | `noonoo-motion` | springs, velocity-preserving retarget | — (owned) |
 | `noonoo-style` | the cascade: matching → inheritance → computed values | — (owned; replaces `stylo`) |
-| `noonoo-layout` | box layout: block, inline, flex, positioning, overflow & scroll containers | — (owned; replaces `taffy`) |
+| `noonoo-layout` | box layout: block, inline, flex, grid, floats, positioning, overflow & scroll containers | — (owned; replaces `taffy`) |
 | `noonoo-geometry` | `Point` / `Size` / `Rect` | — |
 | `noonoo-markdown` | Markdown (subset) → HTML | — (owned) |
 | `noonoo-csv` | CSV/TSV → HTML table | — (owned) |
@@ -84,15 +84,19 @@ Seventeen crates in five tiers. Arrows point *downward only*.
 | `noonoo-net` | loading: `file:` + `data:` owned; `http` behind a feature | TLS (borrowed, not wired) |
 | `noonoo-engine` | the working document (parse→style→layout) | — (orchestrates) |
 | `noonoo-headless` | tree dump, virtual clock, synthetic input | — |
-| `noonoo-paint` | render command stream (fills, text or glyph outlines, clip) | `anyrender`/`vello` (feature-gated) |
-| `noonoo-shell` | multi-document host: layers, routing, focus, composition | window/GPU (borrowed; the Vello GPU pass is `noonoo-vello`, opt-in) |
+| `noonoo-paint` | render command stream (fills, gradients, layers, text or glyph outlines) | `vello` via `noonoo-vello` (opt-in, outside the workspace) |
+| `noonoo-shell` | multi-document host: layers, routing, focus/hover/active, composition | window/GPU borrowed; see `docs/BACKEND.md` |
 | `noonoo` | umbrella + CLI | — |
 
-**Parsers and the style engine are owned, not borrowed.** The four format crates
-(`noonoo-json`, `noonoo-css`, `noonoo-caison`, `noonoo-html`) are dependency-free,
-and `noonoo-style` runs the cascade itself (`docs/DEPENDENCY-EXIT.md` Phase A) —
-`stylo` is not a dependency. What stays borrowed is only the genuinely huge:
-`noonoo-layout` (`taffy`), `noonoo-text` (`parley`), and the GPU/windowing stack.
+**Parsers, the style engine, layout, and text are owned, not borrowed.** The
+four format crates (`noonoo-json`, `noonoo-css`, `noonoo-caison`, `noonoo-html`)
+are dependency-free; `noonoo-style` runs the cascade itself (Phase A) — `stylo`
+is not a dependency; `noonoo-layout` owns block, inline, flex, grid, and floats
+(Phase B) — `taffy` is not a dependency; and `noonoo-text` owns line breaking
+while real font metrics arrive through `noonoo-ttf` behind the `Shaper` seam
+(Phase C) — `parley` is not a dependency. What stays borrowed is only the
+genuinely huge: font shaping (GSUB/GPOS, complex scripts), GPU rasterization,
+and platform windowing — each behind an opt-in integration (`docs/BACKEND.md`).
 
 ## Data flow
 

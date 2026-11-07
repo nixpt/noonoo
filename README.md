@@ -12,9 +12,11 @@ that a UI framework (arniko) and a browser (surfer) build on.
 
 > **Clean room.** No code here is copied from `bliss-engine`, Blitz, or any other
 > rendering engine. Noonoo is written from behaviour and specification. The
-> third-party engines it depends on (Servo's *stylo*, *taffy*, *parley*,
-> *anyrender/vello*, *winit*) are ordinary crates.io dependencies, pinned in one
-> place and reached through one crate each — never vendored, never forked.
+> engines it *replaces* (Servo's *stylo*, *taffy*, *parley*) are not
+> dependencies at all — they were re-owned as small crates. What is borrowed is
+> borrowed deliberately (GPU rasterization, windowing): ordinary crates.io
+> dependencies, pinned in one place, reached through one crate each, and kept
+> out of the default build entirely.
 
 ## Crates
 
@@ -65,10 +67,14 @@ capability-gated DOM. See
 
 ## Status
 
-**Pre-alpha, scaffolding.** The workspace compiles with **zero third-party
-dependencies**; the engine backends are declared as features and wired in later
-slices. See [`docs/ROADMAP.md`](docs/ROADMAP.md) and
-[`ARCHITECTURE.md`](ARCHITECTURE.md).
+**Working engine, pre-alpha API.** The whole pipeline runs on owned code —
+parse → cascade → layout → paint — with **zero third-party dependencies** in
+the engine's lockfile. Layout covers block, inline, flex, grid, and floats;
+the cascade covers custom properties, the math functions, viewport units, and
+gradients; fonts load via `@font-face`; `:hover`/`:focus`/`:active` style for
+real. The GPU and window backends are opt-in integrations outside the
+workspace (`docs/BACKEND.md`). The API is pre-1.0 and still moving.
+See [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Building
 
@@ -106,6 +112,12 @@ noonoo --svg icon.svg       # SVG subset → paint commands
 noonoo --caison app.caison  # parse CAISON, print its JSON projection
 ```
 
+And a real window (the opt-in integration, GPU-composited):
+
+```sh
+cargo run --example showcase --manifest-path integrations/noonoo-winit/Cargo.toml
+```
+
 The workspace MSRV is **1.89**. CI checks it explicitly.
 
 ## Docs
@@ -118,6 +130,8 @@ The workspace MSRV is **1.89**. CI checks it explicitly.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — slices
 - [`docs/FORMATS.md`](docs/FORMATS.md) — file formats: DOM vs. value model, and Markdown
 - [`docs/FONTS.md`](docs/FONTS.md) — the font layer: what Noonoo owns, the seams, what is borrowed
+- [`docs/BACKEND.md`](docs/BACKEND.md) — the GPU and window passes (opt-in, outside the workspace)
+- [`docs/SHELL.md`](docs/SHELL.md) — the multi-document host: layers, routing, composition
 - [`docs/BACKEND.md`](docs/BACKEND.md) — GPU & window backends: the opt-in Vello pass and the winit window pass
 - [`docs/XIP.md`](docs/XIP.md) — capability-gated DOM: the owned seam and the opt-in XIP adapter
 

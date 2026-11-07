@@ -61,18 +61,21 @@ The subset (v1) to target:
   `flex-*`, `gap`, `align-items`/`justify-content`, `color`, `background-*`,
   `font-*` (incl. line-height), `text-align` / `text-decoration`,
   `overflow`, `opacity`, `border-radius`, `z-index`, `visibility`, `cursor`.
-- **Non-goals (v1):** `@supports`, animations/keyframes, `grid` (own later),
-  full custom-property cascade, media queries (parsed, ignored), SVG CSS.
+- **Non-goals (v1):** `@supports`, animations/keyframes, grid *containers'* full
+  feature set (tracks, placement, and `fr` are owned in `noonoo-layout`; older
+  grid sugar like named areas is not), media queries (parsed, ignored), SVG CSS.
+  Custom properties landed since (`var()`, inheritance, cycles, fallbacks).
 
 Already built: the **tokenizer + rule splitter** (`noonoo-css`). Remaining:
 selector model + specificity, a property/value model, the cascade + inheritance,
 computed values, and a default UA stylesheet.
 
-### taffy — **OWN** ✅
+### taffy — **OWN** ✅ (done: block, inline, flex, grid, floats)
 Only 3 crates (taffy is nearly standalone), but the code to replace is real:
 block + inline + flexbox first, grid later. A focused box-layout engine is
 ~3–5k LOC. Owning it also lets layout consume our CSS values directly (no
-`stylo_taffy` bridge).
+`stylo_taffy` bridge). *All of it landed — including `fr` tracks, placement,
+auto-placement, floats with formatting contexts, and alignment.*
 
 ### parley (+ fontique/swash/skrifa) — **PARTIAL** ⚠️ keep shaping
 Shaping (OpenType features, complex scripts, BiDi) is a 100k+-LOC swamp and a
@@ -122,15 +125,15 @@ live; the bought ones are solved problems nobody wins by re-deriving.
 
 ## 4. Phased plan
 
-| Phase | Removes | Deliverable | Done when |
-|-------|---------|-------------|-----------|
-| **A. CSS engine** | **stylo (108)**, cssparser, selectors | `noonoo-css` grows selectors + specificity + a property/value model; `noonoo-style` owns the cascade, inheritance, computed values, UA stylesheet | a fixture's computed `color`/`display`/`margin` are asserted from our engine, with **stylo absent from `Cargo.lock`** |
-| B. Layout | taffy (3) | `noonoo-layout`: block + inline + flex, consuming `noonoo-style` values | a fixture yields expected box rects |
-| C. Text | part of parley | `noonoo-text`: line-breaking + text-align, shaping delegated | wrapped text lays out to expected lines |
-| D. Paint | (none) | `noonoo-paint` command stream + a recording backend; keep vello/wgpu | a fixture's commands match a golden file |
-| E. Net / SVG | reqwest (66) / usvg (51) | thin HTTP client over rustls; SVG subset | optional |
+| Phase | Removes | Deliverable | Done when | Status |
+|-------|---------|-------------|-----------|--------|
+| **A. CSS engine** | **stylo (108)**, cssparser, selectors | `noonoo-css` grows selectors + specificity + a property/value model; `noonoo-style` owns the cascade, inheritance, computed values, UA stylesheet | a fixture's computed `color`/`display`/`margin` are asserted from our engine, with **stylo absent from `Cargo.lock`** | ✅ |
+| B. Layout | taffy (3) | `noonoo-layout`: block + inline + flex, consuming `noonoo-style` values | a fixture yields expected box rects | ✅ (grid + floats too) |
+| C. Text | part of parley | `noonoo-text`: line-breaking + text-align, shaping delegated | wrapped text lays out to expected lines | ✅ (+ `noonoo-ttf` metrics behind the seam) |
+| D. Paint | (none) | `noonoo-paint` command stream + a recording backend; keep vello/wgpu | a fixture's commands match a golden file | ✅ (JSON is the recording backend; GPU + window passes are opt-in) |
+| E. Net / SVG | reqwest (66) / usvg (51) | thin HTTP client over rustls; SVG subset | optional | ✅ (`file:`/`data:` owned, `http` behind a feature; SVG subset owned) |
 
-Phase A is the headline and the biggest single win.
+Phase A was the headline and the biggest single win; all five phases are done.
 
 ## 5. Target after Phase A
 

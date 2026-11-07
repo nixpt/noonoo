@@ -4,10 +4,10 @@
 //! splitter, and the value & property model. The **selectors** live in
 //! `noonoo-selectors`, and the cascade in `noonoo-style`.
 //!
-//! Scope note: this owns *syntax* and *value/property typing*. It
-//! does not yet own the cascade (merging declarations by origin, specificity and
-//! order, then inheritance and computed values), which `noonoo-style` builds on
-//! top — see `docs/DEPENDENCY-EXIT.md` (Phase A).
+//! Scope note: this owns *syntax* and *value/property typing* only. The
+//! cascade — merging declarations by origin, specificity, and order, then
+//! inheritance and computed values — is deliberately not here: `noonoo-style`
+//! builds it on top (see `docs/DEPENDENCY-EXIT.md`, Phase A).
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
