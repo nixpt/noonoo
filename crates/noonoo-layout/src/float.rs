@@ -172,7 +172,7 @@ pub(crate) fn place(ctx: &mut Ctx<'_>, node: NodeId, content_x: f32, content_wid
     };
     let border_y = y + margin.top;
 
-    let height = ctx.layout_element(node, border_x, border_y, available_for_layout);
+    let height = ctx.layout_element(node, border_x, border_y, available_for_layout, None);
     ctx.floats_mut().push(
         side,
         Rect::new(

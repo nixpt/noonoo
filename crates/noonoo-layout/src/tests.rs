@@ -206,6 +206,83 @@ fn a_float_among_inline_content_shapes_the_lines() {
 }
 
 #[test]
+fn align_items_stretches_items_to_the_line_height() {
+    let (doc, tree) = page(
+        r#"<div id="parent"><div id="a"></div><div id="b"></div></div>"#,
+        "#parent { display: flex } #a { width: 100px; height: 40px } #b { width: 100px }",
+        400.0,
+    );
+    // `b` has an auto height, so `stretch` (the default) fills the line.
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.height, 40.0);
+}
+
+#[test]
+fn an_explicit_height_beats_stretch() {
+    let (doc, tree) = page(
+        r#"<div id="parent"><div id="a"></div><div id="b"></div></div>"#,
+        "#parent { display: flex } #a { width: 100px; height: 40px }
+         #b { width: 100px; height: 10px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.height, 10.0);
+}
+
+#[test]
+fn align_items_positions_within_the_line() {
+    let (doc, tree) = page(
+        r#"<div id="parent"><div id="c"></div><div id="e"></div></div>"#,
+        "#parent { display: flex; align-items: center }
+         #c { width: 100px; height: 10px } #e { width: 100px; height: 40px }
+         #e { align-self: flex-end }",
+        400.0,
+    );
+    // The line is 40 tall: the centered item sits at (40 - 10) / 2, the
+    // `flex-end` one at the bottom (its own height is the line height).
+    assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.y, 15.0);
+    assert_eq!(tree.get(id(&doc, "e")).unwrap().rect.y, 0.0);
+}
+
+#[test]
+fn align_self_overrides_align_items() {
+    let (doc, tree) = page(
+        r#"<div id="parent"><div id="a"></div><div id="b"></div></div>"#,
+        "#parent { display: flex; align-items: center }
+         #a { width: 100px; height: 40px }
+         #b { width: 100px; align-self: stretch }",
+        400.0,
+    );
+    // The container centers, but `b` asks to stretch — and it wins.
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.height, 40.0);
+}
+
+#[test]
+fn grid_items_stretch_to_their_area() {
+    let (doc, tree) = page(
+        r#"<div id="parent"><div id="a"></div><div id="b"></div></div>"#,
+        "#parent { display: grid; grid-template-columns: 1fr 1fr;
+                  grid-auto-rows: 40px }
+         #a, #b { width: auto }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.height, 40.0);
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.height, 40.0);
+}
+
+#[test]
+fn grid_align_items_positions_within_the_area() {
+    let (doc, tree) = page(
+        r#"<div id="parent"><div id="a"></div><div id="b"></div></div>"#,
+        "#parent { display: grid; grid-template-columns: 1fr 1fr;
+                  grid-template-rows: 60px; align-items: center }
+         #a { height: 20px }
+         #b { height: 20px; align-self: end }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.y, 20.0);
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.y, 40.0);
+}
+
+#[test]
 fn grid_columns_share_the_free_space() {
     let (doc, tree) = page(
         r#"<div id="parent"><div id="a"></div><div id="b"></div></div>"#,

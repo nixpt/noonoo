@@ -25,7 +25,7 @@
 use std::collections::HashSet;
 
 use noonoo_dom::NodeId;
-use noonoo_style::{ComputedStyle, GridLine, Track};
+use noonoo_style::{AlignItems, ComputedStyle, GridLine, Track};
 
 use crate::Ctx;
 use crate::float;
@@ -229,24 +229,18 @@ pub(crate) fn layout_grid_children(
     };
 
     // --- row sizing (measure: real layout, thrown away) ----------------------
-    let measure_base = ctx.tree.boxes.len();
     let mut heights = Vec::with_capacity(placements.len());
     for placed in &placements {
         let margins = resolve::margins(&ctx.style(placed.node).margin, content_width);
-        heights.push(ctx.layout_element(
+        heights.push(ctx.measure_height(
             placed.node,
             column_x(placed.column) + margins.left,
             content_y,
             area_width(placed.column, placed.column_span),
+            None,
         ));
     }
-    // Discard the measurements; the final pass re-lays everything in place.
-    ctx.tree.boxes.truncate(measure_base);
-    ctx.tree.index.retain(|_, &mut index| index < measure_base);
-    // Measured items may have enqueued out-of-flow descendants that the final
-    // pass will enqueue again.
-    let mut seen = HashSet::new();
-    ctx.pending.retain(|node| seen.insert(*node));
+    ctx.prune_pending();
 
     let mut row_heights: Vec<f32> = row_tracks
         .iter()
@@ -276,14 +270,29 @@ pub(crate) fn layout_grid_children(
     };
 
     // --- placement -----------------------------------------------------------
+    // Each item aligns within its area's height: `stretch` (the default)
+    // fills it, the others keep the item's natural height and position it.
+    let area_height = |row: usize, span: usize| -> f32 {
+        row_heights[row..row + span].iter().sum::<f32>() + row_gap * (span.saturating_sub(1)) as f32
+    };
     let mut indices = Vec::new();
-    for placed in &placements {
-        let margins = resolve::margins(&ctx.style(placed.node).margin, content_width);
+    for (index, placed) in placements.iter().enumerate() {
+        let item_style = ctx.style(placed.node);
+        let align = item_style.align_self.unwrap_or(style.align_items);
+        let margins = resolve::margins(&item_style.margin, content_width);
+        let area = area_height(placed.row, placed.row_span);
+        let (y, definite) = match align {
+            AlignItems::Stretch => (row_y(placed.row), Some(area)),
+            AlignItems::Start | AlignItems::Baseline => (row_y(placed.row), None),
+            AlignItems::Center => (row_y(placed.row) + (area - heights[index]) / 2.0, None),
+            AlignItems::End => (row_y(placed.row) + area - heights[index], None),
+        };
         ctx.layout_element(
             placed.node,
             column_x(placed.column) + margins.left,
-            row_y(placed.row) + margins.top,
+            y + margins.top,
             area_width(placed.column, placed.column_span),
+            definite,
         );
         if let Some(index) = ctx.tree_index(placed.node) {
             indices.push(index);

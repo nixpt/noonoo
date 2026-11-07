@@ -1,11 +1,18 @@
 //! Flexbox: row and column, grow/shrink, `justify-content`, gaps, and — for a
 //! row — `flex-wrap` (items spill onto additional lines).
 //!
-//! v1 places items on the cross-start edge (no `align-items` cross positioning
-//! yet); column flex stacks natural heights.
+//! Rows align items on the cross axis per `align-items`/`align-self`:
+//! `stretch` (the default) fills the line height when the item's height is
+//! auto — an explicit height wins — and `start`/`center`/`end` position the
+//! item (`baseline` behaves as `start`). Column flex stretches items across
+//! the container as always; cross positioning on columns is not applied yet.
+//! Line heights come from a measure pass (real layout, discarded) so items
+//! can be positioned within them.
 
 use noonoo_dom::NodeId;
-use noonoo_style::{BoxSizing, ComputedStyle, Dimension, FlexDirection, FlexWrap, JustifyContent};
+use noonoo_style::{
+    AlignItems, BoxSizing, ComputedStyle, Dimension, FlexDirection, FlexWrap, JustifyContent,
+};
 
 use crate::{Ctx, resolve};
 
@@ -55,8 +62,13 @@ fn layout_column(
     let mut y = content_y;
     for &item in items {
         let margin = resolve::margins(&ctx.style(item).margin, content_width);
-        let height =
-            ctx.layout_element(item, content_x + margin.left, y + margin.top, content_width);
+        let height = ctx.layout_element(
+            item,
+            content_x + margin.left,
+            y + margin.top,
+            content_width,
+            None,
+        );
         if let Some(index) = ctx.tree_index(item) {
             indices.push(index);
         }
@@ -217,18 +229,46 @@ fn layout_row(
         let remaining = (content_width - used).max(0.0);
         let (start, extra) = justify_offset(style.justify_content, remaining, n);
 
-        let mut x = content_x + start;
-        let mut line_height = 0.0_f32;
+        // Cross sizes first: an item is positioned (and stretched) within the
+        // line, so its height must be known before it is placed. The
+        // measurement is real layout, thrown away.
+        let mut cross = Vec::with_capacity(n);
+        let mut measure_x = content_x + start;
         for (k, &i) in line.iter().enumerate() {
             let margin = resolve::margins(&ctx.style(items[i]).margin, content_width);
+            cross.push(ctx.measure_height(
+                items[i],
+                measure_x + margin.left,
+                cursor_y,
+                line_bases[k],
+                None,
+            ));
+            measure_x += line_bases[k] + gap + extra;
+        }
+        ctx.prune_pending();
+        let line_height = cross.iter().copied().fold(0.0_f32, f32::max);
+
+        let mut x = content_x + start;
+        for (k, &i) in line.iter().enumerate() {
+            let item_style = ctx.style(items[i]);
+            let align = item_style.align_self.unwrap_or(style.align_items);
+            let margin = resolve::margins(&item_style.margin, content_width);
+            // `stretch` fills the line (when the item's height is auto);
+            // otherwise the item keeps its natural height and is positioned.
+            let (y, definite) = match align {
+                AlignItems::Stretch => (cursor_y, Some(line_height)),
+                AlignItems::Start | AlignItems::Baseline => (cursor_y, None),
+                AlignItems::Center => (cursor_y + (line_height - cross[k]) / 2.0, None),
+                AlignItems::End => (cursor_y + line_height - cross[k], None),
+            };
             ctx.layout_element(
                 items[i],
                 x + margin.left,
-                cursor_y + margin.top,
+                y + margin.top,
                 line_bases[k],
+                definite,
             );
             if let Some(index) = ctx.tree_index(items[i]) {
-                line_height = line_height.max(ctx.box_height(index));
                 indices.push(index);
             }
             x += line_bases[k] + gap + extra;

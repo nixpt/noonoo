@@ -136,7 +136,7 @@ pub(crate) fn layout_block_children(
                 Some(previous) => margin::collapse(previous, margin.top),
                 None => margin.top,
             });
-            ctx.layout_element(child, content_x + margin.left, cursor, content_width);
+            ctx.layout_element(child, content_x + margin.left, cursor, content_width, None);
             if let Some(index) = ctx.tree_index(child) {
                 indices.push(index);
             }
@@ -155,7 +155,8 @@ pub(crate) fn layout_block_children(
             cursor += gap;
         }
 
-        let height = ctx.layout_element(child, content_x + margin.left, cursor, content_width);
+        let height =
+            ctx.layout_element(child, content_x + margin.left, cursor, content_width, None);
         if let Some(index) = ctx.tree_index(child) {
             indices.push(index);
         }

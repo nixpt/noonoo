@@ -10,7 +10,8 @@
 //!   container.
 //! - **Inline flow** — text and inline-level boxes wrapped into lines.
 //! - **Flex** — row/column, `flex-grow`/`flex-shrink`, `justify-content`,
-//!   `align-items`, gaps, and row `flex-wrap`.
+//!   `align-items`/`align-self` cross alignment and stretch, gaps, and row
+//!   `flex-wrap`.
 //! - **Positioning** — `position: relative` (offsets its subtree without moving
 //!   siblings) and `position: absolute` / `fixed` (out of flow, placed against
 //!   the nearest positioned ancestor's padding box — the viewport for `fixed`).
@@ -28,8 +29,9 @@
 //!   sized by `grid-auto-rows`/`grid-auto-columns`, and a container whose auto
 //!   height is its rows. Columns size against the definite width (fixed first,
 //!   `fr` shares the leftover, otherwise `auto` tracks stretch); rows size to
-//!   content. Items fill their area on the inline axis and sit at its top;
-//!   loose text in a grid container is dropped (no anonymous items yet).
+//!   content. Items stretch to their area's height (`align-items`/`align-self`
+//!   position within it); loose text in a grid container is dropped (no
+//!   anonymous items yet).
 //! - **Vertical margin collapsing** — adjacent siblings share the larger of
 //!   their facing margins; a block collapses its top/bottom margin through its
 //!   first/last child when no border or padding separates them; and an empty
@@ -55,8 +57,9 @@
 //!
 //! Full stacking contexts (a positioned box is ordered within its
 //! parent, not hoisted), scrollbar *rendering* (content scrolls; no bars are
-//! drawn), `align-items`/`justify-items` positioning in grid areas, and writing
-//! modes. Floats are ignored for flex and grid items, per CSS. Percentage
+//! drawn), `align-items` cross positioning on flex *columns*, `justify-items`
+//! positioning in grid areas, and writing modes. Floats are ignored for flex
+//! and grid items, per CSS. Percentage
 //! tracks on an indefinite axis behave as `auto`. Absolute boxes whose width or height is `auto` fall
 //! back to the containing block when only the trailing inset (`right`/`bottom`)
 //! is set. Text is measured through the [`Shaper`] seam — the heuristic
@@ -72,7 +75,7 @@ mod grid;
 mod margin;
 mod resolve;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use noonoo_dom::{Document, NodeData, NodeId};
 use noonoo_geometry::{Point, Rect, Size};
@@ -545,11 +548,6 @@ impl Ctx<'_> {
         self.tree.index.get(&node).copied()
     }
 
-    /// The border-box height of the box at `index`.
-    pub fn box_height(&self, index: usize) -> f32 {
-        self.tree.boxes[index].rect.height
-    }
-
     pub fn push(&mut self, b: LayoutBox) -> usize {
         let index = self.tree.boxes.len();
         if let Some(node) = b.node {
@@ -614,12 +612,17 @@ impl Ctx<'_> {
     ///
     /// The vertical margins are *not* applied here: the caller has already
     /// collapsed them and positioned the border box (see [`crate::margin`]).
+    ///
+    /// `definite_height` is a height the container has already decided for the
+    /// item — a stretched flex/grid item fills it when the item's own `height`
+    /// is `auto`. `None` sizes to content, as block flow does.
     pub fn layout_element(
         &mut self,
         node: NodeId,
         border_x: f32,
         border_y: f32,
         available_width: f32,
+        definite_height: Option<f32>,
     ) -> f32 {
         let style = self.style(node).clone();
         if style.display == Display::None {
@@ -747,7 +750,11 @@ impl Ctx<'_> {
             BoxSizing::ContentBox => height + vertical,
         };
         let specified_height = resolve::definite(&style.height).map(to_border_box_height);
-        let mut border_box_height = specified_height.unwrap_or(content_height + vertical);
+        let mut border_box_height = match specified_height {
+            Some(height) => height,
+            // A stretched item fills the height its container decided.
+            None => definite_height.unwrap_or(content_height + vertical),
+        };
         if let Some(maximum) = resolve::definite(&style.max_height) {
             border_box_height = border_box_height.min(to_border_box_height(maximum));
         }
@@ -789,6 +796,33 @@ impl Ctx<'_> {
         let _ = index;
 
         border_box_height
+    }
+
+    /// Measure a node's laid-out border-box height by laying it out at
+    /// `(x, y)` and discarding the boxes — for flows that must know heights
+    /// before they place (flex lines, grid rows). Out-of-flow descendants
+    /// discovered during measurement are enqueued; call [`Ctx::prune_pending`]
+    /// after a measurement pass.
+    pub fn measure_height(
+        &mut self,
+        node: NodeId,
+        x: f32,
+        y: f32,
+        available_width: f32,
+        definite_height: Option<f32>,
+    ) -> f32 {
+        let base = self.tree.boxes.len();
+        let height = self.layout_element(node, x, y, available_width, definite_height);
+        self.tree.boxes.truncate(base);
+        self.tree.index.retain(|_, &mut index| index < base);
+        height
+    }
+
+    /// Drop out-of-flow nodes enqueued more than once (measurement lays items
+    /// out, then the real pass lays them again).
+    pub fn prune_pending(&mut self) {
+        let mut seen = HashSet::new();
+        self.pending.retain(|node| seen.insert(*node));
     }
 
     /// Lay out an out-of-flow box (`position: absolute`/`fixed`) against its
