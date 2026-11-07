@@ -1213,6 +1213,51 @@ mod tests {
     }
 
     #[test]
+    fn a_realistic_page_survives_the_whole_pipeline() {
+        // The review's closing suggestion (`docs/REVIEW-2026-11-07.md`):
+        // test realistic content — media rules, flex buttons, entities,
+        // tables — not only per-feature fixtures.
+        let list = render(
+            r#"<nav class="bar"><button>Save &amp; exit</button></nav>
+    <h1>H<br>i</h1>
+    <table><tr><td>a<td>b</tr></table>
+    <p class="greeting">&copy; 2026 &mdash; hello</p>"#,
+            "nav { display: flex; gap: 8px }
+                 button { padding: 8px 16px; white-space: nowrap }
+                 h1 { font-size: 2em; margin: 0 }
+                 table { border-collapse: collapse } td { border: 1px solid #000 }
+                 @media (min-width: 100px) { .greeting { color: blue } }
+                 @media (min-width: 100000px) { .greeting { color: red } }",
+        );
+        let texts: Vec<&str> = list
+            .commands()
+            .iter()
+            .filter_map(|command| match command {
+                Command::DrawText { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        // Entities decode, `<br>` separates the heading, cells separate, and
+        // no empty run appears anywhere. Inline runs paint one word per box,
+        // so sentences assert word-wise.
+        assert_eq!(texts.len(), 11, "{texts:?}");
+        assert!(texts.contains(&"&"), "the `&amp;` decodes");
+        let a = texts.contains(&"a") && texts.contains(&"b");
+        assert!(a, "table cells stay separate: {texts:?}");
+        assert!(texts.iter().all(|t| !t.is_empty()));
+        // The matching media rule wins; the impossible one contributes
+        // nothing.
+        assert!(
+            list.commands().iter().any(|command| matches!(
+                command,
+                Command::DrawText { text, color, .. }
+                    if *text == "©" && *color == Color::rgb(0, 0, 255)
+            )),
+            "{texts:?}"
+        );
+    }
+
+    #[test]
     fn empty_text_runs_are_dropped() {
         // Finding 7 of docs/REVIEW-2026-11-07.md: a `<br>` used to emit a
         // `draw-text` with empty text; an `<img>` without `alt`, too.
