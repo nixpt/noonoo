@@ -1,6 +1,6 @@
 //! Resolving computed values (percentages included) against a containing block.
 
-use noonoo_style::{ComputedStyle, Dimension, Edges, Length, LengthOrAuto};
+use noonoo_style::{ComputedStyle, Dimension, Edges, Length, LengthOrAuto, Overflow};
 
 /// Resolve a dimension against a reference length; `auto` is `None`.
 pub fn dimension(value: Dimension, reference: f32) -> Option<f32> {
@@ -44,6 +44,11 @@ pub fn paddings(edges: &Edges<Length>, reference: f32) -> Edges<f32> {
         bottom: length(edges.bottom, reference).max(0.0),
         left: length(edges.left, reference).max(0.0),
     }
+}
+
+/// Whether a box clips its content: any `overflow` other than `visible`.
+pub(crate) fn clips(style: &ComputedStyle) -> bool {
+    !matches!(style.overflow_x, Overflow::Visible) || !matches!(style.overflow_y, Overflow::Visible)
 }
 
 /// Resolve border widths, collapsing hidden borders to zero.

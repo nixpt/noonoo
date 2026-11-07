@@ -70,7 +70,7 @@ Seventeen crates in five tiers. Arrows point *downward only*.
 | `noonoo-text` | line breaking + alignment (shaping behind `Shaper`) | `parley` (via the seam, not yet wired) |
 | `noonoo-motion` | springs, velocity-preserving retarget | — (owned) |
 | `noonoo-style` | the cascade: matching → inheritance → computed values | — (owned; replaces `stylo`) |
-| `noonoo-layout` | box layout: block, inline, flex, positioning | — (owned; replaces `taffy`) |
+| `noonoo-layout` | box layout: block, inline, flex, positioning, overflow | — (owned; replaces `taffy`) |
 | `noonoo-geometry` | `Point` / `Size` / `Rect` | — |
 | `noonoo-markdown` | Markdown (subset) → HTML | — (owned) |
 | `noonoo-csv` | CSV/TSV → HTML table | — (owned) |
@@ -83,7 +83,7 @@ Seventeen crates in five tiers. Arrows point *downward only*.
 | `noonoo-net` | loading: `file:` + `data:` owned; `http` behind a feature | TLS (borrowed, not wired) |
 | `noonoo-engine` | the working document (parse→style→layout) | — (orchestrates) |
 | `noonoo-headless` | tree dump, virtual clock, synthetic input | — |
-| `noonoo-paint` | render command stream, scene effects, overlays | `anyrender`/`vello` (feature-gated) |
+| `noonoo-paint` | render command stream (fills, text, clip), scene effects, overlays | `anyrender`/`vello` (feature-gated) |
 | `noonoo-shell` | multi-document host: layers, routing, focus, composition | window/GPU (borrowed, feature-gated) |
 | `noonoo` | umbrella + CLI | — |
 

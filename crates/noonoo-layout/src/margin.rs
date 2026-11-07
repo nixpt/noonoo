@@ -50,9 +50,14 @@ pub(crate) fn effective_margins(ctx: &Ctx<'_>, node: NodeId, width: f32) -> Vert
     let margin = resolve::margins(&style.margin, width);
     let padding = resolve::paddings(&style.padding, width);
     let border = resolve::borders(style);
-    let top_open = border.top == 0.0 && padding.top == 0.0;
-    let bottom_open =
-        border.bottom == 0.0 && padding.bottom == 0.0 && matches!(style.height, Dimension::Auto);
+    // A clipping box is a formatting context: its margins never collapse with
+    // its children's.
+    let clipping = resolve::clips(style);
+    let top_open = border.top == 0.0 && padding.top == 0.0 && !clipping;
+    let bottom_open = border.bottom == 0.0
+        && padding.bottom == 0.0
+        && matches!(style.height, Dimension::Auto)
+        && !clipping;
 
     let horizontal =
         margin.left + margin.right + padding.left + padding.right + border.left + border.right;
@@ -150,6 +155,7 @@ fn is_collapse_through(ctx: &Ctx<'_>, node: NodeId, width: f32) -> bool {
         || padding.top != 0.0
         || padding.bottom != 0.0
         || !matches!(style.height, Dimension::Auto)
+        || resolve::clips(style)
     {
         return false;
     }

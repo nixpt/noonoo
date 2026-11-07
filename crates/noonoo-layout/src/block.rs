@@ -261,6 +261,7 @@ pub(crate) fn layout_inline_run(
                 margin: no_edges(),
                 padding: no_edges(),
                 border: no_edges(),
+                clips: false,
                 children: Vec::new(),
             });
             indices.push(index);

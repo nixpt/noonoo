@@ -1,9 +1,9 @@
 //! # noonoo-paint
 //!
 //! Turn a [`LayoutTree`] into a backend-neutral **command stream**: fill a box,
-//! draw a border side, draw a text run and its decoration bars. The stream is the
-//! artifact — it can be diffed (as JSON), fed to a GPU rasterizer, or recorded
-//! by a test without a screen.
+//! draw a border side, draw a text run and its decoration bars, and clip a
+//! subtree. The stream is the artifact — it can be diffed (as JSON), fed to a
+//! GPU rasterizer, or recorded by a test without a screen.
 //!
 //! This is Phase D of the dependency-exit plan (`docs/DEPENDENCY-EXIT.md`). The
 //! GPU backend (`anyrender`/`vello`) is deliberately **not** wired yet: this
@@ -49,6 +49,13 @@ pub enum Command {
         /// Text colour.
         color: Color,
     },
+    /// Clip subsequent commands to a rectangle until the matching [`Command::PopClip`].
+    PushClip {
+        /// The clip rectangle (a clipping box's padding box).
+        rect: Rect,
+    },
+    /// End the most recent clip.
+    PopClip,
 }
 
 /// An ordered list of [`Command`]s.
@@ -144,8 +151,16 @@ fn paint_box(index: usize, boxes: &[LayoutBox], styles: &Styles, out: &mut Comma
         }
     }
 
+    if b.clips {
+        out.0.push(Command::PushClip {
+            rect: b.padding_box(),
+        });
+    }
     for &child in &b.children {
         paint_box(child, boxes, styles, out);
+    }
+    if b.clips {
+        out.0.push(Command::PopClip);
     }
 }
 
@@ -225,6 +240,14 @@ fn command_json(command: &Command) -> Json {
             ("font_size", Json::Number(*font_size as f64)),
             ("color", Json::String(color_hex(*color))),
         ]),
+        Command::PushClip { rect } => object(vec![
+            ("op", Json::String("push-clip".into())),
+            ("x", Json::Number(rect.x as f64)),
+            ("y", Json::Number(rect.y as f64)),
+            ("width", Json::Number(rect.width as f64)),
+            ("height", Json::Number(rect.height as f64)),
+        ]),
+        Command::PopClip => object(vec![("op", Json::String("pop-clip".into()))]),
     }
 }
 
@@ -327,5 +350,24 @@ mod tests {
                 .iter()
                 .any(|c| matches!(c, Command::FillRect { .. }))
         );
+    }
+
+    #[test]
+    fn overflow_hidden_emits_a_clip() {
+        let list = render(
+            r#"<div id="clip"><div id="inner">x</div></div>"#,
+            "#clip { width: 50px; height: 20px; overflow: hidden }",
+        );
+        assert!(
+            list.commands()
+                .iter()
+                .any(|c| matches!(c, Command::PushClip { .. }))
+        );
+        assert!(
+            list.commands()
+                .iter()
+                .any(|c| matches!(c, Command::PopClip))
+        );
+        assert!(list.to_json().to_string().contains("push-clip"));
     }
 }

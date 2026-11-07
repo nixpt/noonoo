@@ -19,6 +19,9 @@
 //!   their facing margins; a block collapses its top/bottom margin through its
 //!   first/last child when no border or padding separates them; and an empty
 //!   block's two margins become one that joins the surrounding chain.
+//! - **Overflow** — a box with a non-`visible` `overflow` clips its content to
+//!   its padding box, hit-tests within that clip, and establishes a formatting
+//!   context (so its margins do not collapse with its children's).
 //! - Width: `auto` / px / percentage (and stretch between `left`+`right`);
 //!   height: `auto` / px / percentage of the containing block.
 //! - `box-sizing`, margins, padding, and borders, resolved to absolute pixels.
@@ -26,7 +29,8 @@
 //! ## What it does not (yet)
 //!
 //! Floats, `grid`, `z-index` paint ordering (positioned boxes paint in tree
-//! order), `overflow` clipping, and writing modes. Absolute boxes whose width or
+//! order), per-box *scroll offsets* (a clipping box clips, but the shell still
+//! scrolls whole documents), and writing modes. Absolute boxes whose width or
 //! height is `auto` fall back to the containing block when only the trailing
 //! inset (`right`/`bottom`) is set. Text is measured through the [`Shaper`] seam
 //! — a heuristic stands in until `noonoo-text` brings real shaping
@@ -80,6 +84,8 @@ pub struct LayoutBox {
     pub padding: Edges<f32>,
     /// Resolved border widths.
     pub border: Edges<f32>,
+    /// Whether this box clips its content (a non-`visible` `overflow`).
+    pub clips: bool,
     /// Child box indices.
     pub children: Vec<usize>,
 }
@@ -151,7 +157,7 @@ impl LayoutTree {
     pub fn hit_test(&self, point: Point) -> Option<NodeId> {
         let mut best: Option<(usize, NodeId)> = None;
         for &root in self.roots.iter().rev() {
-            self.hit_box(root, point, 0, &mut best);
+            self.hit_box(root, point, 0, None, &mut best);
         }
         best.map(|(_, node)| node)
     }
@@ -161,8 +167,13 @@ impl LayoutTree {
         index: usize,
         point: Point,
         depth: usize,
+        clip: Option<Rect>,
         best: &mut Option<(usize, NodeId)>,
     ) {
+        // A point outside a clipping ancestor's box reaches nothing inside it.
+        if clip.is_some_and(|rect| !rect.contains(point)) {
+            return;
+        }
         let box_ = &self.boxes[index];
         // A positioned child may sit outside its parent's box, so we always
         // descend; we only *record* a box whose rect actually contains the point.
@@ -177,8 +188,13 @@ impl LayoutTree {
                 *best = Some((depth, node));
             }
         }
+        let child_clip = if box_.clips {
+            Some(box_.padding_box())
+        } else {
+            clip
+        };
         for &child in &box_.children {
-            self.hit_box(child, point, depth + 1, best);
+            self.hit_box(child, point, depth + 1, child_clip, best);
         }
     }
 }
@@ -374,11 +390,14 @@ impl Ctx<'_> {
         let children_nodes = child_nodes(self.document, node);
 
         // A block collapses its top/bottom margin through its first/last child
-        // only when nothing separates them.
-        let collapse_top = border.top == 0.0 && padding.top == 0.0;
+        // only when nothing separates them; a clipping box is a formatting
+        // context, so its margins never collapse with its children.
+        let clips = resolve::clips(&style);
+        let collapse_top = border.top == 0.0 && padding.top == 0.0 && !clips;
         let collapse_bottom = border.bottom == 0.0
             && padding.bottom == 0.0
-            && matches!(style.height, Dimension::Auto);
+            && matches!(style.height, Dimension::Auto)
+            && !clips;
 
         let (child_indices, content_height) = match style.display {
             Display::Flex | Display::InlineFlex => flex::layout_flex_children(
@@ -423,6 +442,7 @@ impl Ctx<'_> {
             margin,
             padding,
             border,
+            clips,
             children: child_indices,
         });
         let _ = index;
@@ -556,6 +576,7 @@ impl Ctx<'_> {
             margin,
             padding,
             border,
+            clips: resolve::clips(&style),
             children: child_indices,
         });
 

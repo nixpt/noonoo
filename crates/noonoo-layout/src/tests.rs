@@ -365,3 +365,34 @@ fn a_border_makes_an_empty_block_occupy_space() {
     assert_eq!(e.rect.height, 1.0);
     assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.y, 51.0);
 }
+
+#[test]
+fn overflow_hidden_clips_hit_testing() {
+    let (doc, tree) = page(
+        r#"<div id="clip"><div id="inner"></div></div>"#,
+        "#clip { position: relative; width: 100px; height: 50px; overflow: hidden } \
+         #inner { position: absolute; left: 200px; top: 0; width: 20px; height: 20px }",
+        400.0,
+    );
+    // Inside the clip box, the clip box itself is hit (the inner sits outside).
+    assert_eq!(
+        tree.hit_test(Point::new(50.0, 10.0)),
+        Some(id(&doc, "clip"))
+    );
+    // Outside the clip box, the overflowing inner box is clipped away.
+    assert_eq!(tree.hit_test(Point::new(210.0, 10.0)), None);
+}
+
+#[test]
+fn a_clipping_box_does_not_collapse_margins_with_its_child() {
+    let (doc, tree) = page(
+        r#"<div id="clip"><div id="inner"></div></div>"#,
+        "#clip { overflow: hidden } #inner { margin-top: 20px; height: 10px }",
+        400.0,
+    );
+    let clip = tree.get(id(&doc, "clip")).unwrap();
+    // The clip box is a formatting context: the child's margin stays inside it.
+    assert_eq!(clip.rect.y, 0.0);
+    assert_eq!(tree.get(id(&doc, "inner")).unwrap().rect.y, 20.0);
+    assert_eq!(clip.rect.height, 30.0);
+}

@@ -35,7 +35,7 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | [`noonoo-text`](crates/noonoo-text) | Line breaking + alignment (shaping behind a seam) |
 | [`noonoo-motion`](crates/noonoo-motion) | Springs, velocity-preserving retarget |
 | [`noonoo-style`](crates/noonoo-style) | Style ingestion and the cascade |
-| [`noonoo-layout`](crates/noonoo-layout) | Box layout: computed style → boxes (block / inline / flex / positioned) |
+| [`noonoo-layout`](crates/noonoo-layout) | Box layout: computed style → boxes (block / inline / flex / positioned) + overflow clipping |
 | [`noonoo-markdown`](crates/noonoo-markdown) | Markdown (subset) → HTML |
 | [`noonoo-csv`](crates/noonoo-csv) | CSV/TSV → HTML table |
 | [`noonoo-ini`](crates/noonoo-ini) | INI → value model (JSON) |
@@ -47,7 +47,7 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | [`noonoo-net`](crates/noonoo-net) | Loading: `file:` + `data:` owned; `http` behind a feature |
 | [`noonoo-engine`](crates/noonoo-engine) | Orchestration: a working document |
 | [`noonoo-headless`](crates/noonoo-headless) | Tree dump, virtual clock, synthetic input |
-| [`noonoo-paint`](crates/noonoo-paint) | Layout → render commands, scene effects, overlays |
+| [`noonoo-paint`](crates/noonoo-paint) | Layout → render commands (fills, text, clip), scene effects, overlays |
 | [`noonoo-shell`](crates/noonoo-shell) | Multi-document host: layers, input routing, focus, composition |
 | [`noonoo`](crates/noonoo) | Umbrella re-export + the `noonoo` command line |
 
