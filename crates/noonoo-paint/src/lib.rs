@@ -2,8 +2,9 @@
 //!
 //! Turn a [`LayoutTree`] into a backend-neutral **command stream**: fill a box,
 //! draw a border side, draw a text run and its decoration bars, and clip a
-//! subtree. The stream is the artifact — it can be diffed (as JSON), fed to a
-//! GPU rasterizer, or recorded by a test without a screen.
+//! subtree — walking each box's children in stacking order. The stream is the
+//! artifact — it can be diffed (as JSON), fed to a GPU rasterizer, or recorded
+//! by a test without a screen.
 //!
 //! This is Phase D of the dependency-exit plan (`docs/DEPENDENCY-EXIT.md`). The
 //! GPU backend (`anyrender`/`vello`) is deliberately **not** wired yet: this

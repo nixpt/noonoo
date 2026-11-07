@@ -21,21 +21,25 @@
 //!   block's two margins become one that joins the surrounding chain.
 //! - **Overflow** — a box with a non-`visible` `overflow` clips its content to
 //!   its padding box, hit-tests within that clip, and establishes a formatting
-//!   context. An `overflow-y: auto`/`scroll` box is a **scroll container**: the
-//!   tree tracks a per-box offset, `scroll_by` clamps it to the content range,
-//!   and paint shifts — and hit-testing maps — the content by it.
+//!   context. An `overflow-x`/`overflow-y` of `auto`/`scroll` makes it a **scroll
+//!   container** on that axis: the tree tracks a per-box offset, `scroll_by`
+//!   clamps it to the content range, and paint shifts — and hit-testing maps —
+//!   the content by it.
+//! - **Stacking order** — every box carries a paint key from `position` and
+//!   `z-index`; paint and hit-testing order siblings by it (negative `z-index`
+//!   first, then in-flow content, then positioned boxes by `z-index`).
 //! - Width: `auto` / px / percentage (and stretch between `left`+`right`);
 //!   height: `auto` / px / percentage of the containing block.
 //! - `box-sizing`, margins, padding, and borders, resolved to absolute pixels.
 //!
 //! ## What it does not (yet)
 //!
-//! Floats, `grid`, `z-index` paint ordering (positioned boxes paint in tree
-//! order), horizontal scrolling and scrollbars (only `overflow-y` scrolls), and
-//! writing modes. Absolute boxes whose width or height is `auto` fall back to the
-//! containing block when only the trailing inset (`right`/`bottom`) is set. Text
-//! is measured through the [`Shaper`] seam — a heuristic stands in until
-//! `noonoo-text` brings real shaping (`docs/ROADMAP.md` Phase C).
+//! Floats, `grid`, full stacking contexts (a positioned box is ordered within its
+//! parent, not hoisted), scrollbar *rendering* (content scrolls; no bars are
+//! drawn), and writing modes. Absolute boxes whose width or height is `auto` fall
+//! back to the containing block when only the trailing inset (`right`/`bottom`)
+//! is set. Text is measured through the [`Shaper`] seam — a heuristic stands in
+//! until `noonoo-text` brings real shaping (`docs/ROADMAP.md` Phase C).
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]

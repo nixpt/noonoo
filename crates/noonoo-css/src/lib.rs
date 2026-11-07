@@ -2,7 +2,7 @@
 //!
 //! The CSS layer: a tokenizer following CSS Syntax Level 3, a top-level rule
 //! splitter, and the value & property model. The **selectors** live in
-//! [`noonoo_selectors`], and the cascade in [`noonoo_style`].
+//! `noonoo-selectors`, and the cascade in `noonoo-style`.
 //!
 //! Scope note: this owns *syntax* and *value/property typing*. It
 //! does not yet own the cascade (merging declarations by origin, specificity and
