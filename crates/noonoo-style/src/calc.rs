@@ -14,6 +14,7 @@
 //! Arguments that share a percentage can be compared immediately, because the
 //! comparison of `px + percent%` is the comparison of `px`.
 
+use crate::Viewport;
 use crate::computed::{CalcTerm, Extreme};
 use noonoo_css::value::{Length as CssLength, LengthUnit as CssLengthUnit, Value};
 
@@ -50,12 +51,18 @@ impl CalcValue {
 }
 
 /// Evaluate the arguments of a `calc()` function.
-pub(crate) fn evaluate(args: &[Value], font_size: f32, root: f32) -> Option<CalcValue> {
+pub(crate) fn evaluate(
+    args: &[Value],
+    font_size: f32,
+    root: f32,
+    viewport: Viewport,
+) -> Option<CalcValue> {
     let mut parser = Parser {
         values: args,
         pos: 0,
         font_size,
         root,
+        viewport,
     };
     let value = parser.sum()?;
     (parser.pos == args.len()).then_some(value)
@@ -67,9 +74,10 @@ pub(crate) fn evaluate_function(
     args: &[Value],
     font_size: f32,
     root: f32,
+    viewport: Viewport,
 ) -> Option<CalcValue> {
     if name.eq_ignore_ascii_case("calc") {
-        return evaluate(args, font_size, root);
+        return evaluate(args, font_size, root, viewport);
     }
     let kind = if name.eq_ignore_ascii_case("min") {
         Extreme::Min
@@ -87,7 +95,7 @@ pub(crate) fn evaluate_function(
     }
     let mut values = Vec::with_capacity(groups.len());
     for group in groups {
-        values.push(evaluate(group, font_size, root)?);
+        values.push(evaluate(group, font_size, root, viewport)?);
     }
     extreme(kind, values)
 }
@@ -109,7 +117,12 @@ pub(crate) fn resolve(value: &CalcValue, reference: f32) -> Option<f32> {
 }
 
 /// Convert a CSS length to pixels.
-pub(crate) fn to_px(length: &CssLength, font_size: f32, root_font_size: f32) -> f32 {
+pub(crate) fn to_px(
+    length: &CssLength,
+    font_size: f32,
+    root_font_size: f32,
+    viewport: Viewport,
+) -> f32 {
     let value = length.value;
     match length.unit {
         CssLengthUnit::Px => value,
@@ -122,8 +135,10 @@ pub(crate) fn to_px(length: &CssLength, font_size: f32, root_font_size: f32) -> 
         CssLengthUnit::Cm => value * 96.0 / 2.54,
         CssLengthUnit::Mm => value * 96.0 / 25.4,
         CssLengthUnit::Q => value * 96.0 / 101.6,
-        // Viewport-relative units need a viewport; approximate with the root.
-        CssLengthUnit::Vw | CssLengthUnit::Vh | CssLengthUnit::Vmin | CssLengthUnit::Vmax => value,
+        CssLengthUnit::Vw => value * viewport.width / 100.0,
+        CssLengthUnit::Vh => value * viewport.height / 100.0,
+        CssLengthUnit::Vmin => value * viewport.width.min(viewport.height) / 100.0,
+        CssLengthUnit::Vmax => value * viewport.width.max(viewport.height) / 100.0,
         CssLengthUnit::Other(_) => 0.0,
     }
 }
@@ -227,6 +242,7 @@ struct Parser<'a> {
     pos: usize,
     font_size: f32,
     root: f32,
+    viewport: Viewport,
 }
 
 impl Parser<'_> {
@@ -290,16 +306,16 @@ impl Parser<'_> {
         match value {
             Value::Number(number) => Some(CalcValue::Number(*number)),
             Value::Length(length) => Some(CalcValue::Length {
-                px: to_px(length, self.font_size, self.root),
+                px: to_px(length, self.font_size, self.root, self.viewport),
                 percent: 0.0,
             }),
             Value::Percentage(percent) => Some(CalcValue::Length {
                 px: 0.0,
                 percent: *percent,
             }),
-            Value::Group(inner) => evaluate(inner, self.font_size, self.root),
+            Value::Group(inner) => evaluate(inner, self.font_size, self.root, self.viewport),
             Value::Function { name, args } => {
-                evaluate_function(name, args, self.font_size, self.root)
+                evaluate_function(name, args, self.font_size, self.root, self.viewport)
             }
             _ => None,
         }
@@ -357,11 +373,15 @@ mod tests {
     use noonoo_css::value::parse_values;
 
     fn math(source: &str, font_size: f32, root: f32) -> Option<CalcValue> {
+        math_at(source, font_size, root, Viewport::DEFAULT)
+    }
+
+    fn math_at(source: &str, font_size: f32, root: f32, viewport: Viewport) -> Option<CalcValue> {
         let values = parse_values(source).ok()?;
         let [Value::Function { name, args }] = values.as_slice() else {
             return None;
         };
-        evaluate_function(name, args, font_size, root)
+        evaluate_function(name, args, font_size, root, viewport)
     }
 
     fn length(px: f32, percent: f32) -> Option<CalcValue> {
@@ -502,6 +522,26 @@ mod tests {
         assert_eq!(resolve(&value, 200.0), Some(100.0));
         assert_eq!(resolve(&value, 1000.0), Some(300.0));
         assert_eq!(resolve(&value, 10.0), Some(20.0));
+    }
+
+    #[test]
+    fn viewport_units_use_the_viewport() {
+        let viewport = Viewport {
+            width: 1000.0,
+            height: 500.0,
+        };
+        assert_eq!(
+            math_at("calc(50vw + 10px)", 16.0, 16.0, viewport),
+            length(510.0, 0.0)
+        );
+        assert_eq!(
+            math_at("calc(10vh)", 16.0, 16.0, viewport),
+            length(50.0, 0.0)
+        );
+        assert_eq!(
+            math_at("calc(10vmin + 10vmax)", 16.0, 16.0, viewport),
+            length(150.0, 0.0)
+        );
     }
 
     #[test]

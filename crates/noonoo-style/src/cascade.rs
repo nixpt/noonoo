@@ -12,6 +12,7 @@ use noonoo_css::{Declaration, Property, Stylesheet, parse_declaration, parse_dec
 use noonoo_dom::{Document, NodeId};
 use noonoo_selectors::{Element, MatchContext, SelectorList};
 
+use crate::Viewport;
 use crate::apply::{apply, resolve_font_size};
 use crate::computed::*;
 use crate::ua::UA_STYLESHEET;
@@ -246,7 +247,11 @@ fn winners_for(doc: &Document, id: NodeId, rules: &[Rule]) -> HashMap<Property, 
 }
 
 /// Compute every element's style, in document order (parents before children).
-pub(crate) fn compute(doc: &Document, stylesheets: &[Stylesheet]) -> Vec<Option<ComputedStyle>> {
+pub(crate) fn compute(
+    doc: &Document,
+    stylesheets: &[Stylesheet],
+    viewport: Viewport,
+) -> Vec<Option<ComputedStyle>> {
     let rules = collect_rules(stylesheets);
     let mut out: Vec<Option<ComputedStyle>> = vec![None; doc.tree().len()];
     let mut custom: Vec<CustomProperties> = vec![CustomProperties::new(); doc.tree().len()];
@@ -277,7 +282,7 @@ pub(crate) fn compute(doc: &Document, stylesheets: &[Stylesheet]) -> Vec<Option<
         let font_size = winners
             .get(&Property::FontSize)
             .and_then(|c| vars::substitute(&c.values, &props))
-            .and_then(|values| resolve_font_size(&values, parent_font, root_font_size))
+            .and_then(|values| resolve_font_size(&values, parent_font, root_font_size, viewport))
             .unwrap_or(parent_font);
 
         let mut style = match &parent {
@@ -307,6 +312,7 @@ pub(crate) fn compute(doc: &Document, stylesheets: &[Stylesheet]) -> Vec<Option<
                 &values,
                 font_size,
                 root_font_size,
+                viewport,
                 parent.as_ref(),
             );
         }

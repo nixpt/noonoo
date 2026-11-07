@@ -73,8 +73,25 @@ impl Engine {
 
     /// Compute every element's style: cascade the collected stylesheets over the
     /// user-agent sheet and any inline `style` attributes.
+    ///
+    /// Viewport-relative units resolve against
+    /// [`noonoo_style::Viewport::DEFAULT`]; [`Engine::compute_styles_for`] uses a
+    /// real viewport instead.
     pub fn compute_styles(&self) -> noonoo_style::Styles {
         noonoo_style::compute(&self.dom, &self.stylesheets)
+    }
+
+    /// Compute every element's style against `viewport`, so `vw`/`vh` and
+    /// `calc(100vw - 2rem)` resolve correctly.
+    pub fn compute_styles_for(&self, viewport: noonoo_geometry::Size) -> noonoo_style::Styles {
+        noonoo_style::compute_with(
+            &self.dom,
+            &self.stylesheets,
+            noonoo_style::Viewport {
+                width: viewport.width,
+                height: viewport.height,
+            },
+        )
     }
 
     /// Lay the document out for a viewport, using the given text shaper.
@@ -83,7 +100,7 @@ impl Engine {
         viewport: noonoo_geometry::Size,
         shaper: &dyn noonoo_layout::Shaper,
     ) -> noonoo_layout::LayoutTree {
-        let styles = self.compute_styles();
+        let styles = self.compute_styles_for(viewport);
         noonoo_layout::layout(&self.dom, &styles, viewport, shaper)
     }
 
@@ -106,7 +123,7 @@ impl Engine {
         shaper: &dyn noonoo_layout::Shaper,
         glyphs: &dyn noonoo_paint::Glyphs,
     ) -> noonoo_paint::CommandList {
-        let styles = self.compute_styles();
+        let styles = self.compute_styles_for(viewport);
         let layout = noonoo_layout::layout(&self.dom, &styles, viewport, shaper);
         noonoo_paint::paint_with(&styles, &layout, glyphs)
     }

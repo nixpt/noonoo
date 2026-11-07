@@ -231,7 +231,7 @@ impl Host {
             }
 
             let layer = &mut self.layers[index];
-            let styles = layer.engine.compute_styles();
+            let styles = layer.engine.compute_styles_for(layer.rect.size());
             let mut layout =
                 noonoo_layout::layout(layer.engine.dom(), &styles, layer.rect.size(), shaper);
             // Preserve what the user scrolled across a re-layout.

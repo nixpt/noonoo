@@ -30,6 +30,11 @@
 //! settled without the containing block, so the result is kept as a deferred
 //! [`Dimension::Extreme`]/[`Length::Extreme`] and resolved in layout. Arguments
 //! that share a slope (all absolute, or all percentages) are folded here.
+//!
+//! Viewport units (`vw`, `vh`, `vmin`, `vmax`) resolve in the same pass against
+//! the [`Viewport`] passed to [`compute_with`]. [`compute`] uses
+//! [`Viewport::DEFAULT`] (800x600), matching the headless CLI. `Engine` callers
+//! get the real size because the engine computes styles per layout viewport.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -63,11 +68,44 @@ impl Styles {
     }
 }
 
+/// The viewport that viewport-relative units (`vw`, `vh`, `vmin`, `vmax`)
+/// resolve against.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Viewport {
+    /// The viewport width, in pixels.
+    pub width: f32,
+    /// The viewport height, in pixels.
+    pub height: f32,
+}
+
+impl Viewport {
+    /// The default viewport used by [`compute`] when none is given.
+    pub const DEFAULT: Viewport = Viewport {
+        width: 800.0,
+        height: 600.0,
+    };
+}
+
+impl Default for Viewport {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
 /// Compute every element's style in `document`, cascading the given author
 /// stylesheets over the built-in user-agent sheet and inline styles.
+///
+/// Viewport-relative units resolve against [`Viewport::DEFAULT`]; use
+/// [`compute_with`] to supply a real viewport.
 pub fn compute(document: &Document, stylesheets: &[Stylesheet]) -> Styles {
+    compute_with(document, stylesheets, Viewport::DEFAULT)
+}
+
+/// Compute every element's style against a specific viewport, so `vw`/`vh`
+/// (and `calc(100vw - 2rem)`) resolve correctly.
+pub fn compute_with(document: &Document, stylesheets: &[Stylesheet], viewport: Viewport) -> Styles {
     Styles {
-        entries: cascade::compute(document, stylesheets),
+        entries: cascade::compute(document, stylesheets, viewport),
     }
 }
 
@@ -83,6 +121,13 @@ mod tests {
         let doc = noonoo_html::parse(html);
         let sheet = Stylesheet::parse(css).unwrap();
         let styles = compute(&doc, &[sheet]);
+        (doc, styles)
+    }
+
+    fn styled_at(html: &str, css: &str, viewport: Viewport) -> (Document, Styles) {
+        let doc = noonoo_html::parse(html);
+        let sheet = Stylesheet::parse(css).unwrap();
+        let styles = compute_with(&doc, &[sheet], viewport);
         (doc, styles)
     }
 
@@ -376,6 +421,44 @@ mod tests {
             }
         ));
         assert_eq!(s.font_size, 16.0, "clamp(10, 16, 20) at a 16px parent");
+    }
+
+    #[test]
+    fn viewport_units_resolve_against_the_given_viewport() {
+        let viewport = Viewport {
+            width: 1000.0,
+            height: 500.0,
+        };
+        let (doc, styles) = styled_at(
+            "<p>x</p>",
+            "p { width: 50vw; height: 10vh; padding-left: 10vmin; margin-top: 10vmax; font-size: 2vw }",
+            viewport,
+        );
+        let p = doc.get_elements_by_tag_name("p")[0];
+        let s = styles.get(p).unwrap();
+        assert_eq!(s.width, Dimension::Px(500.0));
+        assert_eq!(s.height, Dimension::Px(50.0));
+        assert_eq!(s.padding.left, Length::Px(50.0));
+        assert_eq!(s.margin.top, Dimension::Px(100.0));
+        assert_eq!(s.font_size, 20.0);
+    }
+
+    #[test]
+    fn viewport_units_compose_with_calc_and_min() {
+        let viewport = Viewport {
+            width: 1000.0,
+            height: 500.0,
+        };
+        let (doc, styles) = styled_at(
+            "<p>x</p>",
+            "p { width: calc(100vw - 20px); height: min(100vw, 1200px) }",
+            viewport,
+        );
+        let p = doc.get_elements_by_tag_name("p")[0];
+        let s = styles.get(p).unwrap();
+        assert_eq!(s.width, Dimension::Px(980.0));
+        // Both arguments are absolute once `vw` resolves, so this folds here.
+        assert_eq!(s.height, Dimension::Px(1000.0));
     }
 
     #[test]

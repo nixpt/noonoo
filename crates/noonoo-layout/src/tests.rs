@@ -2,10 +2,21 @@ use super::*;
 use noonoo_geometry::{Point, Rect, Size};
 
 fn page(html: &str, css: &str, width: f32) -> (Document, LayoutTree) {
+    page_at(html, css, Size::new(width, 600.0))
+}
+
+fn page_at(html: &str, css: &str, viewport: Size) -> (Document, LayoutTree) {
     let doc = noonoo_html::parse(html);
     let sheet = noonoo_css::Stylesheet::parse(css).unwrap();
-    let styles = noonoo_style::compute(&doc, &[sheet]);
-    let tree = layout(&doc, &styles, Size::new(width, 600.0), &MetricShaper);
+    let styles = noonoo_style::compute_with(
+        &doc,
+        &[sheet],
+        noonoo_style::Viewport {
+            width: viewport.width,
+            height: viewport.height,
+        },
+    );
+    let tree = layout(&doc, &styles, viewport, &MetricShaper);
     (doc, tree)
 }
 
@@ -51,6 +62,20 @@ fn min_max_and_clamp_resolve_against_the_containing_block() {
     assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.width, 160.0);
     assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.width, 200.0);
     assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.width, 100.0);
+}
+
+#[test]
+fn viewport_units_track_the_layout_viewport() {
+    let (doc, tree) = page_at(
+        r#"<div id="a"></div><div id="b"></div>"#,
+        "#a { width: 50vw; height: 10vh } #b { width: calc(100vw - 100px); height: 1px }",
+        Size::new(400.0, 300.0),
+    );
+    let a = tree.get(id(&doc, "a")).unwrap();
+    assert_eq!(a.rect.width, 200.0);
+    assert_eq!(a.rect.height, 30.0);
+    let b = tree.get(id(&doc, "b")).unwrap();
+    assert_eq!(b.rect.width, 300.0);
 }
 
 #[test]

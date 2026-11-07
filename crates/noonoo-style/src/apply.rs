@@ -4,6 +4,7 @@
 use noonoo_css::Property;
 use noonoo_css::value::Value;
 
+use crate::Viewport;
 use crate::calc::{self, CalcValue, to_px};
 use crate::computed::*;
 // --- value resolution ------------------------------------------------------
@@ -62,14 +63,19 @@ fn calc_length(value: CalcValue) -> Option<Length> {
     }
 }
 
-pub(crate) fn resolve_font_size(values: &[Value], parent: f32, root: f32) -> Option<f32> {
+pub(crate) fn resolve_font_size(
+    values: &[Value],
+    parent: f32,
+    root: f32,
+    viewport: Viewport,
+) -> Option<f32> {
     if let Some((name, args)) = math_fn(values) {
-        let value = calc::evaluate_function(name, args, parent, root)?;
+        let value = calc::evaluate_function(name, args, parent, root, viewport)?;
         // A percentage in `font-size` is relative to the parent font size.
         return calc::resolve(&value, parent).map(|size| size.max(0.0));
     }
     match values {
-        [Value::Length(length)] => Some(to_px(length, parent, root).max(0.0)),
+        [Value::Length(length)] => Some(to_px(length, parent, root, viewport).max(0.0)),
         [Value::Percentage(percent)] => Some((parent * percent / 100.0).max(0.0)),
         [Value::Number(number)] => Some((*number).max(0.0)),
         [Value::Keyword(keyword)] => match keyword.as_str() {
@@ -95,27 +101,27 @@ fn keyword(values: &[Value]) -> Option<&str> {
     }
 }
 
-fn dimension(values: &[Value], font_size: f32, root: f32) -> Option<Dimension> {
+fn dimension(values: &[Value], font_size: f32, root: f32, viewport: Viewport) -> Option<Dimension> {
     if let Some((name, args)) = math_fn(values) {
-        let value = calc::evaluate_function(name, args, font_size, root)?;
+        let value = calc::evaluate_function(name, args, font_size, root, viewport)?;
         return calc_dimension(value);
     }
     match values {
         [Value::Keyword(keyword)] if keyword == "auto" => Some(Dimension::Auto),
-        [Value::Length(length)] => Some(Dimension::Px(to_px(length, font_size, root))),
+        [Value::Length(length)] => Some(Dimension::Px(to_px(length, font_size, root, viewport))),
         [Value::Percentage(percent)] => Some(Dimension::Percent(*percent)),
         [Value::Number(number)] => Some(Dimension::Px(*number)),
         _ => None,
     }
 }
 
-fn length(values: &[Value], font_size: f32, root: f32) -> Option<Length> {
+fn length(values: &[Value], font_size: f32, root: f32, viewport: Viewport) -> Option<Length> {
     if let Some((name, args)) = math_fn(values) {
-        let value = calc::evaluate_function(name, args, font_size, root)?;
+        let value = calc::evaluate_function(name, args, font_size, root, viewport)?;
         return calc_length(value);
     }
     match values {
-        [Value::Length(l)] => Some(Length::Px(to_px(l, font_size, root).max(0.0))),
+        [Value::Length(l)] => Some(Length::Px(to_px(l, font_size, root, viewport).max(0.0))),
         [Value::Percentage(percent)] => Some(Length::Percent(*percent)),
         [Value::Number(number)] => Some(Length::Px((*number).max(0.0))),
         _ => None,
@@ -130,9 +136,9 @@ fn color(values: &[Value]) -> Option<noonoo_css::Color> {
     }
 }
 
-fn border_width_px(values: &[Value], font_size: f32) -> Option<f32> {
+fn border_width_px(values: &[Value], font_size: f32, viewport: Viewport) -> Option<f32> {
     if let Some((name, args)) = math_fn(values) {
-        let value = calc::evaluate_function(name, args, font_size, 16.0)?;
+        let value = calc::evaluate_function(name, args, font_size, 16.0, viewport)?;
         // Border widths must be absolute; percentages have no reference here.
         return value
             .is_absolute()
@@ -147,7 +153,7 @@ fn border_width_px(values: &[Value], font_size: f32) -> Option<f32> {
             "thick" => Some(5.0),
             _ => None,
         },
-        [Value::Length(l)] => Some(to_px(l, font_size, 16.0).max(0.0)),
+        [Value::Length(l)] => Some(to_px(l, font_size, 16.0, viewport).max(0.0)),
         [Value::Number(n)] => Some((*n).max(0.0)),
         _ => None,
     }
@@ -161,6 +167,7 @@ pub(crate) fn apply(
     values: &[Value],
     font_size: f32,
     root: f32,
+    viewport: Viewport,
     parent: Option<&ComputedStyle>,
 ) {
     // Global CSS-wide keywords: `inherit` / `initial` / `unset`.
@@ -219,47 +226,77 @@ pub(crate) fn apply(
                 };
             }
         }
-        Property::Width => set_first(&mut style.width, dimension(values, font_size, root)),
-        Property::Height => set_first(&mut style.height, dimension(values, font_size, root)),
-        Property::Top => set_first(&mut style.inset.top, dimension(values, font_size, root)),
-        Property::Right => set_first(&mut style.inset.right, dimension(values, font_size, root)),
-        Property::Bottom => set_first(&mut style.inset.bottom, dimension(values, font_size, root)),
-        Property::Left => set_first(&mut style.inset.left, dimension(values, font_size, root)),
-        Property::MarginTop => set_first(&mut style.margin.top, dimension(values, font_size, root)),
-        Property::MarginRight => {
-            set_first(&mut style.margin.right, dimension(values, font_size, root))
-        }
-        Property::MarginBottom => {
-            set_first(&mut style.margin.bottom, dimension(values, font_size, root))
-        }
-        Property::MarginLeft => {
-            set_first(&mut style.margin.left, dimension(values, font_size, root))
-        }
-        Property::PaddingTop => set_first(&mut style.padding.top, length(values, font_size, root)),
-        Property::PaddingRight => {
-            set_first(&mut style.padding.right, length(values, font_size, root))
-        }
-        Property::PaddingBottom => {
-            set_first(&mut style.padding.bottom, length(values, font_size, root))
-        }
-        Property::PaddingLeft => {
-            set_first(&mut style.padding.left, length(values, font_size, root))
-        }
+        Property::Width => set_first(
+            &mut style.width,
+            dimension(values, font_size, root, viewport),
+        ),
+        Property::Height => set_first(
+            &mut style.height,
+            dimension(values, font_size, root, viewport),
+        ),
+        Property::Top => set_first(
+            &mut style.inset.top,
+            dimension(values, font_size, root, viewport),
+        ),
+        Property::Right => set_first(
+            &mut style.inset.right,
+            dimension(values, font_size, root, viewport),
+        ),
+        Property::Bottom => set_first(
+            &mut style.inset.bottom,
+            dimension(values, font_size, root, viewport),
+        ),
+        Property::Left => set_first(
+            &mut style.inset.left,
+            dimension(values, font_size, root, viewport),
+        ),
+        Property::MarginTop => set_first(
+            &mut style.margin.top,
+            dimension(values, font_size, root, viewport),
+        ),
+        Property::MarginRight => set_first(
+            &mut style.margin.right,
+            dimension(values, font_size, root, viewport),
+        ),
+        Property::MarginBottom => set_first(
+            &mut style.margin.bottom,
+            dimension(values, font_size, root, viewport),
+        ),
+        Property::MarginLeft => set_first(
+            &mut style.margin.left,
+            dimension(values, font_size, root, viewport),
+        ),
+        Property::PaddingTop => set_first(
+            &mut style.padding.top,
+            length(values, font_size, root, viewport),
+        ),
+        Property::PaddingRight => set_first(
+            &mut style.padding.right,
+            length(values, font_size, root, viewport),
+        ),
+        Property::PaddingBottom => set_first(
+            &mut style.padding.bottom,
+            length(values, font_size, root, viewport),
+        ),
+        Property::PaddingLeft => set_first(
+            &mut style.padding.left,
+            length(values, font_size, root, viewport),
+        ),
         Property::BorderTopWidth => set_first(
             &mut style.border_width.top,
-            border_width_px(values, font_size),
+            border_width_px(values, font_size, viewport),
         ),
         Property::BorderRightWidth => set_first(
             &mut style.border_width.right,
-            border_width_px(values, font_size),
+            border_width_px(values, font_size, viewport),
         ),
         Property::BorderBottomWidth => set_first(
             &mut style.border_width.bottom,
-            border_width_px(values, font_size),
+            border_width_px(values, font_size, viewport),
         ),
         Property::BorderLeftWidth => set_first(
             &mut style.border_width.left,
-            border_width_px(values, font_size),
+            border_width_px(values, font_size, viewport),
         ),
         Property::BorderTopStyle => set_border_style(&mut style.border_style.top, values),
         Property::BorderRightStyle => set_border_style(&mut style.border_style.right, values),
@@ -298,7 +335,10 @@ pub(crate) fn apply(
         }
         Property::FlexGrow => set_number(&mut style.flex_grow, values),
         Property::FlexShrink => set_number(&mut style.flex_shrink, values),
-        Property::FlexBasis => set_first(&mut style.flex_basis, dimension(values, font_size, root)),
+        Property::FlexBasis => set_first(
+            &mut style.flex_basis,
+            dimension(values, font_size, root, viewport),
+        ),
         Property::JustifyContent => set_justify(&mut style.justify_content, values),
         Property::AlignItems => {
             set_align(&mut style.align_items, values);
@@ -309,8 +349,8 @@ pub(crate) fn apply(
                 style.align_self = Some(value);
             }
         }
-        Property::RowGap => set_px(&mut style.row_gap, values, font_size, root),
-        Property::ColumnGap => set_px(&mut style.column_gap, values, font_size, root),
+        Property::RowGap => set_px(&mut style.row_gap, values, font_size, root, viewport),
+        Property::ColumnGap => set_px(&mut style.column_gap, values, font_size, root, viewport),
         Property::Color => set_first(&mut style.color, color(values)),
         Property::BackgroundColor => set_first(&mut style.background_color, color(values)),
         Property::FontWeight => set_font_weight(&mut style.font_weight, values),
@@ -324,7 +364,9 @@ pub(crate) fn apply(
             }
         }
         Property::FontFamily => style.font_family = font_family(values),
-        Property::LineHeight => set_line_height(&mut style.line_height, values, font_size),
+        Property::LineHeight => {
+            set_line_height(&mut style.line_height, values, font_size, viewport)
+        }
         Property::TextAlign => set_text_align(&mut style.text_align, values),
         Property::TextDecorationLine => {
             let mut decoration = TextDecoration::NONE;
@@ -392,8 +434,8 @@ fn set_number(slot: &mut f32, values: &[Value]) {
     }
 }
 
-fn set_px(slot: &mut f32, values: &[Value], font_size: f32, root: f32) {
-    if let Some(Length::Px(px)) = length(values, font_size, root) {
+fn set_px(slot: &mut f32, values: &[Value], font_size: f32, root: f32, viewport: Viewport) {
+    if let Some(Length::Px(px)) = length(values, font_size, root, viewport) {
         *slot = px;
     }
 }
@@ -466,10 +508,10 @@ fn font_family(values: &[Value]) -> Vec<String> {
         .collect()
 }
 
-fn set_line_height(slot: &mut f32, values: &[Value], font_size: f32) {
+fn set_line_height(slot: &mut f32, values: &[Value], font_size: f32, viewport: Viewport) {
     let value = if let Some((name, args)) = math_fn(values) {
         // A unitless `line-height` is a multiplier; a length is absolute.
-        match calc::evaluate_function(name, args, font_size, font_size) {
+        match calc::evaluate_function(name, args, font_size, font_size, viewport) {
             Some(CalcValue::Number(number)) => font_size * number,
             Some(value) => match calc::resolve(&value, font_size) {
                 Some(resolved) => resolved,
@@ -480,7 +522,7 @@ fn set_line_height(slot: &mut f32, values: &[Value], font_size: f32) {
     } else {
         match values {
             [Value::Number(number)] => font_size * *number,
-            [Value::Length(l)] => to_px(l, font_size, font_size),
+            [Value::Length(l)] => to_px(l, font_size, font_size, viewport),
             [Value::Percentage(percent)] => font_size * percent / 100.0,
             [Value::Keyword(k)] if k == "normal" => font_size * 1.2,
             _ => return,
