@@ -10,6 +10,15 @@
 //! replaces `stylo` with a documented subset. Selectors, values, and properties
 //! come from [`noonoo_css`]; this crate owns the matching-to-computed-values
 //! step that the borrowed engine used to provide.
+//!
+//! ## Custom properties
+//!
+//! `--x` declarations are kept as substitution tokens and inherited like any
+//! inherited property. A `var(--x, fallback)` in a declaration is replaced at
+//! computed-value time, *after* the cascade has picked a winner, so the value
+//! follows cascade and inheritance (see the `vars` module). An unresolvable
+//! `var()` drops the declaration, which then keeps its inherited or initial
+//! value.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -18,6 +27,7 @@ mod apply;
 mod cascade;
 pub mod computed;
 pub mod ua;
+mod vars;
 
 use noonoo_css::Stylesheet;
 use noonoo_dom::{Document, NodeId};
@@ -182,5 +192,75 @@ mod tests {
         assert!(s.text_decoration.contains(TextDecoration::UNDERLINE));
         assert!(s.text_decoration.contains(TextDecoration::LINE_THROUGH));
         assert!(!s.text_decoration.contains(TextDecoration::OVERLINE));
+    }
+
+    #[test]
+    fn custom_properties_substitute() {
+        let (doc, styles) = styled(
+            "<div><p>x</p></div>",
+            ":root { --brand: #ff0000 } p { color: var(--brand) }",
+        );
+        let p = doc.get_elements_by_tag_name("p")[0];
+        assert_eq!(styles.get(p).unwrap().color, Color::rgb(255, 0, 0));
+    }
+
+    #[test]
+    fn custom_properties_inherit() {
+        let (doc, styles) = styled(
+            "<div><section><p>x</p></section></div>",
+            "div { --gap: 12px } p { margin-top: var(--gap) }",
+        );
+        let p = doc.get_elements_by_tag_name("p")[0];
+        assert_eq!(styles.get(p).unwrap().margin.top, Dimension::Px(12.0));
+    }
+
+    #[test]
+    fn a_descendant_can_override_and_forward_the_value() {
+        let (doc, styles) = styled(
+            "<html><body><div><p>x</p></div></body></html>",
+            ":root { --ink: black } div { --ink: blue } p { color: var(--ink) }",
+        );
+        let p = doc.get_elements_by_tag_name("p")[0];
+        assert_eq!(styles.get(p).unwrap().color, Color::rgb(0, 0, 255));
+    }
+
+    #[test]
+    fn var_fallback_is_used_when_undefined() {
+        let (doc, styles) = styled("<p>x</p>", "p { color: var(--missing, #00ff00) }");
+        let p = doc.get_elements_by_tag_name("p")[0];
+        assert_eq!(styles.get(p).unwrap().color, Color::rgb(0, 255, 0));
+    }
+
+    #[test]
+    fn an_unresolvable_var_leaves_the_property_inherited() {
+        let (doc, styles) = styled(
+            "<div><p>x</p></div>",
+            "div { color: red } p { color: var(--missing) }",
+        );
+        let p = doc.get_elements_by_tag_name("p")[0];
+        assert_eq!(styles.get(p).unwrap().color, Color::rgb(255, 0, 0));
+    }
+
+    #[test]
+    fn var_works_through_shorthands_and_font_size() {
+        let (doc, styles) = styled(
+            "<p>x</p>",
+            ":root { --gap: 6px; --size: 20px } p { margin: var(--gap); font-size: var(--size) }",
+        );
+        let p = doc.get_elements_by_tag_name("p")[0];
+        let s = styles.get(p).unwrap();
+        assert_eq!(s.margin.top, Dimension::Px(6.0));
+        assert_eq!(s.margin.left, Dimension::Px(6.0), "shorthand expands first");
+        assert_eq!(s.font_size, 20.0);
+    }
+
+    #[test]
+    fn a_cycle_falls_back_instead_of_looping() {
+        let (doc, styles) = styled(
+            "<p>x</p>",
+            "p { --a: var(--b); --b: var(--a); color: var(--a, #0000ff) }",
+        );
+        let p = doc.get_elements_by_tag_name("p")[0];
+        assert_eq!(styles.get(p).unwrap().color, Color::rgb(0, 0, 255));
     }
 }

@@ -15,6 +15,7 @@ use noonoo_selectors::{Element, MatchContext, SelectorList};
 use crate::apply::{apply, resolve_font_size};
 use crate::computed::*;
 use crate::ua::UA_STYLESHEET;
+use crate::vars::{self, CustomProperties};
 
 /// Where a rule came from.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -248,18 +249,35 @@ fn winners_for(doc: &Document, id: NodeId, rules: &[Rule]) -> HashMap<Property, 
 pub(crate) fn compute(doc: &Document, stylesheets: &[Stylesheet]) -> Vec<Option<ComputedStyle>> {
     let rules = collect_rules(stylesheets);
     let mut out: Vec<Option<ComputedStyle>> = vec![None; doc.tree().len()];
+    let mut custom: Vec<CustomProperties> = vec![CustomProperties::new(); doc.tree().len()];
     let mut root_font_size = 16.0_f32;
     let mut first_element = true;
 
     for id in doc.elements() {
-        let parent = doc.tree().parent(id).and_then(|p| out[p.index()].clone());
+        let parent_id = doc.tree().parent(id);
+        let parent = parent_id.and_then(|p| out[p.index()].clone());
         let parent_font = parent.as_ref().map(|s| s.font_size).unwrap_or(16.0);
+        let parent_custom = parent_id
+            .map(|p| custom[p.index()].clone())
+            .unwrap_or_default();
 
         let winners = winners_for(doc, id, &rules);
 
+        // Custom properties inherit, then this element's winners override them.
+        // Build the full map *before* substituting, so declaration order within
+        // an element does not matter (`color: var(--x); --x: red` works).
+        let mut props = parent_custom;
+        for (property, candidate) in &winners {
+            if let Property::Custom(name) = property {
+                props.insert(name.clone(), candidate.values.clone());
+            }
+        }
+        custom[id.index()] = props.clone();
+
         let font_size = winners
             .get(&Property::FontSize)
-            .and_then(|c| resolve_font_size(&c.values, parent_font, root_font_size))
+            .and_then(|c| vars::substitute(&c.values, &props))
+            .and_then(|values| resolve_font_size(&values, parent_font, root_font_size))
             .unwrap_or(parent_font);
 
         let mut style = match &parent {
@@ -275,13 +293,18 @@ pub(crate) fn compute(doc: &Document, stylesheets: &[Stylesheet]) -> Vec<Option<
         }
 
         for (property, candidate) in &winners {
-            if matches!(property, Property::FontSize) {
+            if matches!(property, Property::FontSize | Property::Custom(_)) {
                 continue;
             }
+            // A `var()` that cannot be resolved invalidates the declaration;
+            // the property then keeps its inherited or initial value.
+            let Some(values) = vars::substitute(&candidate.values, &props) else {
+                continue;
+            };
             apply(
                 &mut style,
                 property,
-                &candidate.values,
+                &values,
                 font_size,
                 root_font_size,
                 parent.as_ref(),
