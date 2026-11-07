@@ -64,9 +64,10 @@ pub fn draw(scene: &mut Scene, commands: &CommandList) {
                 // Vello's radial brush is a circle; an ellipse scales it about
                 // its centre through the brush transform.
                 let brush_transform = match geometry {
-                    GradientGeometry::Radial { center, radius: (rx, ry) }
-                        if *rx > 0.0 && (*ry - *rx).abs() > f32::EPSILON =>
-                    {
+                    GradientGeometry::Radial {
+                        center,
+                        radius: (rx, ry),
+                    } if *rx > 0.0 && (*ry - *rx).abs() > f32::EPSILON => {
                         let (cx, cy) = (center.x as f64, center.y as f64);
                         Some(
                             Affine::translate((cx, cy))
@@ -77,7 +78,13 @@ pub fn draw(scene: &mut Scene, commands: &CommandList) {
                     _ => None,
                 };
                 let shape = kurbo_rect(*rect);
-                scene.fill(Fill::NonZero, Affine::IDENTITY, &brush, brush_transform, &shape);
+                scene.fill(
+                    Fill::NonZero,
+                    Affine::IDENTITY,
+                    &brush,
+                    brush_transform,
+                    &shape,
+                );
             }
             Command::FillPolygon { points, color } => {
                 if points.len() >= 3 {
@@ -110,10 +117,9 @@ fn gradient(
     stops: &[noonoo_paint::GradientStop],
 ) -> Gradient {
     let mut gradient = match geometry {
-        GradientGeometry::Linear { from, to } => Gradient::new_linear(
-            (from.x as f64, from.y as f64),
-            (to.x as f64, to.y as f64),
-        ),
+        GradientGeometry::Linear { from, to } => {
+            Gradient::new_linear((from.x as f64, from.y as f64), (to.x as f64, to.y as f64))
+        }
         GradientGeometry::Radial { center, radius } => {
             // A zero radius draws nothing; keep it a hair above zero so the
             // encoder sees a usable extent.

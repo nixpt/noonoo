@@ -1,0 +1,25 @@
+[package]
+name = "noonoo-winit"
+version = "0.11.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+description = "Opt-in: run a noonoo-shell Host in a winit window (GPU + input)."
+
+# Deliberately OUTSIDE the noonoo workspace (see the root `exclude`): it pulls
+# the window + GPU stack, which the engine's default build and lockfile must
+# not pay for.
+[dependencies]
+noonoo-dom = { path = "../../crates/noonoo-dom" }
+noonoo-shell = { path = "../../crates/noonoo-shell" }
+noonoo-vello = { path = "../noonoo-vello" }
+noonoo-events = { path = "../../crates/noonoo-events" }
+noonoo-geometry = { path = "../../crates/noonoo-geometry" }
+noonoo-text = { path = "../../crates/noonoo-text" }
+vello = { version = "0.7", default-features = false, features = ["wgpu"] }
+wgpu = "27"
+winit = "=0.31.0-beta.2"
+pollster = "0.4"
+
+[dev-dependencies]
+noonoo-engine = { path = "../../crates/noonoo-engine" }

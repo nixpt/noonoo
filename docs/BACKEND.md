@@ -29,9 +29,9 @@ Depends on `vello` (`default-features = false` — no wgpu) plus the path
 `Scene::encoding()` (paths and draws), including that a clip adds layer entries
 and a text run adds none.
 
-## The window pass — `noonoo-winit` (planned)
+## The window pass — `noonoo-winit` ✅
 
-The remaining opt-in crate: a winit window with a wgpu surface, driving Vello's
+`integrations/noonoo-winit`. A winit window with a wgpu surface, driving Vello's
 renderer each frame, and converting platform input into `noonoo-events`.
 
 **Versions to pin** (matching the ecosystem, see `arniko`/`mustang`):
@@ -43,24 +43,35 @@ renderer each frame, and converting platform input into `noonoo-events`.
 | `winit` | `=0.31.0-beta.2` | the fork the ecosystem pins |
 | `anyrender` (opt.) | `0.7` | the `PaintScene` seam mustang consumes |
 
-**Shape:**
+**Shape (as landed):**
 
-1. `winit` `ApplicationHandler` → on `resumed`, create an `Arc<Window>`, a wgpu
-   `Instance`/`Surface`/`Device`/`Queue`, and Vello's renderer.
-2. Each frame: `noonoo_vello::scene(&layer.commands())` per host layer, compose
-   them (offset by each layer's `rect`), and render to the surface.
-3. Input: convert `WindowEvent` (`CursorMoved`, `MouseInput`, `MouseWheel`,
-   `KeyboardInput`, `Resized`) into `noonoo-events`, then call the matching
-   `Host` method — `hit`/`dispatch_pointer`/`dispatch_key`/`wheel` — using the
-   window-size viewport. This reuses the host model unchanged.
-4. Lifecycle: honor `resumed`/`suspended` for real (the old engine's `resumed`
-   was a no-op stub — see `docs/SHELL.md` §5).
+1. **`input`** — a pure translator from `WindowEvent` to an `Action` the host
+   performs (`Pointer`/`Key`/`Wheel`/`Resized`/`Redraw`/`Close`), tested
+   headlessly against winit's own types. Coordinates divide by the scale factor
+   (Noonoo works in logical pixels); wheel deltas flip sign (winit's positive
+   delta means content moves down, `Host::wheel`'s positive delta scrolls
+   forward); `LineDelta` lines convert at `LINE_HEIGHT` (40 logical px); named
+   keys use `NamedKey`'s spec names, characters their text; dead/unidentified
+   keys are skipped. Touch buttons are not dispatched.
+2. **`render::Renderer`** — wgpu `Instance`/`Surface`/`Device`/`Queue` +
+   Vello's renderer. Each frame composes one `noonoo_vello` scene per host
+   layer, offset by the layer's `rect` and clipped to it. The surface is
+   created from the window's raw handles (`SurfaceTargetUnsafe::from_window`)
+   so it can be `'static` while the window keeps ownership — the one scoped
+   `unsafe`, documented, with the renderer ordered to drop before the window.
+3. **`App`** — winit's `ApplicationHandler`: window + surface in
+   `can_create_surfaces` (recreated after `suspended`), `SurfaceResized` →
+   `host.viewport` + a host-supplied resize hook, pointer *buttons* set
+   keyboard focus and synthesize a `Click` when the release lands on the press
+   target, pointer *moves* route to the DOM without stealing focus, wheel
+   chains through `Host::wheel`, and rendering is redraw-driven with a dirty
+   flag.
 
-**Open risks** (why this is its own slice): the winit `0.31-beta` API is a moving
-target and cannot be verified without a display; the wgpu/vello renderer entry
-points in 0.7 differ from 0.6; and the crate is heavy to compile. It is a
-*mechanical* integration once the API is pinned — the engine-facing seam is
-already the `CommandList`, which the GPU pass consumes today.
+**Verification**: the input seam is unit-tested without a display (8 tests over
+winit's real event types); the whole crate — handler, renderer, and a runnable
+`examples/showcase.rs` — compiles against the pinned `winit =0.31.0-beta.2`,
+`wgpu 27`, and `vello 0.7`. Presenting frames needs a display and remains
+runtime-verified only.
 
 ## mustang — the effect compositor
 
@@ -94,6 +105,7 @@ backends are **excluded** (like `integrations/noonoo-xip` and
 ## Status
 
 - **GPU pass** (`noonoo-vello`): landed, headless-tested.
-- **Window pass** (`noonoo-winit`): planned; the versions and shape are above.
+- **Window pass** (`noonoo-winit`): landed; input seam headless-tested, frame
+  presentation runtime-verified only (no display in CI).
 - **Effects** (mustang): out of scope for now — it is a separate project with a
   clean seam (`vello::Scene`) to attach at.

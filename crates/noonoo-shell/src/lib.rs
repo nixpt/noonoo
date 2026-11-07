@@ -199,6 +199,11 @@ impl Host {
         &self.layers
     }
 
+    /// Every layer, mutably — for a host adjusting rectangles on resize.
+    pub fn layers_mut(&mut self) -> &mut [Layer] {
+        &mut self.layers
+    }
+
     /// The layer at `index`.
     pub fn layer(&self, index: usize) -> Option<&Layer> {
         self.layers.get(index)
