@@ -567,7 +567,7 @@ impl Ctx<'_> {
         let horizontal = padding.left + padding.right + border.left + border.right;
         let vertical = padding.top + padding.bottom + border.top + border.bottom;
 
-        let specified_width = resolve::dimension(style.width, available_width);
+        let specified_width = resolve::dimension(style.width.clone(), available_width);
         let (content_width, border_box_width) = match (specified_width, style.box_sizing) {
             (Some(w), BoxSizing::BorderBox) => ((w - horizontal).max(0.0), w),
             (Some(w), BoxSizing::ContentBox) => (w, w + horizontal),
@@ -634,7 +634,7 @@ impl Ctx<'_> {
             }
         };
 
-        let border_box_height = match resolve::dimension(style.height, f32::INFINITY) {
+        let border_box_height = match resolve::dimension(style.height.clone(), f32::INFINITY) {
             Some(height) => height + vertical,
             None => content_height + vertical,
         };
@@ -698,7 +698,7 @@ impl Ctx<'_> {
         // Width: an explicit width, or stretched between `left`+`right`, or
         // shrink-to-fit against the available space.
         let specified =
-            resolve::dimension(style.width, cb_width).map(|width| match style.box_sizing {
+            resolve::dimension(style.width.clone(), cb_width).map(|width| match style.box_sizing {
                 BoxSizing::BorderBox => (width - horizontal).max(0.0),
                 BoxSizing::ContentBox => width,
             });
@@ -734,7 +734,7 @@ impl Ctx<'_> {
         let border_y = if let Some(top) = inset.top {
             containing.y + top + margin.top
         } else if let Some(bottom) = inset.bottom {
-            match resolve::dimension(style.height, cb_height) {
+            match resolve::dimension(style.height.clone(), cb_height) {
                 Some(height) => containing.bottom() - bottom - margin.bottom - (height + vertical),
                 None => containing.y + margin.top,
             }
@@ -783,7 +783,7 @@ impl Ctx<'_> {
             }
         };
 
-        let border_height = match resolve::dimension(style.height, cb_height) {
+        let border_height = match resolve::dimension(style.height.clone(), cb_height) {
             Some(height) => height + vertical,
             None => content_height + vertical,
         };

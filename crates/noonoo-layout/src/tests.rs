@@ -28,6 +28,32 @@ fn blocks_stack_vertically_and_fill_width() {
 }
 
 #[test]
+fn min_max_and_clamp_resolve_against_the_containing_block() {
+    let (doc, tree) = page(
+        r#"<div id="a"></div><div id="b"></div><div id="c"></div>"#,
+        "#a { width: min(100%, 300px); height: 1px }
+         #b { width: max(50%, 200px); height: 1px }
+         #c { width: clamp(100px, 50%, 150px); height: 1px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.width, 300.0);
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.width, 200.0);
+    assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.width, 150.0);
+
+    // Narrower viewport: the percentage terms now win.
+    let (doc, tree) = page(
+        r#"<div id="a"></div><div id="b"></div><div id="c"></div>"#,
+        "#a { width: min(100%, 300px); height: 1px }
+         #b { width: max(50%, 200px); height: 1px }
+         #c { width: clamp(100px, 50%, 150px); height: 1px }",
+        160.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.width, 160.0);
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.width, 200.0);
+    assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.width, 100.0);
+}
+
+#[test]
 fn calc_mixes_percentage_and_pixels_against_the_containing_block() {
     let (doc, tree) = page(
         r#"<div id="a"></div>"#,

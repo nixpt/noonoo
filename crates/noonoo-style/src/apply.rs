@@ -8,15 +8,22 @@ use crate::calc::{self, CalcValue, to_px};
 use crate::computed::*;
 // --- value resolution ------------------------------------------------------
 
-/// The arguments of a lone `calc()` in `values`.
-fn calc_args(values: &[Value]) -> Option<&[Value]> {
+/// A lone math function (`calc()`, `min()`, `max()`, `clamp()`) in `values`.
+fn math_fn(values: &[Value]) -> Option<(&str, &[Value])> {
     match values {
-        [Value::Function { name, args }] if name.eq_ignore_ascii_case("calc") => Some(args),
+        [Value::Function { name, args }]
+            if name.eq_ignore_ascii_case("calc")
+                || name.eq_ignore_ascii_case("min")
+                || name.eq_ignore_ascii_case("max")
+                || name.eq_ignore_ascii_case("clamp") =>
+        {
+            Some((name.as_str(), args))
+        }
         _ => None,
     }
 }
 
-/// Normalise a `calc()` result into a [`Dimension`].
+/// Normalise a math result into a [`Dimension`].
 fn calc_dimension(value: CalcValue) -> Option<Dimension> {
     match value {
         CalcValue::Number(number) => Some(Dimension::Px(number)),
@@ -27,10 +34,14 @@ fn calc_dimension(value: CalcValue) -> Option<Dimension> {
         } else {
             Dimension::Calc { px, percent }
         }),
+        CalcValue::Extreme { kind, terms } => Some(Dimension::Extreme {
+            kind,
+            terms: terms.into_boxed_slice(),
+        }),
     }
 }
 
-/// Normalise a `calc()` result into a [`Length`].
+/// Normalise a math result into a [`Length`].
 ///
 /// The absolute part keeps its sign here; layout clamps *after* adding the
 /// percentage, so `calc(100% - 20px)` stays correct for a narrow container.
@@ -44,16 +55,18 @@ fn calc_length(value: CalcValue) -> Option<Length> {
         } else {
             Length::Calc { px, percent }
         }),
+        CalcValue::Extreme { kind, terms } => Some(Length::Extreme {
+            kind,
+            terms: terms.into_boxed_slice(),
+        }),
     }
 }
 
 pub(crate) fn resolve_font_size(values: &[Value], parent: f32, root: f32) -> Option<f32> {
-    if let Some(args) = calc_args(values) {
-        return match calc::evaluate(args, parent, root)? {
-            // A percentage in `font-size` is relative to the parent font size.
-            CalcValue::Length { px, percent } => Some((px + parent * percent / 100.0).max(0.0)),
-            CalcValue::Number(number) => Some(number.max(0.0)),
-        };
+    if let Some((name, args)) = math_fn(values) {
+        let value = calc::evaluate_function(name, args, parent, root)?;
+        // A percentage in `font-size` is relative to the parent font size.
+        return calc::resolve(&value, parent).map(|size| size.max(0.0));
     }
     match values {
         [Value::Length(length)] => Some(to_px(length, parent, root).max(0.0)),
@@ -83,8 +96,9 @@ fn keyword(values: &[Value]) -> Option<&str> {
 }
 
 fn dimension(values: &[Value], font_size: f32, root: f32) -> Option<Dimension> {
-    if let Some(args) = calc_args(values) {
-        return calc_dimension(calc::evaluate(args, font_size, root)?);
+    if let Some((name, args)) = math_fn(values) {
+        let value = calc::evaluate_function(name, args, font_size, root)?;
+        return calc_dimension(value);
     }
     match values {
         [Value::Keyword(keyword)] if keyword == "auto" => Some(Dimension::Auto),
@@ -96,8 +110,9 @@ fn dimension(values: &[Value], font_size: f32, root: f32) -> Option<Dimension> {
 }
 
 fn length(values: &[Value], font_size: f32, root: f32) -> Option<Length> {
-    if let Some(args) = calc_args(values) {
-        return calc_length(calc::evaluate(args, font_size, root)?);
+    if let Some((name, args)) = math_fn(values) {
+        let value = calc::evaluate_function(name, args, font_size, root)?;
+        return calc_length(value);
     }
     match values {
         [Value::Length(l)] => Some(Length::Px(to_px(l, font_size, root).max(0.0))),
@@ -116,12 +131,14 @@ fn color(values: &[Value]) -> Option<noonoo_css::Color> {
 }
 
 fn border_width_px(values: &[Value], font_size: f32) -> Option<f32> {
-    if let Some(args) = calc_args(values) {
-        return match calc::evaluate(args, font_size, 16.0)? {
-            CalcValue::Length { px, percent: 0.0 } => Some(px.max(0.0)),
-            CalcValue::Number(number) => Some(number.max(0.0)),
-            _ => None,
-        };
+    if let Some((name, args)) = math_fn(values) {
+        let value = calc::evaluate_function(name, args, font_size, 16.0)?;
+        // Border widths must be absolute; percentages have no reference here.
+        return value
+            .is_absolute()
+            .then(|| calc::resolve(&value, 0.0))
+            .flatten()
+            .map(|width| width.max(0.0));
     }
     match values {
         [Value::Keyword(keyword)] => match keyword.as_str() {
@@ -450,10 +467,14 @@ fn font_family(values: &[Value]) -> Vec<String> {
 }
 
 fn set_line_height(slot: &mut f32, values: &[Value], font_size: f32) {
-    let value = if let Some(args) = calc_args(values) {
-        match calc::evaluate(args, font_size, font_size) {
+    let value = if let Some((name, args)) = math_fn(values) {
+        // A unitless `line-height` is a multiplier; a length is absolute.
+        match calc::evaluate_function(name, args, font_size, font_size) {
             Some(CalcValue::Number(number)) => font_size * number,
-            Some(CalcValue::Length { px, percent }) => px + font_size * percent / 100.0,
+            Some(value) => match calc::resolve(&value, font_size) {
+                Some(resolved) => resolved,
+                None => return,
+            },
             None => return,
         }
     } else {
@@ -537,20 +558,20 @@ fn copy_property(dst: &mut ComputedStyle, src: &ComputedStyle, property: &Proper
     match property {
         Property::Display => dst.display = src.display,
         Property::Position => dst.position = src.position,
-        Property::Width => dst.width = src.width,
-        Property::Height => dst.height = src.height,
-        Property::Top => dst.inset.top = src.inset.top,
-        Property::Right => dst.inset.right = src.inset.right,
-        Property::Bottom => dst.inset.bottom = src.inset.bottom,
-        Property::Left => dst.inset.left = src.inset.left,
-        Property::MarginTop => dst.margin.top = src.margin.top,
-        Property::MarginRight => dst.margin.right = src.margin.right,
-        Property::MarginBottom => dst.margin.bottom = src.margin.bottom,
-        Property::MarginLeft => dst.margin.left = src.margin.left,
-        Property::PaddingTop => dst.padding.top = src.padding.top,
-        Property::PaddingRight => dst.padding.right = src.padding.right,
-        Property::PaddingBottom => dst.padding.bottom = src.padding.bottom,
-        Property::PaddingLeft => dst.padding.left = src.padding.left,
+        Property::Width => dst.width = src.width.clone(),
+        Property::Height => dst.height = src.height.clone(),
+        Property::Top => dst.inset.top = src.inset.top.clone(),
+        Property::Right => dst.inset.right = src.inset.right.clone(),
+        Property::Bottom => dst.inset.bottom = src.inset.bottom.clone(),
+        Property::Left => dst.inset.left = src.inset.left.clone(),
+        Property::MarginTop => dst.margin.top = src.margin.top.clone(),
+        Property::MarginRight => dst.margin.right = src.margin.right.clone(),
+        Property::MarginBottom => dst.margin.bottom = src.margin.bottom.clone(),
+        Property::MarginLeft => dst.margin.left = src.margin.left.clone(),
+        Property::PaddingTop => dst.padding.top = src.padding.top.clone(),
+        Property::PaddingRight => dst.padding.right = src.padding.right.clone(),
+        Property::PaddingBottom => dst.padding.bottom = src.padding.bottom.clone(),
+        Property::PaddingLeft => dst.padding.left = src.padding.left.clone(),
         Property::BorderTopWidth => dst.border_width.top = src.border_width.top,
         Property::BorderRightWidth => dst.border_width.right = src.border_width.right,
         Property::BorderBottomWidth => dst.border_width.bottom = src.border_width.bottom,
@@ -568,7 +589,7 @@ fn copy_property(dst: &mut ComputedStyle, src: &ComputedStyle, property: &Proper
         Property::FlexWrap => dst.flex_wrap = src.flex_wrap,
         Property::FlexGrow => dst.flex_grow = src.flex_grow,
         Property::FlexShrink => dst.flex_shrink = src.flex_shrink,
-        Property::FlexBasis => dst.flex_basis = src.flex_basis,
+        Property::FlexBasis => dst.flex_basis = src.flex_basis.clone(),
         Property::JustifyContent => dst.justify_content = src.justify_content,
         Property::AlignItems => dst.align_items = src.align_items,
         Property::AlignSelf => dst.align_self = src.align_self,

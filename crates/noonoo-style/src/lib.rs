@@ -23,9 +23,13 @@
 //! `calc()` is evaluated in the same pass, when `em`/`rem` have a font size to
 //! resolve against (see the `calc` module). It is typed: lengths and
 //! percentages add and subtract, numbers multiply and divide them, and adding a
-//! bare number to a length is invalid. A result that mixes a percentage with an
-//! absolute part (`calc(100% - 20px)`) stays unresolved until layout knows the
-//! containing block.
+//! bare number to a length is invalid.
+//!
+//! `min()`, `max()`, and `clamp()` build on the same evaluator. When their
+//! arguments mix percentages with absolute lengths the comparison cannot be
+//! settled without the containing block, so the result is kept as a deferred
+//! [`Dimension::Extreme`]/[`Length::Extreme`] and resolved in layout. Arguments
+//! that share a slope (all absolute, or all percentages) are folded here.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -41,9 +45,9 @@ use noonoo_css::Stylesheet;
 use noonoo_dom::{Document, NodeId};
 
 pub use computed::{
-    AlignItems, BorderStyle, BoxSizing, ComputedStyle, Cursor, Dimension, Display, Edges,
-    FlexDirection, FlexWrap, FontStyle, JustifyContent, Length, LengthOrAuto, Overflow, Position,
-    TextAlign, TextDecoration, Visibility, WhiteSpace, ZIndex,
+    AlignItems, BorderStyle, BoxSizing, CalcTerm, ComputedStyle, Cursor, Dimension, Display, Edges,
+    Extreme, FlexDirection, FlexWrap, FontStyle, JustifyContent, Length, LengthOrAuto, Overflow,
+    Position, TextAlign, TextDecoration, Visibility, WhiteSpace, ZIndex,
 };
 
 /// Computed styles for a document, indexed by node.
@@ -328,5 +332,68 @@ mod tests {
         // non-inherited property then falls back to its initial value.
         assert_eq!(styles.get(p).unwrap().margin.top, Dimension::Px(0.0));
         assert_eq!(styles.get(p).unwrap().color, Color::rgb(255, 0, 0));
+    }
+
+    #[test]
+    fn min_and_max_mix_percentages_with_lengths() {
+        let (doc, styles) = styled("<p>x</p>", "p { width: min(100%, 600px) }");
+        let p = doc.get_elements_by_tag_name("p")[0];
+        let expected = Dimension::Extreme {
+            kind: Extreme::Min,
+            terms: vec![
+                CalcTerm {
+                    px: 0.0,
+                    percent: 100.0,
+                },
+                CalcTerm {
+                    px: 600.0,
+                    percent: 0.0,
+                },
+            ]
+            .into_boxed_slice(),
+        };
+        assert_eq!(styles.get(p).unwrap().width, expected);
+
+        // Absolute-only arguments fold immediately.
+        let (doc, styles) = styled("<p>x</p>", "p { width: max(10px, 2em); font-size: 20px }");
+        let p = doc.get_elements_by_tag_name("p")[0];
+        assert_eq!(styles.get(p).unwrap().width, Dimension::Px(40.0));
+    }
+
+    #[test]
+    fn clamp_reaches_padding_and_font_size() {
+        let (doc, styles) = styled(
+            "<div><p>x</p></div>",
+            "div { font-size: 16px } p { padding-left: clamp(4px, 10%, 40px); font-size: clamp(10px, 1em, 20px) }",
+        );
+        let p = doc.get_elements_by_tag_name("p")[0];
+        let s = styles.get(p).unwrap();
+        assert!(matches!(
+            s.padding.left,
+            Length::Extreme {
+                kind: Extreme::Clamp,
+                ..
+            }
+        ));
+        assert_eq!(s.font_size, 16.0, "clamp(10, 16, 20) at a 16px parent");
+    }
+
+    #[test]
+    fn min_and_max_compose_with_variables() {
+        let (doc, styles) = styled(
+            "<p>x</p>",
+            ":root { --cap: 300px } p { width: min(100%, var(--cap)) }",
+        );
+        let p = doc.get_elements_by_tag_name("p")[0];
+        let Dimension::Extreme { terms, .. } = &styles.get(p).unwrap().width else {
+            panic!("expected a deferred comparison");
+        };
+        assert_eq!(
+            terms[1],
+            CalcTerm {
+                px: 300.0,
+                percent: 0.0
+            }
+        );
     }
 }

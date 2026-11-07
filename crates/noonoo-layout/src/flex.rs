@@ -82,12 +82,12 @@ fn layout_row(
     let mut shrinks = Vec::with_capacity(count);
     for &item in items {
         let item_style = ctx.style(item);
-        let basis = match item_style.flex_basis {
+        let basis = match &item_style.flex_basis {
             Dimension::Auto => None,
-            dimension => resolve::dimension(dimension, content_width),
+            dimension => resolve::dimension(dimension.clone(), content_width),
         };
         let base = basis
-            .or_else(|| resolve::dimension(item_style.width, content_width))
+            .or_else(|| resolve::dimension(item_style.width.clone(), content_width))
             .unwrap_or_else(|| {
                 let text = ctx.document.text_content(item);
                 ctx.shaper

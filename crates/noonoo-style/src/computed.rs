@@ -42,7 +42,7 @@ pub enum Position {
 }
 
 /// A dimension that may be `auto`, a pixel length, or a percentage.
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Dimension {
     /// `auto`.
     Auto,
@@ -57,13 +57,41 @@ pub enum Dimension {
         /// The percentage part (`50.0` for `50%`).
         percent: f32,
     },
+    /// A `min()`/`max()`/`clamp()` whose terms cannot be ordered until the
+    /// containing block is known (because they mix percentages and lengths).
+    Extreme {
+        /// Which extreme to select.
+        kind: Extreme,
+        /// The terms, each `px + percent%`.
+        terms: Box<[CalcTerm]>,
+    },
+}
+
+/// One term of a deferred comparison: `percent% + px`.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct CalcTerm {
+    /// The absolute part, in pixels.
+    pub px: f32,
+    /// The percentage part (`50.0` for `50%`).
+    pub percent: f32,
+}
+
+/// Which value a `min()`/`max()`/`clamp()` selects.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Extreme {
+    /// `min()`.
+    Min,
+    /// `max()`.
+    Max,
+    /// `clamp(min, value, max)`.
+    Clamp,
 }
 
 /// A margin: a dimension that may be `auto`.
 pub type LengthOrAuto = Dimension;
 
 /// A padding or radius: a non-negative length, pixels or percentage.
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Length {
     /// An absolute length in pixels.
     Px(f32),
@@ -75,6 +103,13 @@ pub enum Length {
         px: f32,
         /// The percentage part (`50.0` for `50%`).
         percent: f32,
+    },
+    /// A `min()`/`max()`/`clamp()` deferred to layout (see [`Dimension`]).
+    Extreme {
+        /// Which extreme to select.
+        kind: Extreme,
+        /// The terms, each `px + percent%`.
+        terms: Box<[CalcTerm]>,
     },
 }
 
@@ -96,13 +131,13 @@ pub struct Edges<T> {
     pub left: T,
 }
 
-impl<T: Copy> Edges<T> {
+impl<T: Clone> Edges<T> {
     /// The same value on all four edges.
     pub fn all(value: T) -> Self {
         Self {
-            top: value,
-            right: value,
-            bottom: value,
+            top: value.clone(),
+            right: value.clone(),
+            bottom: value.clone(),
             left: value,
         }
     }
