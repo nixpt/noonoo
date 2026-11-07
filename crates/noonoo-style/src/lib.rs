@@ -470,6 +470,27 @@ mod tests {
     }
 
     #[test]
+    fn min_and_max_sizing_parse() {
+        let (doc, styles) = styled(
+            "<p>x</p>",
+            "p { max-width: calc(100% - 20px); min-height: 2em }",
+        );
+        let p = doc.get_elements_by_tag_name("p")[0];
+        let style = styles.get(p).unwrap();
+        assert_eq!(
+            style.max_width,
+            Dimension::Calc {
+                px: -20.0,
+                percent: 100.0
+            }
+        );
+        assert_eq!(style.min_height, Dimension::Px(32.0));
+        // Defaults are `auto`.
+        assert_eq!(style.min_width, Dimension::Auto);
+        assert_eq!(style.max_height, Dimension::Auto);
+    }
+
+    #[test]
     fn min_and_max_compose_with_variables() {
         let (doc, styles) = styled(
             "<p>x</p>",

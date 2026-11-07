@@ -634,8 +634,16 @@ pub struct ComputedStyle {
     pub opacity: f32,
     /// `width`.
     pub width: Dimension,
+    /// `min-width`.
+    pub min_width: Dimension,
+    /// `max-width`.
+    pub max_width: Dimension,
     /// `height`.
     pub height: Dimension,
+    /// `min-height`.
+    pub min_height: Dimension,
+    /// `max-height`.
+    pub max_height: Dimension,
     /// `top` / `right` / `bottom` / `left` offsets.
     pub inset: Edges<Dimension>,
     /// `margin`.
@@ -707,7 +715,11 @@ impl Default for ComputedStyle {
             visibility: Visibility::Visible,
             opacity: 1.0,
             width: Dimension::Auto,
+            min_width: Dimension::Auto,
+            max_width: Dimension::Auto,
             height: Dimension::Auto,
+            min_height: Dimension::Auto,
+            max_height: Dimension::Auto,
             inset: Edges::all(Dimension::Auto),
             margin: Edges::all(Dimension::Px(0.0)),
             padding: Edges::all(Length::ZERO),

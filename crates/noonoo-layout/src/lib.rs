@@ -43,8 +43,12 @@
 //! - **Stacking order** — every box carries a paint key from `position` and
 //!   `z-index`; paint and hit-testing order siblings by it (negative `z-index`
 //!   first, then in-flow content, then positioned boxes by `z-index`).
-//! - Width: `auto` / px / percentage (and stretch between `left`+`right`);
-//!   height: `auto` / px / percentage of the containing block.
+//! - Width: `auto` / px / percentage (and stretch between `left`+`right`),
+//!   clamped by `min-width`/`max-width` (which share `width`'s box per
+//!   `box-sizing`, with `min` winning over `max` — flex bases freeze and
+//!   re-distribute per CSS 9.7); height: `auto` / px / percentage of the
+//!   containing block (percentages behave as `auto` against an indefinite
+//!   container), clamped by `min-height`/`max-height`.
 //! - `box-sizing`, margins, padding, and borders, resolved to absolute pixels.
 //!
 //! ## What it does not (yet)
@@ -629,15 +633,27 @@ impl Ctx<'_> {
         let horizontal = padding.left + padding.right + border.left + border.right;
         let vertical = padding.top + padding.bottom + border.top + border.bottom;
 
-        let specified_width = resolve::dimension(style.width.clone(), available_width);
-        let (content_width, border_box_width) = match (specified_width, style.box_sizing) {
-            (Some(w), BoxSizing::BorderBox) => ((w - horizontal).max(0.0), w),
-            (Some(w), BoxSizing::ContentBox) => (w, w + horizontal),
-            (None, _) => {
-                let inner = (available_width - horizontal).max(0.0);
-                (inner, inner + horizontal)
-            }
+        // `width`, `min-width`, and `max-width` share a box (per `box-sizing`):
+        // normalise them all to border boxes, clamp — `min` wins over `max` —
+        // and derive the content width. An auto width fills the available
+        // width (its border box is the whole reference).
+        let to_border_box = |width: f32| match style.box_sizing {
+            BoxSizing::BorderBox => width,
+            BoxSizing::ContentBox => (width + horizontal).max(0.0),
         };
+        let specified = resolve::dimension(style.width.clone(), available_width).map(to_border_box);
+        let minimum =
+            resolve::dimension(style.min_width.clone(), available_width).map(to_border_box);
+        let maximum =
+            resolve::dimension(style.max_width.clone(), available_width).map(to_border_box);
+        let mut border_box_width = specified.unwrap_or_else(|| available_width.max(0.0));
+        if let Some(maximum) = maximum {
+            border_box_width = border_box_width.min(maximum);
+        }
+        if let Some(minimum) = minimum {
+            border_box_width = border_box_width.max(minimum);
+        }
+        let content_width = (border_box_width - horizontal).max(0.0);
 
         let (mut border_x, mut border_y) = (border_x, border_y);
 
@@ -722,12 +738,22 @@ impl Ctx<'_> {
             self.pop_bfc();
         }
 
-        // A percentage height has no definite containing-block height here
-        // (the container is still being sized), so it behaves as `auto`.
-        let border_box_height = match resolve::definite(&style.height) {
-            Some(height) => height + vertical,
-            None => content_height + vertical,
+        // `height`, `min-height`, and `max-height` share a box (per
+        // `box-sizing`), like the widths above. A percentage-bearing height has
+        // no definite containing-block height here (the container is still
+        // being sized), so it behaves as `auto`.
+        let to_border_box_height = |height: f32| match style.box_sizing {
+            BoxSizing::BorderBox => height,
+            BoxSizing::ContentBox => height + vertical,
         };
+        let specified_height = resolve::definite(&style.height).map(to_border_box_height);
+        let mut border_box_height = specified_height.unwrap_or(content_height + vertical);
+        if let Some(maximum) = resolve::definite(&style.max_height) {
+            border_box_height = border_box_height.min(to_border_box_height(maximum));
+        }
+        if let Some(minimum) = resolve::definite(&style.min_height) {
+            border_box_height = border_box_height.max(to_border_box_height(minimum));
+        }
 
         let padding_box = Rect::new(
             border_x + border.left,

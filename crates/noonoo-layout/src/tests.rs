@@ -342,6 +342,95 @@ fn repeat_expands_tracks() {
 }
 
 #[test]
+fn max_width_caps_an_auto_width_block() {
+    let (doc, tree) = page(
+        r#"<div id="a"></div>"#,
+        "#a { max-width: 200px; height: 10px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.width, 200.0);
+}
+
+#[test]
+fn max_width_caps_a_specified_width() {
+    let (doc, tree) = page(
+        r#"<div id="a"></div>"#,
+        "#a { width: 400px; max-width: 200px; height: 10px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.width, 200.0);
+}
+
+#[test]
+fn min_width_floors_an_auto_width_block() {
+    let (doc, tree) = page(
+        r#"<div id="a"></div>"#,
+        "#a { min-width: 300px; height: 10px }",
+        200.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.width, 300.0);
+}
+
+#[test]
+fn min_width_wins_over_max_width() {
+    let (doc, tree) = page(
+        r#"<div id="a"></div>"#,
+        "#a { width: 50px; min-width: 300px; max-width: 200px; height: 10px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.width, 300.0);
+}
+
+#[test]
+fn min_max_respect_box_sizing() {
+    let (doc, tree) = page(
+        r#"<div id="a"></div>"#,
+        "#a { box-sizing: border-box; width: 100px; padding: 10px;
+              min-width: 150px; height: 10px }",
+        400.0,
+    );
+    // `min-width` is a border box here: 150 total, 130 of content.
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.width, 150.0);
+}
+
+#[test]
+fn a_percentage_max_width_resolves_against_the_container() {
+    let (doc, tree) = page(
+        r#"<div id="parent"><div id="a"></div></div>"#,
+        "#parent { width: 200px } #a { max-width: 50%; height: 10px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.width, 100.0);
+}
+
+#[test]
+fn max_height_caps_the_box_and_min_height_grows_it() {
+    let (doc, tree) = page(
+        r#"<div id="a">word word word</div><div id="b"></div>"#,
+        "#a { max-height: 20px; overflow: hidden; width: 100px }
+         #b { min-height: 40px; width: 10px }",
+        400.0,
+    );
+    // Three words wrap to two lines (~38.4px tall); the box is capped at 20.
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.height, 20.0);
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.height, 40.0);
+}
+
+#[test]
+fn a_flex_item_respects_its_min_and_max_width() {
+    let (doc, tree) = page(
+        r#"<div id="parent"><div id="a"></div><div id="b"></div></div>"#,
+        "#parent { display: flex }
+         #a { flex-grow: 1; max-width: 100px; height: 10px }
+         #b { flex-grow: 1; height: 10px }",
+        400.0,
+    );
+    // Both want half (200); `a` caps at 100 and `b` takes the rest.
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.width, 100.0);
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.width, 300.0);
+}
+
+#[test]
 fn a_grid_container_heights_to_its_rows() {
     let (doc, tree) = page(
         r#"<div id="parent"><div id="a"></div><div id="b"></div></div>"#,

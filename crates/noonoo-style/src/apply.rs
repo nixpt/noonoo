@@ -282,6 +282,22 @@ pub(crate) fn apply(
                 style.grid_row = range;
             }
         }
+        Property::MinWidth => set_first(
+            &mut style.min_width,
+            dimension(values, font_size, root, viewport),
+        ),
+        Property::MaxWidth => set_first(
+            &mut style.max_width,
+            dimension(values, font_size, root, viewport),
+        ),
+        Property::MinHeight => set_first(
+            &mut style.min_height,
+            dimension(values, font_size, root, viewport),
+        ),
+        Property::MaxHeight => set_first(
+            &mut style.max_height,
+            dimension(values, font_size, root, viewport),
+        ),
         Property::Width => set_first(
             &mut style.width,
             dimension(values, font_size, root, viewport),
@@ -671,7 +687,11 @@ fn copy_property(dst: &mut ComputedStyle, src: &ComputedStyle, property: &Proper
         Property::GridColumn => dst.grid_column = src.grid_column,
         Property::GridRow => dst.grid_row = src.grid_row,
         Property::Width => dst.width = src.width.clone(),
+        Property::MinWidth => dst.min_width = src.min_width.clone(),
+        Property::MaxWidth => dst.max_width = src.max_width.clone(),
         Property::Height => dst.height = src.height.clone(),
+        Property::MinHeight => dst.min_height = src.min_height.clone(),
+        Property::MaxHeight => dst.max_height = src.max_height.clone(),
         Property::Top => dst.inset.top = src.inset.top.clone(),
         Property::Right => dst.inset.right = src.inset.right.clone(),
         Property::Bottom => dst.inset.bottom = src.inset.bottom.clone(),

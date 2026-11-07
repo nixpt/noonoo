@@ -5,7 +5,7 @@
 //! yet); column flex stacks natural heights.
 
 use noonoo_dom::NodeId;
-use noonoo_style::{ComputedStyle, Dimension, FlexDirection, FlexWrap, JustifyContent};
+use noonoo_style::{BoxSizing, ComputedStyle, Dimension, FlexDirection, FlexWrap, JustifyContent};
 
 use crate::{Ctx, resolve};
 
@@ -80,6 +80,8 @@ fn layout_row(
     let mut bases = Vec::with_capacity(count);
     let mut grows = Vec::with_capacity(count);
     let mut shrinks = Vec::with_capacity(count);
+    let mut minimums = Vec::with_capacity(count);
+    let mut maximums = Vec::with_capacity(count);
     for &item in items {
         let item_style = ctx.style(item);
         let basis = match &item_style.flex_basis {
@@ -93,7 +95,24 @@ fn layout_row(
                 ctx.shaper
                     .advance(&text, item_style.font_request(), item_style.font_size)
             });
+        // `min-width`/`max-width` clamp the flex base before grow/shrink, and
+        // share `width`'s box (per `box-sizing`).
+        let horizontal = {
+            let padding = resolve::paddings(&item_style.padding, content_width);
+            let border = resolve::borders(item_style);
+            padding.left + padding.right + border.left + border.right
+        };
+        let to_border_box = |width: f32| match item_style.box_sizing {
+            BoxSizing::BorderBox => width,
+            BoxSizing::ContentBox => (width + horizontal).max(0.0),
+        };
+        let minimum =
+            resolve::dimension(item_style.min_width.clone(), content_width).map(to_border_box);
+        let maximum =
+            resolve::dimension(item_style.max_width.clone(), content_width).map(to_border_box);
         bases.push(base.max(0.0));
+        minimums.push(minimum);
+        maximums.push(maximum);
         grows.push(item_style.flex_grow);
         shrinks.push(item_style.flex_shrink);
     }
@@ -132,9 +151,57 @@ fn layout_row(
         if free > 0.0 {
             let total_grow: f32 = line.iter().map(|&i| grows[i]).sum();
             if total_grow > 0.0 {
-                for (k, &i) in line.iter().enumerate() {
-                    line_bases[k] += free * grows[i] / total_grow;
+                // CSS 9.7's freeze: grow, then any item clamped by its
+                // min/max freezes at the bound and its share re-distributes
+                // among the growers that are still free. Each pass freezes at
+                // least one item, so this terminates.
+                let mut sizes: Vec<f32> = line.iter().map(|&i| bases[i]).collect();
+                let mut frozen = vec![false; n];
+                loop {
+                    let remaining =
+                        (content_width - line_gaps - sizes.iter().sum::<f32>()).max(0.0);
+                    if remaining <= f32::EPSILON {
+                        break;
+                    }
+                    let growers: Vec<usize> = line
+                        .iter()
+                        .enumerate()
+                        .filter(|&(k, &i)| !frozen[k] && grows[i] > 0.0)
+                        .map(|(k, _)| k)
+                        .collect();
+                    if growers.is_empty() {
+                        break;
+                    }
+                    let total: f32 = growers.iter().map(|&k| grows[line[k]]).sum();
+                    if total <= 0.0 {
+                        break;
+                    }
+                    for &k in &growers {
+                        sizes[k] += remaining * grows[line[k]] / total;
+                    }
+                    let mut froze_any = false;
+                    for &k in &growers {
+                        let i = line[k];
+                        if let Some(maximum) = maximums[i]
+                            && sizes[k] > maximum
+                        {
+                            sizes[k] = maximum;
+                            frozen[k] = true;
+                            froze_any = true;
+                        }
+                        if let Some(minimum) = minimums[i]
+                            && sizes[k] < minimum
+                        {
+                            sizes[k] = minimum;
+                            frozen[k] = true;
+                            froze_any = true;
+                        }
+                    }
+                    if !froze_any {
+                        break;
+                    }
                 }
+                line_bases = sizes;
             }
         } else if free < 0.0 {
             let weights: Vec<f32> = line.iter().map(|&i| shrinks[i] * bases[i]).collect();
