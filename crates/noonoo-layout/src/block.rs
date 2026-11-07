@@ -264,6 +264,8 @@ pub(crate) fn layout_inline_run(
                 clips: false,
                 scroll_max: 0.0,
                 scroll: 0.0,
+                z_tier: 1,
+                z_index: 0,
                 children: Vec::new(),
             });
             indices.push(index);

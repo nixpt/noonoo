@@ -427,3 +427,15 @@ fn scrolling_changes_which_row_is_hit() {
     tree.scroll_by(list, 50.0);
     assert_eq!(tree.hit_test(Point::new(10.0, 10.0)), Some(id(&doc, "b")));
 }
+
+#[test]
+fn z_index_orders_hit_testing() {
+    let (doc, tree) = page(
+        r#"<div id="a"></div><div id="b"></div>"#,
+        "#a { position: absolute; top: 0; left: 0; width: 50px; height: 50px; z-index: 1 } \
+         #b { position: absolute; top: 0; left: 0; width: 50px; height: 50px; z-index: 2 }",
+        100.0,
+    );
+    // #b (z 2) is on top, so a point inside both selects it.
+    assert_eq!(tree.hit_test(Point::new(10.0, 10.0)), Some(id(&doc, "b")));
+}

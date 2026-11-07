@@ -88,7 +88,9 @@ impl CommandList {
 pub fn paint(styles: &Styles, layout: &LayoutTree) -> CommandList {
     let mut list = CommandList(Vec::new());
     let boxes = layout.boxes();
-    for &root in layout.root_indices() {
+    let mut roots = layout.root_indices().to_vec();
+    roots.sort_by_key(|&root| (boxes[root].z_tier, boxes[root].z_index));
+    for root in roots {
         paint_box(root, boxes, styles, 0.0, &mut list);
     }
     list
@@ -162,7 +164,11 @@ fn paint_box(index: usize, boxes: &[LayoutBox], styles: &Styles, ty: f32, out: &
         });
     }
     let child_ty = ty + b.scroll;
-    for &child in &b.children {
+    // Paint children in stacking order: negative `z-index` first, then in-flow
+    // content, then positioned boxes by `z-index`.
+    let mut children = b.children.clone();
+    children.sort_by_key(|&child| (boxes[child].z_tier, boxes[child].z_index));
+    for child in children {
         paint_box(child, boxes, styles, child_ty, out);
     }
     if b.clips {
@@ -407,5 +413,56 @@ mod tests {
                 _ => None,
             })
             .expect("a red rect")
+    }
+
+    #[test]
+    fn z_index_orders_positioned_siblings() {
+        let list = render(
+            r#"<div id="a"></div><div id="b"></div>"#,
+            "#a { position: absolute; top: 0; left: 0; width: 10px; height: 10px; \
+                  background-color: #ff0000; z-index: 2 } \
+             #b { position: absolute; top: 0; left: 0; width: 10px; height: 10px; \
+                  background-color: #00ff00; z-index: 1 }",
+        );
+        // #a has the higher z-index, so it paints last (on top).
+        assert!(
+            index_of_color(&list, Color::rgb(255, 0, 0))
+                > index_of_color(&list, Color::rgb(0, 255, 0))
+        );
+    }
+
+    #[test]
+    fn a_positioned_box_paints_above_in_flow_content() {
+        let list = render(
+            r#"<div id="flow"></div><div id="over"></div>"#,
+            "#flow { height: 10px; background-color: #00ff00 } \
+             #over { position: absolute; top: 0; left: 0; width: 10px; height: 10px; \
+                     background-color: #ff0000 }",
+        );
+        assert!(
+            index_of_color(&list, Color::rgb(255, 0, 0))
+                > index_of_color(&list, Color::rgb(0, 255, 0))
+        );
+    }
+
+    #[test]
+    fn a_negative_z_index_paints_below_in_flow_content() {
+        let list = render(
+            r#"<div id="under"></div><div id="flow"></div>"#,
+            "#under { position: absolute; top: 0; left: 0; width: 10px; height: 10px; \
+                      background-color: #ff0000; z-index: -1 } \
+             #flow { height: 10px; background-color: #00ff00 }",
+        );
+        assert!(
+            index_of_color(&list, Color::rgb(255, 0, 0))
+                < index_of_color(&list, Color::rgb(0, 255, 0))
+        );
+    }
+
+    fn index_of_color(list: &CommandList, color: Color) -> usize {
+        list.commands()
+            .iter()
+            .position(|c| matches!(c, Command::FillRect { color: c, .. } if *c == color))
+            .expect("a rect of that colour")
     }
 }

@@ -49,7 +49,7 @@ use std::collections::HashMap;
 
 use noonoo_dom::{Document, NodeData, NodeId};
 use noonoo_geometry::{Point, Rect, Size};
-use noonoo_style::{BoxSizing, ComputedStyle, Dimension, Display, Edges, Position, Styles};
+use noonoo_style::{BoxSizing, ComputedStyle, Dimension, Display, Edges, Position, Styles, ZIndex};
 
 pub use noonoo_text::{Align, MetricShaper, Shaper};
 
@@ -92,6 +92,12 @@ pub struct LayoutBox {
     pub scroll_max: f32,
     /// The current vertical scroll offset.
     pub scroll: f32,
+    /// The box's paint tier within its parent: `0` for a negative-`z-index`
+    /// positioned box, `1` for in-flow content, `2` for a positioned box with
+    /// `z-index: 0`/`auto`/positive.
+    pub z_tier: u8,
+    /// The box's `z-index` (`auto` is `0`).
+    pub z_index: i32,
     /// Child box indices.
     pub children: Vec<usize>,
 }
@@ -162,7 +168,9 @@ impl LayoutTree {
     /// this matches what the user sees.
     pub fn hit_test(&self, point: Point) -> Option<NodeId> {
         let mut best: Option<(usize, NodeId)> = None;
-        for &root in self.roots.iter().rev() {
+        let mut roots = self.roots.clone();
+        roots.sort_by_key(|&root| (self.boxes[root].z_tier, self.boxes[root].z_index));
+        for root in roots {
             self.hit_box(root, point, 0, None, 0.0, &mut best);
         }
         best.map(|(_, node)| node)
@@ -204,7 +212,11 @@ impl LayoutTree {
             clip
         };
         let child_scroll = scroll + box_.scroll;
-        for &child in &box_.children {
+        // Visit children in paint order, so the topmost (last-painted) box wins
+        // the depth tie-break below.
+        let mut children = box_.children.clone();
+        children.sort_by_key(|&child| (self.boxes[child].z_tier, self.boxes[child].z_index));
+        for child in children {
             self.hit_box(child, point, depth + 1, child_clip, child_scroll, best);
         }
     }
@@ -268,7 +280,9 @@ impl LayoutTree {
         }
         let child_clip = if box_.clips { Some(scrollport) } else { clip };
         let child_scroll = scroll + box_.scroll;
-        for &child in &box_.children {
+        let mut children = box_.children.clone();
+        children.sort_by_key(|&child| (self.boxes[child].z_tier, self.boxes[child].z_index));
+        for child in children {
             self.collect_scroll(child, point, child_clip, child_scroll, out);
         }
     }
@@ -574,6 +588,7 @@ impl Ctx<'_> {
             &child_indices,
             border_y + border_box_height - border.bottom,
         );
+        let (z_tier, z_index) = paint_key(&style);
 
         let index = self.push(LayoutBox {
             node: Some(node),
@@ -591,6 +606,8 @@ impl Ctx<'_> {
             clips,
             scroll_max,
             scroll: 0.0,
+            z_tier,
+            z_index,
             children: child_indices,
         });
         let _ = index;
@@ -716,6 +733,7 @@ impl Ctx<'_> {
             &child_indices,
             border_y + border_height - border.bottom,
         );
+        let (z_tier, z_index) = paint_key(&style);
 
         let index = self.push(LayoutBox {
             node: Some(node),
@@ -733,6 +751,8 @@ impl Ctx<'_> {
             clips: resolve::clips(&style),
             scroll_max,
             scroll: 0.0,
+            z_tier,
+            z_index,
             children: child_indices,
         });
 
@@ -747,6 +767,20 @@ impl Ctx<'_> {
         }
 
         Some(index)
+    }
+}
+
+/// The paint-order key of a box within its parent: negative-`z-index` positioned
+/// boxes first, then in-flow content, then positioned boxes with `z-index`
+/// `0`/`auto` or positive (ordered by `z-index` among themselves).
+fn paint_key(style: &ComputedStyle) -> (u8, i32) {
+    if style.position == Position::Static {
+        return (1, 0);
+    }
+    match style.z_index {
+        ZIndex::Auto => (2, 0),
+        ZIndex::Number(z) if z < 0 => (0, z),
+        ZIndex::Number(z) => (2, z),
     }
 }
 
