@@ -79,7 +79,7 @@ pub fn tokenize(source: &str) -> Vec<Token> {
             while pos < source.len() && bytes[pos] != b'<' {
                 pos += 1;
             }
-            tokens.push(Token::Text(source[start..pos].to_owned()));
+            tokens.push(Token::Text(entities::decode(&source[start..pos])));
             continue;
         }
 
@@ -295,9 +295,13 @@ pub fn parse(source: &str) -> Document {
                 let parent = *stack.last().unwrap();
                 let node = doc.create_element(name.clone());
                 for (attr, value) in attrs {
-                    let _ = doc
-                        .mutate()
-                        .set_attribute(node, &attr, value.unwrap_or_default());
+                    let _ = doc.mutate().set_attribute(
+                        node,
+                        &attr,
+                        value
+                            .map(|value| entities::decode(&value))
+                            .unwrap_or_default(),
+                    );
                 }
                 let _ = doc.mutate().append_child(parent, node);
                 if !self_closing && !is_void(&name) {
@@ -342,6 +346,8 @@ pub fn plain_text_to_html(source: &str) -> String {
 
 /// The version of this crate, taken from the workspace.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+mod entities;
 
 #[cfg(test)]
 mod tests {
