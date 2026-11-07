@@ -35,7 +35,7 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | [`noonoo-text`](crates/noonoo-text) | Line breaking + alignment (shaping behind a seam) |
 | [`noonoo-motion`](crates/noonoo-motion) | Springs, velocity-preserving retarget |
 | [`noonoo-style`](crates/noonoo-style) | Style ingestion and the cascade |
-| [`noonoo-layout`](crates/noonoo-layout) | Box layout: computed style → boxes (block / inline / flex / positioned) + overflow clipping |
+| [`noonoo-layout`](crates/noonoo-layout) | Box layout: computed style → boxes (block / inline / flex / positioned) + overflow & scroll containers |
 | [`noonoo-markdown`](crates/noonoo-markdown) | Markdown (subset) → HTML |
 | [`noonoo-csv`](crates/noonoo-csv) | CSV/TSV → HTML table |
 | [`noonoo-ini`](crates/noonoo-ini) | INI → value model (JSON) |

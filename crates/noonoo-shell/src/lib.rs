@@ -232,8 +232,10 @@ impl Host {
 
             let layer = &mut self.layers[index];
             let styles = layer.engine.compute_styles();
-            let layout =
+            let mut layout =
                 noonoo_layout::layout(layer.engine.dom(), &styles, layer.rect.size(), shaper);
+            // Preserve what the user scrolled across a re-layout.
+            layout.inherit_scroll(&layer.layout);
             let commands = noonoo_paint::paint(&styles, &layout);
             layer.styles = styles;
             layer.layout = layout;
@@ -297,13 +299,21 @@ impl Host {
         true
     }
 
-    /// Apply a wheel (scroll) delta at `point`, chaining to the parent when a
-    /// sub-document cannot consume it all.
+    /// Re-run paint for one layer against its current layout, after a scroll.
+    fn repaint(&mut self, index: usize) {
+        let layer = &mut self.layers[index];
+        layer.commands = noonoo_paint::paint(&layer.styles, &layer.layout);
+    }
+
+    /// Apply a wheel (scroll) delta at `point`, chaining outward.
     ///
-    /// Returns `(layer, consumed)` pairs along the chain, innermost first. A
-    /// sub-document that reaches its edge passes the leftover to its parent,
-    /// which scrolls instead — so a wheel gesture never stops dead at a nested
-    /// boundary.
+    /// Inside a layer, the innermost scroll container under `point` scrolls
+    /// first; what it cannot consume goes to the next container outward, then to
+    /// the layer's own viewport, then — for a sub-document — to its parent.
+    ///
+    /// Returns `(layer, consumed)` pairs along the layer-level chain, innermost
+    /// first. Per-container consumption is visible through
+    /// [`Layer::layout`]/[`LayoutTree::scroll_offset`].
     pub fn wheel(&mut self, point: Point, delta_y: f32) -> Vec<(usize, f32)> {
         let mut chain = Vec::new();
         let Some(mut index) = self.route(point) else {
@@ -311,6 +321,15 @@ impl Host {
         };
         let mut leftover = delta_y;
         loop {
+            // Scroll containers inside this layer first.
+            let local = local_point(self.layers[index].rect, point);
+            let (boxes, remaining) = self.layers[index].layout.scroll_at(local, leftover);
+            if !boxes.is_empty() {
+                self.repaint(index);
+                leftover = remaining;
+            }
+
+            // Then the layer's own viewport scroll.
             let layer = &mut self.layers[index];
             let max = layer.max_scroll_y();
             let before = layer.scroll.y;
@@ -540,6 +559,66 @@ mod tests {
         let chain = host.wheel(Point::new(10.0, 10.0), 50.0);
         assert_eq!(chain, vec![(sub_index, 50.0)]);
         assert_eq!(host.layer(parent).unwrap().scroll().y, 0.0);
+    }
+
+    #[test]
+    fn wheel_scrolls_an_inner_container_before_the_layer() {
+        let mut host = Host::new(Size::new(400.0, 300.0));
+        let index = host.add_content(
+            engine(
+                r#"<div id="list"><div id="tall"></div></div><div id="tail"></div>"#,
+                "#list { width: 200px; height: 50px; overflow-y: auto } \
+                 #tall { height: 200px } #tail { height: 600px }",
+            ),
+            Rect::new(0.0, 0.0, 400.0, 300.0),
+        );
+        host.layout(&MetricShaper);
+        let list = host
+            .layer(index)
+            .unwrap()
+            .engine()
+            .dom()
+            .get_element_by_id("list")
+            .unwrap();
+        assert_eq!(host.layer(index).unwrap().layout().scroll_max(list), 150.0);
+
+        // A wheel over the list scrolls the list, not the layer.
+        host.wheel(Point::new(10.0, 10.0), 100.0);
+        assert_eq!(
+            host.layer(index).unwrap().layout().scroll_offset(list),
+            100.0
+        );
+        assert_eq!(host.layer(index).unwrap().scroll().y, 0.0);
+    }
+
+    #[test]
+    fn wheel_chains_from_a_container_to_the_layer() {
+        let mut host = Host::new(Size::new(400.0, 300.0));
+        let index = host.add_content(
+            engine(
+                r#"<div id="list"><div id="tall"></div></div><div id="tail"></div>"#,
+                "#list { width: 200px; height: 50px; overflow-y: auto } \
+                 #tall { height: 200px } #tail { height: 600px }",
+            ),
+            Rect::new(0.0, 0.0, 400.0, 300.0),
+        );
+        host.layout(&MetricShaper);
+        let list = host
+            .layer(index)
+            .unwrap()
+            .engine()
+            .dom()
+            .get_element_by_id("list")
+            .unwrap();
+
+        // 200 down: the list takes 150 (its whole range), the layer the rest.
+        let chain = host.wheel(Point::new(10.0, 10.0), 200.0);
+        assert_eq!(
+            host.layer(index).unwrap().layout().scroll_offset(list),
+            150.0
+        );
+        assert_eq!(host.layer(index).unwrap().scroll().y, 50.0);
+        assert_eq!(chain, vec![(index, 50.0)]);
     }
 
     #[test]

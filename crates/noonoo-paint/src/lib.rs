@@ -89,14 +89,17 @@ pub fn paint(styles: &Styles, layout: &LayoutTree) -> CommandList {
     let mut list = CommandList(Vec::new());
     let boxes = layout.boxes();
     for &root in layout.root_indices() {
-        paint_box(root, boxes, styles, &mut list);
+        paint_box(root, boxes, styles, 0.0, &mut list);
     }
     list
 }
 
-fn paint_box(index: usize, boxes: &[LayoutBox], styles: &Styles, out: &mut CommandList) {
+/// `ty` is the accumulated vertical scroll of enclosing scroll containers: a
+/// box's content is drawn `ty` pixels higher than it is laid out.
+fn paint_box(index: usize, boxes: &[LayoutBox], styles: &Styles, ty: f32, out: &mut CommandList) {
     let b = &boxes[index];
     let style = styles.get(b.style_node);
+    let rect = b.rect.translate(0.0, -ty);
 
     // Background and borders belong to element boxes; a text run draws only text
     // (it shares its element's style, which was already painted).
@@ -105,14 +108,14 @@ fn paint_box(index: usize, boxes: &[LayoutBox], styles: &Styles, out: &mut Comma
             && style.background_color.a > 0
         {
             out.0.push(Command::FillRect {
-                rect: b.rect,
+                rect,
                 color: style.background_color,
             });
         }
 
-        for (rect, width, color) in border_sides(b, style) {
+        for (band, width, color) in border_sides(rect, b, style) {
             if width > 0.0 {
-                out.0.push(Command::FillRect { rect, color });
+                out.0.push(Command::FillRect { rect: band, color });
             }
         }
     }
@@ -123,8 +126,8 @@ fn paint_box(index: usize, boxes: &[LayoutBox], styles: &Styles, out: &mut Comma
             .unwrap_or((16.0, Color::BLACK));
         out.0.push(Command::DrawText {
             text: text.clone(),
-            x: b.rect.x,
-            y: b.rect.y + font_size * 0.8,
+            x: rect.x,
+            y: rect.y + font_size * 0.8,
             font_size,
             color,
         });
@@ -134,15 +137,15 @@ fn paint_box(index: usize, boxes: &[LayoutBox], styles: &Styles, out: &mut Comma
             let decoration = style.text_decoration;
             if !decoration.is_empty() {
                 let thickness = (font_size * 0.07).max(1.0);
-                let baseline = b.rect.y + font_size * 0.8;
+                let baseline = rect.y + font_size * 0.8;
                 for (flag, y) in [
                     (TextDecoration::UNDERLINE, baseline + font_size * 0.08),
-                    (TextDecoration::OVERLINE, b.rect.y),
+                    (TextDecoration::OVERLINE, rect.y),
                     (TextDecoration::LINE_THROUGH, baseline - font_size * 0.32),
                 ] {
                     if decoration.contains(flag) {
                         out.0.push(Command::FillRect {
-                            rect: Rect::new(b.rect.x, y, b.rect.width, thickness),
+                            rect: Rect::new(rect.x, y, rect.width, thickness),
                             color,
                         });
                     }
@@ -151,28 +154,32 @@ fn paint_box(index: usize, boxes: &[LayoutBox], styles: &Styles, out: &mut Comma
         }
     }
 
+    // A clipping box clips its content; a scrolling box additionally shifts its
+    // content up by its offset.
     if b.clips {
         out.0.push(Command::PushClip {
-            rect: b.padding_box(),
+            rect: b.padding_box().translate(0.0, -ty),
         });
     }
+    let child_ty = ty + b.scroll;
     for &child in &b.children {
-        paint_box(child, boxes, styles, out);
+        paint_box(child, boxes, styles, child_ty, out);
     }
     if b.clips {
         out.0.push(Command::PopClip);
     }
 }
 
-/// The four border side bands: `(rect, width, colour)`.
+/// The four border side bands `(rect, width, colour)`, positioned at `rect`.
 fn border_sides(
+    rect: Rect,
     b: &LayoutBox,
     style: Option<&noonoo_style::ComputedStyle>,
 ) -> [(Rect, f32, Color); 4] {
     let Some(style) = style else {
         return [(Rect::default(), 0.0, Color::BLACK); 4];
     };
-    let r = b.rect;
+    let r = rect;
     let w = &b.border;
     [
         (
@@ -369,5 +376,36 @@ mod tests {
                 .any(|c| matches!(c, Command::PopClip))
         );
         assert!(list.to_json().to_string().contains("push-clip"));
+    }
+
+    #[test]
+    fn scrolling_shifts_the_content_in_the_command_stream() {
+        let doc = noonoo_html::parse(r#"<div id="list"><div id="row"></div></div>"#);
+        let sheet = noonoo_css::Stylesheet::parse(
+            "#list { width: 100px; height: 50px; overflow-y: auto } \
+             #row { height: 200px; background-color: #ff0000 }",
+        )
+        .unwrap();
+        let styles = noonoo_style::compute(&doc, &[sheet]);
+        let mut layout =
+            noonoo_layout::layout(&doc, &styles, Size::new(400.0, 300.0), &MetricShaper);
+        let list = doc.get_element_by_id("list").unwrap();
+
+        assert_eq!(red_rect_y(&paint(&styles, &layout)), 0.0);
+        layout.scroll_by(list, 30.0);
+        // The row's background moved up by the scroll offset.
+        assert_eq!(red_rect_y(&paint(&styles, &layout)), -30.0);
+    }
+
+    fn red_rect_y(list: &CommandList) -> f32 {
+        list.commands()
+            .iter()
+            .find_map(|c| match c {
+                Command::FillRect { rect, color } if *color == Color::rgb(255, 0, 0) => {
+                    Some(rect.y)
+                }
+                _ => None,
+            })
+            .expect("a red rect")
     }
 }

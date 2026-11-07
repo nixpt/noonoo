@@ -396,3 +396,34 @@ fn a_clipping_box_does_not_collapse_margins_with_its_child() {
     assert_eq!(tree.get(id(&doc, "inner")).unwrap().rect.y, 20.0);
     assert_eq!(clip.rect.height, 30.0);
 }
+
+#[test]
+fn overflow_auto_computes_a_scroll_range() {
+    let (doc, mut tree) = page(
+        r#"<div id="list"><div id="tall"></div></div>"#,
+        "#list { width: 100px; height: 50px; overflow-y: auto } #tall { height: 200px }",
+        400.0,
+    );
+    let list = id(&doc, "list");
+    assert_eq!(tree.scroll_max(list), 150.0);
+    assert_eq!(tree.scroll_offset(list), 0.0);
+    // Scrolling clamps at the range.
+    assert_eq!(tree.scroll_by(list, 100.0), 100.0);
+    assert_eq!(tree.scroll_by(list, 100.0), 50.0);
+    assert_eq!(tree.scroll_offset(list), 150.0);
+}
+
+#[test]
+fn scrolling_changes_which_row_is_hit() {
+    let (doc, mut tree) = page(
+        r#"<div id="list"><div id="a"></div><div id="b"></div></div>"#,
+        "#list { width: 100px; height: 50px; overflow-y: auto } #a, #b { height: 50px }",
+        400.0,
+    );
+    let list = id(&doc, "list");
+    // #a spans y 0..50, #b y 50..100, in a 50px scrollport.
+    assert_eq!(tree.hit_test(Point::new(10.0, 10.0)), Some(id(&doc, "a")));
+    // Scroll down 50: #b moves under the point.
+    tree.scroll_by(list, 50.0);
+    assert_eq!(tree.hit_test(Point::new(10.0, 10.0)), Some(id(&doc, "b")));
+}

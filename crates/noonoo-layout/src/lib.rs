@@ -21,7 +21,9 @@
 //!   block's two margins become one that joins the surrounding chain.
 //! - **Overflow** — a box with a non-`visible` `overflow` clips its content to
 //!   its padding box, hit-tests within that clip, and establishes a formatting
-//!   context (so its margins do not collapse with its children's).
+//!   context. An `overflow-y: auto`/`scroll` box is a **scroll container**: the
+//!   tree tracks a per-box offset, `scroll_by` clamps it to the content range,
+//!   and paint shifts — and hit-testing maps — the content by it.
 //! - Width: `auto` / px / percentage (and stretch between `left`+`right`);
 //!   height: `auto` / px / percentage of the containing block.
 //! - `box-sizing`, margins, padding, and borders, resolved to absolute pixels.
@@ -29,12 +31,11 @@
 //! ## What it does not (yet)
 //!
 //! Floats, `grid`, `z-index` paint ordering (positioned boxes paint in tree
-//! order), per-box *scroll offsets* (a clipping box clips, but the shell still
-//! scrolls whole documents), and writing modes. Absolute boxes whose width or
-//! height is `auto` fall back to the containing block when only the trailing
-//! inset (`right`/`bottom`) is set. Text is measured through the [`Shaper`] seam
-//! — a heuristic stands in until `noonoo-text` brings real shaping
-//! (`docs/ROADMAP.md` Phase C).
+//! order), horizontal scrolling and scrollbars (only `overflow-y` scrolls), and
+//! writing modes. Absolute boxes whose width or height is `auto` fall back to the
+//! containing block when only the trailing inset (`right`/`bottom`) is set. Text
+//! is measured through the [`Shaper`] seam — a heuristic stands in until
+//! `noonoo-text` brings real shaping (`docs/ROADMAP.md` Phase C).
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -86,6 +87,11 @@ pub struct LayoutBox {
     pub border: Edges<f32>,
     /// Whether this box clips its content (a non-`visible` `overflow`).
     pub clips: bool,
+    /// The maximum vertical scroll for this box (its content bottom minus its
+    /// padding box bottom, floored at zero). Zero when it does not scroll.
+    pub scroll_max: f32,
+    /// The current vertical scroll offset.
+    pub scroll: f32,
     /// Child box indices.
     pub children: Vec<usize>,
 }
@@ -157,7 +163,7 @@ impl LayoutTree {
     pub fn hit_test(&self, point: Point) -> Option<NodeId> {
         let mut best: Option<(usize, NodeId)> = None;
         for &root in self.roots.iter().rev() {
-            self.hit_box(root, point, 0, None, &mut best);
+            self.hit_box(root, point, 0, None, 0.0, &mut best);
         }
         best.map(|(_, node)| node)
     }
@@ -168,6 +174,7 @@ impl LayoutTree {
         point: Point,
         depth: usize,
         clip: Option<Rect>,
+        scroll: f32,
         best: &mut Option<(usize, NodeId)>,
     ) {
         // A point outside a clipping ancestor's box reaches nothing inside it.
@@ -175,9 +182,12 @@ impl LayoutTree {
             return;
         }
         let box_ = &self.boxes[index];
+        // `point` is in window space and content is shifted up by any ancestor
+        // scroll offsets, so test the box in its own (content) space.
+        let content = Point::new(point.x, point.y + scroll);
         // A positioned child may sit outside its parent's box, so we always
         // descend; we only *record* a box whose rect actually contains the point.
-        if box_.rect.contains(point)
+        if box_.rect.contains(content)
             && let Some(node) = box_.node
         {
             let better = match best {
@@ -189,12 +199,109 @@ impl LayoutTree {
             }
         }
         let child_clip = if box_.clips {
-            Some(box_.padding_box())
+            Some(box_.padding_box().translate(0.0, -scroll))
         } else {
             clip
         };
+        let child_scroll = scroll + box_.scroll;
         for &child in &box_.children {
-            self.hit_box(child, point, depth + 1, child_clip, best);
+            self.hit_box(child, point, depth + 1, child_clip, child_scroll, best);
+        }
+    }
+
+    /// The current vertical scroll offset of `node` (zero if it does not scroll).
+    pub fn scroll_offset(&self, node: NodeId) -> f32 {
+        self.index
+            .get(&node)
+            .map(|&i| self.boxes[i].scroll)
+            .unwrap_or(0.0)
+    }
+
+    /// The maximum vertical scroll of `node`.
+    pub fn scroll_max(&self, node: NodeId) -> f32 {
+        self.index
+            .get(&node)
+            .map(|&i| self.boxes[i].scroll_max)
+            .unwrap_or(0.0)
+    }
+
+    /// Scroll `node` by `dy`, clamped to its range; returns the amount consumed.
+    pub fn scroll_by(&mut self, node: NodeId, dy: f32) -> f32 {
+        let Some(&i) = self.index.get(&node) else {
+            return 0.0;
+        };
+        let max = self.boxes[i].scroll_max;
+        let before = self.boxes[i].scroll;
+        let after = (before + dy).clamp(0.0, max);
+        self.boxes[i].scroll = after;
+        after - before
+    }
+
+    /// The scrollable boxes under `point`, innermost first.
+    pub fn scroll_chain(&self, point: Point) -> Vec<NodeId> {
+        let mut indices = Vec::new();
+        for &root in self.roots.iter().rev() {
+            self.collect_scroll(root, point, None, 0.0, &mut indices);
+        }
+        indices.reverse();
+        indices
+            .into_iter()
+            .filter_map(|i| self.boxes[i].node)
+            .collect()
+    }
+
+    fn collect_scroll(
+        &self,
+        index: usize,
+        point: Point,
+        clip: Option<Rect>,
+        scroll: f32,
+        out: &mut Vec<usize>,
+    ) {
+        if clip.is_some_and(|rect| !rect.contains(point)) {
+            return;
+        }
+        let box_ = &self.boxes[index];
+        let scrollport = box_.padding_box().translate(0.0, -scroll);
+        if box_.scroll_max > 0.0 && scrollport.contains(point) {
+            out.push(index);
+        }
+        let child_clip = if box_.clips { Some(scrollport) } else { clip };
+        let child_scroll = scroll + box_.scroll;
+        for &child in &box_.children {
+            self.collect_scroll(child, point, child_clip, child_scroll, out);
+        }
+    }
+
+    /// Scroll the chain of containers under `point`, innermost first, returning
+    /// `(node, consumed)` pairs and the leftover delta.
+    pub fn scroll_at(&mut self, point: Point, dy: f32) -> (Vec<(NodeId, f32)>, f32) {
+        let chain = self.scroll_chain(point);
+        let mut result = Vec::new();
+        let mut leftover = dy;
+        for node in chain {
+            let consumed = self.scroll_by(node, leftover);
+            if consumed != 0.0 {
+                result.push((node, consumed));
+            }
+            leftover -= consumed;
+            if leftover.abs() < 1e-4 {
+                break;
+            }
+        }
+        (result, leftover)
+    }
+
+    /// Copy scroll offsets from `previous` for nodes present in both trees, so a
+    /// re-layout preserves what the user scrolled.
+    pub fn inherit_scroll(&mut self, previous: &LayoutTree) {
+        for i in 0..self.boxes.len() {
+            if let Some(node) = self.boxes[i].node
+                && let Some(&j) = previous.index.get(&node)
+            {
+                let max = self.boxes[i].scroll_max;
+                self.boxes[i].scroll = previous.boxes[j].scroll.clamp(0.0, max);
+            }
         }
     }
 }
@@ -333,6 +440,39 @@ impl Ctx<'_> {
         index
     }
 
+    /// The bottom edge of `index`'s box subtree (the maximum over descendants).
+    fn subtree_bottom(&self, index: usize) -> f32 {
+        let box_ = &self.tree.boxes[index];
+        let mut bottom = box_.rect.bottom();
+        for &child in &box_.children {
+            bottom = bottom.max(self.subtree_bottom(child));
+        }
+        bottom
+    }
+
+    /// The scroll range of a box whose children are `indices`: their lowest
+    /// bottom minus the padding box bottom, floored at zero. Zero unless the box
+    /// scrolls vertically.
+    fn scroll_max_for(
+        &self,
+        style: &ComputedStyle,
+        indices: &[usize],
+        padding_box_bottom: f32,
+    ) -> f32 {
+        if !resolve::scrollable_y(style) {
+            return 0.0;
+        }
+        let content_bottom = indices
+            .iter()
+            .map(|&child| self.subtree_bottom(child))
+            .fold(f32::NEG_INFINITY, f32::max);
+        if content_bottom.is_finite() {
+            (content_bottom - padding_box_bottom).max(0.0)
+        } else {
+            0.0
+        }
+    }
+
     /// Lay out one element's border box at `(border_x, border_y)` and return its
     /// border-box height.
     ///
@@ -429,6 +569,12 @@ impl Ctx<'_> {
             None => content_height + vertical,
         };
 
+        let scroll_max = self.scroll_max_for(
+            &style,
+            &child_indices,
+            border_y + border_box_height - border.bottom,
+        );
+
         let index = self.push(LayoutBox {
             node: Some(node),
             style_node: node,
@@ -443,6 +589,8 @@ impl Ctx<'_> {
             padding,
             border,
             clips,
+            scroll_max,
+            scroll: 0.0,
             children: child_indices,
         });
         let _ = index;
@@ -563,6 +711,12 @@ impl Ctx<'_> {
             None => content_height + vertical,
         };
 
+        let scroll_max = self.scroll_max_for(
+            &style,
+            &child_indices,
+            border_y + border_height - border.bottom,
+        );
+
         let index = self.push(LayoutBox {
             node: Some(node),
             style_node: node,
@@ -577,6 +731,8 @@ impl Ctx<'_> {
             padding,
             border,
             clips: resolve::clips(&style),
+            scroll_max,
+            scroll: 0.0,
             children: child_indices,
         });
 
