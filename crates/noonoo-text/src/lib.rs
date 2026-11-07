@@ -22,11 +22,37 @@ pub use paragraph::{Line, Paragraph, Run, align, layout_paragraph, wrap};
 /// The seam the whole crate is built on: line breaking asks a `Shaper` how wide
 /// a run is and how tall a line is, and never touches glyphs itself.
 pub trait Shaper {
-    /// The advance width of `text` on one line.
-    fn advance(&self, text: &str, font_size: f32, bold: bool) -> f32;
+    /// The advance width of `text` on one line, in a face matching `request`.
+    fn advance(&self, text: &str, request: FontRequest, font_size: f32) -> f32;
 
-    /// The natural line height for `font_size`.
-    fn line_height(&self, font_size: f32) -> f32;
+    /// The natural line height for `font_size`, in a face matching `request`.
+    fn line_height(&self, request: FontRequest, font_size: f32) -> f32;
+}
+
+/// A font request: the families to try, in preference order, plus weight and
+/// style.
+///
+/// This is what an element's computed style asks for; a [`Shaper`] picks the
+/// face. An empty `families` list matches any face.
+#[derive(Clone, Copy, Debug)]
+pub struct FontRequest<'a> {
+    /// Family names, most preferred first.
+    pub families: &'a [String],
+    /// The requested weight (`400` normal, `700` bold).
+    pub weight: u16,
+    /// Whether italics are requested.
+    pub italic: bool,
+}
+
+impl FontRequest<'_> {
+    /// A request with no family preference at normal weight.
+    pub fn any() -> Self {
+        Self {
+            families: &[],
+            weight: 400,
+            italic: false,
+        }
+    }
 }
 
 /// A dependency-free stand-in: a fixed advance per character and a
@@ -35,12 +61,12 @@ pub trait Shaper {
 pub struct MetricShaper;
 
 impl Shaper for MetricShaper {
-    fn advance(&self, text: &str, font_size: f32, bold: bool) -> f32 {
-        let factor = if bold { 0.55 } else { 0.50 };
+    fn advance(&self, text: &str, request: FontRequest, font_size: f32) -> f32 {
+        let factor = if request.weight >= 600 { 0.55 } else { 0.50 };
         text.chars().count() as f32 * factor * font_size
     }
 
-    fn line_height(&self, font_size: f32) -> f32 {
+    fn line_height(&self, _request: FontRequest, font_size: f32) -> f32 {
         font_size * 1.2
     }
 }
@@ -77,11 +103,15 @@ pub enum WhiteSpace {
 
 /// The style inputs line breaking needs.
 #[derive(Clone, Copy, Debug)]
-pub struct TextStyle {
+pub struct TextStyle<'a> {
     /// Font size, in pixels.
     pub font_size: f32,
-    /// Whether the text is bold.
-    pub bold: bool,
+    /// Which faces to try, in preference order (empty: any face).
+    pub families: &'a [String],
+    /// Font weight (`400` normal, `700` bold).
+    pub weight: u16,
+    /// Whether italics are requested.
+    pub italic: bool,
     /// Line height, in pixels (`0` means "ask the shaper").
     pub line_height: f32,
     /// Horizontal alignment.
@@ -90,11 +120,13 @@ pub struct TextStyle {
     pub white_space: WhiteSpace,
 }
 
-impl Default for TextStyle {
+impl Default for TextStyle<'_> {
     fn default() -> Self {
         Self {
             font_size: 16.0,
-            bold: false,
+            families: &[],
+            weight: 400,
+            italic: false,
             line_height: 0.0,
             align: Align::Start,
             white_space: WhiteSpace::Normal,

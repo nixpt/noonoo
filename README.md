@@ -25,7 +25,7 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | --- | --- |
 | [`noonoo-parse`](crates/noonoo-parse) | Shared parsing primitives: spans, positions, errors, cursor |
 | [`noonoo-json`](crates/noonoo-json) | JSON parser, value model, and writer |
-| [`noonoo-css`](crates/noonoo-css) | CSS: tokenizer, rule splitter, value/property model (incl. grouping), shorthand expansion |
+| [`noonoo-css`](crates/noonoo-css) | CSS: tokenizer, rule splitter, value/property model (incl. grouping), shorthand expansion, `@font-face` descriptors |
 | [`noonoo-selectors`](crates/noonoo-selectors) | CSS selectors: parse, specificity, matching |
 | [`noonoo-caison`](crates/noonoo-caison) | CAISON parse and its JSON projection |
 | [`noonoo-html`](crates/noonoo-html) | HTML tokenizer and tree builder into `noonoo-dom` |
@@ -41,7 +41,7 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | [`noonoo-ini`](crates/noonoo-ini) | INI → value model (JSON) |
 | [`noonoo-toml`](crates/noonoo-toml) | TOML (subset) → value model (JSON) |
 | [`noonoo-xml`](crates/noonoo-xml) | XML → DOM (strict nesting, entities, CDATA) |
-| [`noonoo-ttf`](crates/noonoo-ttf) | TrueType/OpenType → metrics, `cmap`, outlines, kerning (a `Shaper` + `Glyphs`) |
+| [`noonoo-ttf`](crates/noonoo-ttf) | TrueType/OpenType → metrics, `cmap`, outlines, kerning; `FontSet` face selection behind the `Shaper`/`Glyphs` seams |
 | [`noonoo-svg`](crates/noonoo-svg) | SVG subset → paint commands |
 | [`noonoo-hx`](crates/noonoo-hx) | htmx-like declarative attributes → fetch + DOM swap |
 | [`noonoo-caps`](crates/noonoo-caps) | Capability gating: scopes, the policy seam, a gated DOM |

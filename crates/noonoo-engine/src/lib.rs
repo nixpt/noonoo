@@ -71,6 +71,19 @@ impl Engine {
         self.stylesheets = collect_stylesheets(&self.dom);
     }
 
+    /// The `@font-face` descriptors collected from the stylesheets, in source
+    /// order.
+    ///
+    /// A host loads each `src` (`noonoo-net` covers `file:` and `data:`),
+    /// parses the bytes with `noonoo-ttf`'s `Font`, and registers the face
+    /// with a `FontSet`; see the `noonoo` CLI's `--paint` for the pattern.
+    pub fn font_faces(&self) -> Vec<noonoo_css::FontFace> {
+        self.stylesheets
+            .iter()
+            .flat_map(|sheet| sheet.font_faces())
+            .collect()
+    }
+
     /// Compute every element's style: cascade the collected stylesheets over the
     /// user-agent sheet and any inline `style` attributes.
     ///
@@ -179,6 +192,19 @@ mod tests {
         let engine = Engine::from_html("<style>body { color: red; margin: 0 }</style><p>hi</p>");
         assert_eq!(engine.stylesheets().len(), 1);
         assert_eq!(engine.stylesheets()[0].rules.len(), 1);
+    }
+
+    #[test]
+    fn collects_font_face_descriptors() {
+        let engine = Engine::from_html(
+            "<style>@font-face { font-family: A; src: url(a.ttf); font-weight: bold }</style>
+             <style>@font-face { font-family: B; src: url(b.ttf) url(b.woff) }</style>",
+        );
+        let faces = engine.font_faces();
+        assert_eq!(faces.len(), 2);
+        assert_eq!(faces[0].family, "A");
+        assert_eq!(faces[0].weight, 700);
+        assert_eq!(faces[1].src, vec!["b.ttf".to_owned(), "b.woff".to_owned()]);
     }
 
     #[test]

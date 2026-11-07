@@ -28,6 +28,7 @@ use noonoo_geometry::{Point, Rect};
 use noonoo_json::Json;
 use noonoo_layout::{BoxKind, LayoutBox, LayoutTree};
 use noonoo_style::{Gradient, LinearDirection, RadialShape, RadialSize, Styles, TextDecoration};
+use noonoo_text::FontRequest;
 
 /// One colour stop of a gradient fill.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -136,8 +137,10 @@ impl CommandList {
 /// Draws a text run — the seam between layout and the glyph shapes.
 ///
 /// The default [`TextRuns`] emits a [`Command::DrawText`]. A font-backed renderer
-/// (e.g. `noonoo-ttf`'s `OutlineGlyphs`) emits glyph polygons instead. `origin`
-/// is `(x, baseline_y)` in window space.
+/// (e.g. `noonoo-ttf`'s `OutlineGlyphs`) emits glyph polygons instead, selecting
+/// the face from a font set by `request` — the element's `font-family`,
+/// `font-weight`, and `font-style`, exactly what layout measured against.
+/// `origin` is `(x, baseline_y)` in window space.
 pub trait Glyphs {
     /// Emit the commands that draw `text`.
     fn draw(
@@ -146,6 +149,7 @@ pub trait Glyphs {
         origin: (f32, f32),
         font_size: f32,
         color: Color,
+        request: FontRequest,
         out: &mut CommandList,
     );
 }
@@ -161,6 +165,7 @@ impl Glyphs for TextRuns {
         (x, y): (f32, f32),
         font_size: f32,
         color: Color,
+        _request: FontRequest,
         out: &mut CommandList,
     ) {
         out.0.push(Command::DrawText {
@@ -233,7 +238,10 @@ fn paint_box(
             .map(|s| (s.font_size, s.color))
             .unwrap_or((16.0, Color::BLACK));
         let baseline = rect.y + font_size * 0.8;
-        glyphs.draw(text, (rect.x, baseline), font_size, color, out);
+        let request = style
+            .map(|style| style.font_request())
+            .unwrap_or_else(FontRequest::any);
+        glyphs.draw(text, (rect.x, baseline), font_size, color, request, out);
 
         // Text decorations are bars across the run, in the text colour.
         if let Some(style) = style {
@@ -878,6 +886,7 @@ mod tests {
                 _origin: (f32, f32),
                 _font_size: f32,
                 color: Color,
+                _request: noonoo_text::FontRequest,
                 out: &mut CommandList,
             ) {
                 out.0.push(Command::FillRect {

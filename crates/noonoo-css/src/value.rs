@@ -251,6 +251,14 @@ impl Value {
         }
     }
 
+    /// Borrow this value as a `url(…)` string.
+    pub fn as_url(&self) -> Option<&str> {
+        match self {
+            Self::Url(url) => Some(url),
+            _ => None,
+        }
+    }
+
     /// Borrow this value as a colour.
     pub fn as_color(&self) -> Option<Color> {
         match self {

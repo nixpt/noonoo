@@ -33,22 +33,53 @@ and `noonoo-paint`, and adds no third-party dependency.
 
 ## The two seams
 
-**Shaping** (`noonoo_text::Shaper`) — two questions, `advance` and `line_height`:
+**Shaping** (`noonoo_text::Shaper`) — two questions, `advance` and `line_height`,
+each taking a `FontRequest` (the element's family list, weight, and style):
 
+- `MetricShaper` (the default) ignores the request — a deterministic baseline.
 - `FontShaper` measures a single face (real advances, line metrics, and `kern`).
-- `FontSetShaper` selects a face per call from a `FontSet` by family, weight, and
-  style — so `font-weight: bold` picks a real bold face when one is registered.
+- `FontSetShaper` selects a face per call from a `FontSet`: the first family in
+  the request with any registered face wins, matching style preferred, then
+  nearest weight — so `font-weight: bold` picks a real bold face. A face
+  registered under the empty family name matches every request, which is how a
+  host offers a universal fallback. No match at all falls back to the
+  deterministic heuristic.
 
 **Glyphs** (`noonoo_paint::Glyphs`) — how a run is drawn:
 
 - `TextRuns` (the default) emits `Command::DrawText`.
 - `OutlineGlyphs` emits one `Command::FillPolygon` per glyph contour — **vector
   text** through the same command stream as every other shape, with no GPU text
-  backend. It advances the pen with the *same* metrics as `FontShaper`, kerning
-  included.
+  backend. It selects a face from a `FontSet` per request, the same way
+  `FontSetShaper` does, and advances the pen with the same metrics, kerning
+  included — so a document laid out with a `FontSetShaper` paints with the very
+  faces it was measured against.
+
+## `@font-face`
+
+CSS may declare faces directly:
+
+```css
+@font-face {
+  font-family: "Demo";
+  src: url(fonts/Demo.ttf) format("truetype");
+  font-weight: 700;
+  font-style: italic;
+}
+```
+
+`noonoo-css` parses these into `FontFace` descriptors (`Stylesheet::font_faces`),
+and `Engine::font_faces()` aggregates them in source order. Loading the bytes is
+the host's job — the ownership line stays clean: the engine never touches the
+filesystem. The CLI's `--paint` shows the pattern: each descriptor's first
+resolvable `src` (`file:`/`data:` via `noonoo-net`, relative paths joined to the
+document's directory) is loaded, parsed, and registered under its
+family/weight/style; `--font` additionally registers a universal fallback.
 
 ```sh
-# measure with the font, paint with its outlines:
+# `@font-face` in the page resolves on its own; --font is a fallback for
+# anything the page does not declare:
+noonoo --paint page.html
 noonoo --paint page.html --font /path/to/Font.ttf
 ```
 
@@ -71,5 +102,6 @@ These are the borrowed, 100k+-LOC concerns — kept out on purpose:
 
 `noonoo-ttf`: metrics, `cmap`, `glyf` outlines, `kern`, `FontShaper`,
 `FontSetShaper`, `FontSet`, and `OutlineGlyphs`, all tested against a hand-built
-fixture font (deterministic, no embedded, licensed file). The `--paint --font`
-path renders real fonts as vector text.
+fixture font (deterministic, no embedded, licensed file). `@font-face`
+declarations parse into descriptors and the `--paint` path loads and registers
+them, rendering real fonts as vector text with per-element face selection.

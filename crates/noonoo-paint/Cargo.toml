@@ -19,6 +19,7 @@ noonoo-geometry.workspace = true
 noonoo-json.workspace = true
 noonoo-layout.workspace = true
 noonoo-style.workspace = true
+noonoo-text.workspace = true
 
 [dev-dependencies]
 noonoo-html.workspace = true

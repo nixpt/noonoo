@@ -6,6 +6,7 @@
 //! need a containing block are kept as percentages for layout to resolve.
 
 use noonoo_css::Color;
+use noonoo_text::FontRequest;
 
 /// A `<display>` value (the subset Noonoo models).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -633,6 +634,16 @@ impl Default for ComputedStyle {
 }
 
 impl ComputedStyle {
+    /// The font request this style makes: its family list, weight, and style,
+    /// as a `FontRequest` for the shaper seam.
+    pub fn font_request(&self) -> FontRequest<'_> {
+        FontRequest {
+            families: &self.font_family,
+            weight: self.font_weight,
+            italic: self.font_style == FontStyle::Italic,
+        }
+    }
+
     /// The inherited subset, copied from the parent before the cascade runs.
     pub fn inherited_from(parent: &ComputedStyle) -> ComputedStyle {
         ComputedStyle {

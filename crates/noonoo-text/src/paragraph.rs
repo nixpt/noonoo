@@ -1,6 +1,6 @@
 //! Line breaking, alignment, and paragraph layout.
 
-use crate::{Align, Shaper, TextStyle, WhiteSpace};
+use crate::{Align, FontRequest, Shaper, TextStyle, WhiteSpace};
 
 /// A positioned run of text within a line.
 #[derive(Clone, Debug, PartialEq)]
@@ -108,10 +108,15 @@ pub fn layout_paragraph(
     max_width: f32,
     shaper: &dyn Shaper,
 ) -> Paragraph {
+    let request = FontRequest {
+        families: style.families,
+        weight: style.weight,
+        italic: style.italic,
+    };
     let line_height = if style.line_height > 0.0 {
         style.line_height
     } else {
-        shaper.line_height(style.font_size)
+        shaper.line_height(request, style.font_size)
     };
 
     let words: Vec<(String, f32)> = text
@@ -119,12 +124,12 @@ pub fn layout_paragraph(
         .map(|word| {
             (
                 word.to_owned(),
-                shaper.advance(word, style.font_size, style.bold),
+                shaper.advance(word, request, style.font_size),
             )
         })
         .collect();
     let widths: Vec<f32> = words.iter().map(|(_, width)| *width).collect();
-    let space = shaper.advance(" ", style.font_size, style.bold);
+    let space = shaper.advance(" ", request, style.font_size);
 
     let line_indices: Vec<Vec<usize>> = if words.is_empty() {
         Vec::new()
@@ -185,7 +190,7 @@ mod tests {
     use super::*;
     use crate::{MetricShaper, TextStyle};
 
-    fn style() -> TextStyle {
+    fn style() -> TextStyle<'static> {
         TextStyle {
             font_size: 10.0,
             ..TextStyle::default()

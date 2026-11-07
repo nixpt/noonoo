@@ -67,6 +67,22 @@ pub struct Stylesheet {
 }
 
 impl Stylesheet {
+    /// The `@font-face` descriptors, in source order. Malformed blocks are
+    /// skipped: a broken face must not take the whole sheet down.
+    pub fn font_faces(&self) -> Vec<FontFace> {
+        self.rules
+            .iter()
+            .filter_map(|rule| match rule {
+                Rule::At {
+                    name,
+                    block: Some(block),
+                    ..
+                } if name.eq_ignore_ascii_case("font-face") => FontFace::parse_block(block),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// Parse a stylesheet.
     pub fn parse(source: &str) -> ParseResult<Stylesheet> {
         let tokens = tokenize(source);
@@ -149,6 +165,94 @@ impl Stylesheet {
             i = close + 1;
         }
         Ok(Stylesheet { rules })
+    }
+}
+
+/// A `@font-face` descriptor: one face a host may load and register.
+#[derive(Clone, PartialEq, Debug)]
+pub struct FontFace {
+    /// The `font-family` name the face registers under.
+    pub family: String,
+    /// The `src` URLs, in preference order.
+    pub src: Vec<String>,
+    /// The `font-weight` (default `400`).
+    pub weight: u16,
+    /// Whether `font-style: italic`.
+    pub italic: bool,
+}
+
+impl FontFace {
+    /// Parse the body of a `@font-face` block (the declarations between the
+    /// braces). `None` when no usable `font-family` names the face.
+    pub fn parse_block(block: &str) -> Option<FontFace> {
+        let mut family = String::new();
+        let mut src = Vec::new();
+        let mut weight = 400;
+        let mut italic = false;
+        for declaration in parse_declarations(block) {
+            let values = match value::parse_values(&declaration.value) {
+                Ok(values) => values,
+                Err(_) => continue,
+            };
+            match declaration.name.to_ascii_lowercase().as_str() {
+                "font-family" => family = family_name(&values).unwrap_or_default(),
+                "src" => src.extend(values.iter().filter_map(Value::as_url).map(str::to_owned)),
+                "font-weight" => {
+                    if let Some(weight_value) = parse_weight(&values) {
+                        weight = weight_value;
+                    }
+                }
+                "font-style" => {
+                    if let Some(k) = values.first().and_then(Value::as_keyword) {
+                        let k = k.to_ascii_lowercase();
+                        if k == "italic" || k == "oblique" {
+                            italic = true;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        (!family.is_empty()).then_some(FontFace {
+            family,
+            src,
+            weight,
+            italic,
+        })
+    }
+}
+
+/// A `font-family` name: a quoted string, or identifiers joined by spaces.
+fn family_name(values: &[Value]) -> Option<String> {
+    if let Some(Value::Str(text)) = values.first() {
+        return Some(text.clone());
+    }
+    let mut name = String::new();
+    for value in values {
+        match value {
+            Value::Keyword(keyword) => {
+                if !name.is_empty() {
+                    name.push(' ');
+                }
+                name.push_str(keyword);
+            }
+            Value::Comma => break,
+            _ => return None,
+        }
+    }
+    (!name.is_empty()).then_some(name)
+}
+
+/// A `font-weight` value: a number or a keyword.
+fn parse_weight(values: &[Value]) -> Option<u16> {
+    match values.first()? {
+        Value::Number(number) => Some((*number).round().clamp(1.0, 1000.0) as u16),
+        Value::Keyword(keyword) => match keyword.to_ascii_lowercase().as_str() {
+            "bold" => Some(700),
+            "normal" => Some(400),
+            _ => None,
+        },
+        _ => None,
     }
 }
 
@@ -285,6 +389,36 @@ mod tests {
         assert_eq!(declarations[0].name, "color");
         assert_eq!(declarations[0].value, "red");
         assert_eq!(declarations[1].value, "0 auto");
+    }
+
+    #[test]
+    fn font_face_descriptors_parse() {
+        let sheet = Stylesheet::parse(
+            r#"@font-face {
+                font-family: "Demo";
+                src: url(missing.ttf) url(data:font/ttf;base64,AAEAAAAP);
+                font-weight: 700;
+                font-style: italic;
+            }
+            @font-face { font-family: Fallback }"#,
+        )
+        .unwrap();
+        let faces = sheet.font_faces();
+        assert_eq!(faces.len(), 2);
+        assert_eq!(faces[0].family, "Demo");
+        assert_eq!(faces[0].src.len(), 2);
+        assert_eq!(faces[0].weight, 700);
+        assert!(faces[0].italic);
+        assert_eq!(faces[1].family, "Fallback");
+        assert!(faces[1].src.is_empty());
+        assert_eq!(faces[1].weight, 400);
+        assert!(!faces[1].italic);
+    }
+
+    #[test]
+    fn a_font_face_without_a_family_is_skipped() {
+        let sheet = Stylesheet::parse("@font-face { src: url(a.ttf) }").unwrap();
+        assert!(sheet.font_faces().is_empty());
     }
 
     #[test]

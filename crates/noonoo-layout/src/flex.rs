@@ -91,7 +91,7 @@ fn layout_row(
             .unwrap_or_else(|| {
                 let text = ctx.document.text_content(item);
                 ctx.shaper
-                    .advance(&text, item_style.font_size, item_style.font_weight >= 600)
+                    .advance(&text, item_style.font_request(), item_style.font_size)
             });
         bases.push(base.max(0.0));
         grows.push(item_style.flex_grow);

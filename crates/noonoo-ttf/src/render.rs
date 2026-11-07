@@ -4,37 +4,33 @@
 //! emits one `FillPolygon` per glyph contour — so a real font renders through the
 //! same command stream as every other shape, with no GPU text backend.
 //!
-//! It advances the pen with the *same* metrics as [`crate::FontShaper`], so a
-//! document laid out with a `FontShaper` over a font paints correctly when that
-//! same font is handed to `OutlineGlyphs`.
+//! Each request selects a face from a [`FontSet`] (family list, weight, style),
+//! the same way [`crate::FontSetShaper`] does — so a document laid out with a
+//! `FontSetShaper` paints with the very faces it was measured against.
 
 use noonoo_geometry::Point;
 use noonoo_paint::{Color, Command, CommandList, Glyphs};
+use noonoo_text::FontRequest;
 
-use crate::Font;
+use crate::FontSet;
 
-/// Draws text as filled outlines from a [`Font`].
+/// Draws text as filled outlines, selecting faces from a [`FontSet`].
 pub struct OutlineGlyphs<'a> {
-    font: &'a Font,
+    set: &'a FontSet<'a>,
     /// Quadratic subdivision per curve (more is smoother, at more vertices).
     steps: usize,
 }
 
 impl<'a> OutlineGlyphs<'a> {
-    /// A renderer over `font`, with a default curve subdivision of 8.
-    pub fn new(font: &'a Font) -> Self {
-        Self { font, steps: 8 }
+    /// A renderer over `set`, with a default curve subdivision of 8.
+    pub fn new(set: &'a FontSet<'a>) -> Self {
+        Self { set, steps: 8 }
     }
 
     /// Set the number of samples per quadratic curve segment.
     pub fn with_steps(mut self, steps: usize) -> Self {
         self.steps = steps.max(1);
         self
-    }
-
-    /// The font being rendered.
-    pub fn font(&self) -> &'a Font {
-        self.font
     }
 }
 
@@ -45,17 +41,24 @@ impl Glyphs for OutlineGlyphs<'_> {
         (x, baseline): (f32, f32),
         font_size: f32,
         color: Color,
+        request: FontRequest,
         out: &mut CommandList,
     ) {
-        let scale = font_size / self.font.units_per_em().max(1) as f32;
+        let Some(font) = self
+            .set
+            .select_best(request.families, request.weight, request.italic)
+        else {
+            return;
+        };
+        let scale = font_size / font.units_per_em().max(1) as f32;
         let mut pen = x;
         let mut previous = None;
         for character in text.chars() {
-            let glyph = self.font.glyph_for_char_or_notdef(character);
+            let glyph = font.glyph_for_char_or_notdef(character);
             if let Some(left) = previous {
-                pen += self.font.kern(left, glyph) as f32 * scale;
+                pen += font.kern(left, glyph) as f32 * scale;
             }
-            if let Some(outline) = self.font.outline(glyph) {
+            if let Some(outline) = font.outline(glyph) {
                 for contour in outline.flatten(self.steps) {
                     let points: Vec<Point> = contour
                         .into_iter()
@@ -69,7 +72,7 @@ impl Glyphs for OutlineGlyphs<'_> {
                     }
                 }
             }
-            pen += self.font.advance(glyph) as f32 * scale;
+            pen += font.advance(glyph) as f32 * scale;
             previous = Some(glyph);
         }
     }

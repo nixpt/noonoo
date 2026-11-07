@@ -175,12 +175,12 @@ pub(crate) fn layout_inline_run(
     parent_style: &ComputedStyle,
 ) -> (Vec<usize>, f32) {
     let font = parent_style.font_size;
-    let bold = parent_style.font_weight >= 600;
-    let space = ctx.shaper.advance(" ", font, bold);
+    let request = parent_style.font_request();
+    let space = ctx.shaper.advance(" ", request, font);
     let line_height = if parent_style.line_height > 0.0 {
         parent_style.line_height
     } else {
-        ctx.shaper.line_height(font)
+        ctx.shaper.line_height(request, font)
     };
 
     let mut items: Vec<Item> = Vec::new();
@@ -196,7 +196,7 @@ pub(crate) fn layout_inline_run(
                         style_node: parent_node,
                         kind: BoxKind::Text,
                         text: word.to_owned(),
-                        width: ctx.shaper.advance(word, font, bold),
+                        width: ctx.shaper.advance(word, request, font),
                         height: line_height,
                     });
                 }
@@ -207,7 +207,8 @@ pub(crate) fn layout_inline_run(
                 let height = if style.line_height > 0.0 {
                     style.line_height
                 } else {
-                    ctx.shaper.line_height(style.font_size)
+                    ctx.shaper
+                        .line_height(style.font_request(), style.font_size)
                 };
                 items.push(Item {
                     node,
@@ -215,7 +216,7 @@ pub(crate) fn layout_inline_run(
                     kind: BoxKind::Inline,
                     width: ctx
                         .shaper
-                        .advance(&content, style.font_size, style.font_weight >= 600),
+                        .advance(&content, style.font_request(), style.font_size),
                     text: content,
                     height,
                 });

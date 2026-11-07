@@ -122,33 +122,83 @@ fn run_paint(path: &str, font_path: Option<&str>) -> ExitCode {
     let engine = noonoo::engine::Engine::from_html(&html);
     let viewport = noonoo::geometry::Size::new(800.0, 600.0);
 
-    let list = match font_path {
-        None => engine.paint(viewport, &noonoo::layout::MetricShaper),
-        Some(font_path) => {
-            let bytes = match std::fs::read(font_path) {
-                Ok(bytes) => bytes,
-                Err(error) => {
-                    eprintln!("noonoo: {font_path}: {error}");
-                    return ExitCode::from(1);
+    // Collect font bytes: `--font` is the universal fallback (registered under
+    // the empty family name, which matches every request); each `@font-face`
+    // loads its first resolvable `src` and registers its own family/weight/
+    // style, resolved relative to the document for `file:` pages.
+    let mut data: Vec<Vec<u8>> = Vec::new();
+    let mut faces: Vec<(String, u16, bool)> = Vec::new();
+    if let Some(font_path) = font_path {
+        match std::fs::read(font_path) {
+            Ok(bytes) => {
+                data.push(bytes);
+                faces.push((String::new(), 400, false));
+            }
+            Err(error) => {
+                eprintln!("noonoo: {font_path}: {error}");
+                return ExitCode::from(1);
+            }
+        }
+    }
+    let base = std::path::Path::new(path)
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .map(|parent| parent.to_path_buf());
+    for face in engine.font_faces() {
+        for src in &face.src {
+            if noonoo::net::load(&resolve_url(src, base.as_deref()))
+                .inspect(|bytes| {
+                    data.push(bytes.clone());
+                    faces.push((face.family.clone(), face.weight, face.italic));
+                })
+                .is_ok()
+            {
+                break;
+            }
+        }
+    }
+
+    let list = if data.is_empty() {
+        engine.paint(viewport, &noonoo::layout::MetricShaper)
+    } else {
+        let fonts: Result<Vec<_>, _> = data
+            .iter()
+            .map(|bytes| noonoo::ttf::Font::parse(bytes))
+            .collect();
+        match fonts {
+            Ok(fonts) => {
+                let mut set = noonoo::ttf::FontSet::new();
+                for (font, (family, weight, italic)) in fonts.iter().zip(&faces) {
+                    set.add(family.clone(), *weight, *italic, font);
                 }
-            };
-            let font = match noonoo::ttf::Font::parse(&bytes) {
-                Ok(font) => font,
-                Err(error) => {
-                    eprintln!("noonoo: {font_path}: {error}");
-                    return ExitCode::from(1);
-                }
-            };
-            // Shape with the font's metrics and paint with its outlines, so the
-            // run's advances and its glyph shapes come from the same font.
-            let shaper = noonoo::ttf::FontShaper::new(&font);
-            let glyphs = noonoo::ttf::OutlineGlyphs::new(&font);
-            engine.paint_with(viewport, &shaper, &glyphs)
+                // Shape with the set's metrics and paint with its outlines, so
+                // each run's advances and glyph shapes come from the same face.
+                let shaper = noonoo::ttf::FontSetShaper::new(&set);
+                let glyphs = noonoo::ttf::OutlineGlyphs::new(&set);
+                engine.paint_with(viewport, &shaper, &glyphs)
+            }
+            Err(error) => {
+                eprintln!("noonoo: font: {error}");
+                return ExitCode::from(1);
+            }
         }
     };
 
     println!("{}", list.to_json().to_string_pretty());
     ExitCode::SUCCESS
+}
+
+/// Resolve a `@font-face` `src`: `file:`/`data:` URLs pass through, a bare
+/// path joins the document's directory (the current directory for stdin).
+fn resolve_url(src: &str, base: Option<&std::path::Path>) -> String {
+    if src.contains("://") || src.starts_with("data:") {
+        src.to_owned()
+    } else {
+        match base {
+            Some(base) => base.join(src).to_string_lossy().into_owned(),
+            None => src.to_owned(),
+        }
+    }
 }
 
 fn run_markdown(path: &str) -> ExitCode {

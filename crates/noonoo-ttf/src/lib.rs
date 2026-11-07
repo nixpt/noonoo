@@ -20,9 +20,10 @@
 //! CFF outlines are not parsed.
 //!
 //! [`OutlineGlyphs`] implements `noonoo_paint::Glyphs`, drawing a run as filled
-//! glyph outlines — pair it with [`FontShaper`] over the same font to render
-//! vector text through the normal paint stream. [`FontSet`] + [`FontSetShaper`]
-//! select a face from several by family, weight, and style.
+//! glyph outlines — pair it with a [`FontSetShaper`] over the same [`FontSet`]
+//! so each run is measured and painted with the face its element selects
+//! (family list, weight, style), rendering vector text through the normal paint
+//! stream.
 //!
 //! ```
 //! # fn demo(bytes: &[u8]) -> noonoo_parse::ParseResult<()> {

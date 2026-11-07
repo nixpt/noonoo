@@ -67,6 +67,18 @@ impl<'a> FontSet<'a> {
             .map(|face| face.font)
     }
 
+    /// The best face for a request across a family *list*: the first family
+    /// with any registered face wins, matching style preferred, then nearest
+    /// weight (as [`FontSet::select`]). An empty list means "any face".
+    pub fn select_best(&self, families: &[String], weight: u16, italic: bool) -> Option<&'a Font> {
+        if families.is_empty() {
+            return self.select("", weight, italic);
+        }
+        families
+            .iter()
+            .find_map(|family| self.select(family, weight, italic))
+    }
+
     /// The number of registered faces.
     pub fn len(&self) -> usize {
         self.faces.len()

@@ -5,7 +5,7 @@
 //! checksums are left zero.
 
 use super::*;
-use noonoo_text::Shaper;
+use noonoo_text::{FontRequest, Shaper};
 
 fn push_u16(out: &mut Vec<u8>, value: u16) {
     out.extend_from_slice(&value.to_be_bytes());
@@ -255,9 +255,9 @@ fn font_shaper_uses_real_metrics() {
     let font = Font::parse(&minimal_font()).unwrap();
     let shaper = FontShaper::new(&font);
     // "AB" = 600 + 700 units, minus the 100-unit kern pair, at 20px over 1000.
-    assert_eq!(shaper.advance("AB", 20.0, false), 24.0);
+    assert_eq!(shaper.advance("AB", FontRequest::any(), 20.0), 24.0);
     // Line height = (800 - (-200) + 0) units, scaled the same way.
-    assert_eq!(shaper.line_height(20.0), 20.0);
+    assert_eq!(shaper.line_height(FontRequest::any(), 20.0), 20.0);
 }
 
 #[test]
@@ -347,17 +347,54 @@ fn font_set_shaper_picks_the_bold_face() {
     set.add("Demo", 400, false, &regular);
     set.add("Demo", 700, false, &bold);
 
-    let shaper = FontSetShaper::new(&set, "Demo", 400, false);
+    let shaper = FontSetShaper::new(&set);
+    let demo = vec!["Demo".to_owned()];
+    let regular = FontRequest {
+        families: &demo,
+        weight: 400,
+        italic: false,
+    };
     // 1200 units over a 1000-unit em at 20px.
-    assert_eq!(shaper.advance("AB", 20.0, false), 24.0);
+    assert_eq!(shaper.advance("AB", regular, 20.0), 24.0);
+    assert_eq!(shaper.line_height(regular, 20.0), 20.0);
     // The same units over a 2000-unit em (the bold face).
-    assert_eq!(shaper.advance("AB", 20.0, true), 12.0);
-    assert_eq!(shaper.line_height(20.0), 20.0);
+    let bold = FontRequest {
+        families: &demo,
+        weight: 700,
+        italic: false,
+    };
+    assert_eq!(shaper.advance("AB", bold, 20.0), 12.0);
 
     // No matching family falls back to the deterministic heuristic.
-    let missing = FontSetShaper::new(&set, "Nope", 400, false);
-    assert_eq!(missing.advance("AB", 20.0, false), 20.0);
-    assert_eq!(missing.line_height(20.0), 24.0);
+    let missing = vec!["Nope".to_owned()];
+    let missing = FontRequest {
+        families: &missing,
+        weight: 400,
+        italic: false,
+    };
+    assert_eq!(shaper.advance("AB", missing, 20.0), 20.0);
+    assert_eq!(shaper.line_height(missing, 20.0), 24.0);
+}
+
+#[test]
+fn font_set_selects_families_in_order() {
+    let regular = Font::parse(&minimal_font_with_em(1000)).unwrap();
+    let wide = Font::parse(&minimal_font_with_em(3000)).unwrap();
+    let mut set = FontSet::new();
+    set.add("Demo", 400, false, &regular);
+    set.add("Other", 400, false, &wide);
+
+    // The second family matches when the first has no faces.
+    let families = vec!["Missing".to_owned(), "Other".to_owned()];
+    assert_eq!(
+        set.select_best(&families, 400, false)
+            .unwrap()
+            .units_per_em(),
+        3000
+    );
+    // An unresolvable list is `None`, not a guess.
+    let missing = vec!["A".to_owned(), "B".to_owned()];
+    assert!(set.select_best(&missing, 400, false).is_none());
 }
 
 #[test]
@@ -378,7 +415,16 @@ fn outline_glyphs_emit_polygons() {
 
     let font = Font::parse(&minimal_font()).unwrap();
     let mut list = CommandList::default();
-    OutlineGlyphs::new(&font).draw("A", (0.0, 0.0), 1000.0, Color::BLACK, &mut list);
+    let mut set = FontSet::new();
+    set.add("Demo", 400, false, &font);
+    OutlineGlyphs::new(&set).draw(
+        "A",
+        (0.0, 0.0),
+        1000.0,
+        Color::BLACK,
+        FontRequest::any(),
+        &mut list,
+    );
 
     let points = list
         .commands()

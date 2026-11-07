@@ -1,12 +1,12 @@
 //! [`Shaper`]s backed by parsed fonts.
 //!
 //! [`FontShaper`] measures a single face; [`FontSetShaper`] picks the right face
-//! from a [`FontSet`] per call (so `font-weight: bold` selects a real bold face
-//! when one is registered). Neither *shapes* — ligatures, contextual
-//! substitution, and complex scripts remain the borrowed concern behind the
-//! trait (`docs/DEPENDENCY-EXIT.md`).
+//! from a [`FontSet`] per call, so an element's `font-family`/`font-weight`/
+//! `font-style` select the face its text is measured with. Neither *shapes* —
+//! ligatures, contextual substitution, and complex scripts remain the borrowed
+//! concern behind the trait (`docs/DEPENDENCY-EXIT.md`).
 
-use noonoo_text::Shaper;
+use noonoo_text::{FontRequest, Shaper};
 
 use crate::{Font, FontSet};
 
@@ -53,54 +53,48 @@ impl<'a> FontShaper<'a> {
 }
 
 impl Shaper for FontShaper<'_> {
-    fn advance(&self, text: &str, font_size: f32, _bold: bool) -> f32 {
+    fn advance(&self, text: &str, _request: FontRequest, font_size: f32) -> f32 {
         advance_units(self.font, text) as f32 * scale(self.font, font_size)
     }
 
-    fn line_height(&self, font_size: f32) -> f32 {
+    fn line_height(&self, _request: FontRequest, font_size: f32) -> f32 {
         line_height_units(self.font) as f32 * scale(self.font, font_size)
     }
 }
 
 /// A [`Shaper`] that selects a face from a [`FontSet`] per call.
 ///
-/// The `bold` flag a line-break passes selects a heavier face (weight 700)
-/// when one is registered for the family; otherwise the nearest face is used.
+/// Each request carries the element's family list, weight, and style; a face
+/// registered under the empty family name matches every request, which is how
+/// a host offers a universal fallback.
 pub struct FontSetShaper<'a> {
     set: &'a FontSet<'a>,
-    family: String,
-    weight: u16,
-    italic: bool,
 }
 
 impl<'a> FontSetShaper<'a> {
-    /// A shaper over `set` for `family` at `weight`/`italic`.
-    pub fn new(set: &'a FontSet<'a>, family: impl Into<String>, weight: u16, italic: bool) -> Self {
-        Self {
-            set,
-            family: family.into(),
-            weight,
-            italic,
-        }
-    }
-
-    fn pick(&self, bold: bool) -> Option<&'a Font> {
-        let weight = if bold { 700 } else { self.weight };
-        self.set.select(&self.family, weight, self.italic)
+    /// A shaper over `set`.
+    pub fn new(set: &'a FontSet<'a>) -> Self {
+        Self { set }
     }
 }
 
 impl Shaper for FontSetShaper<'_> {
-    fn advance(&self, text: &str, font_size: f32, bold: bool) -> f32 {
-        match self.pick(bold) {
+    fn advance(&self, text: &str, request: FontRequest, font_size: f32) -> f32 {
+        match self
+            .set
+            .select_best(request.families, request.weight, request.italic)
+        {
             Some(font) => advance_units(font, text) as f32 * scale(font, font_size),
             // A deterministic fallback, as `MetricShaper` uses.
             None => text.chars().count() as f32 * 0.5 * font_size,
         }
     }
 
-    fn line_height(&self, font_size: f32) -> f32 {
-        match self.pick(false) {
+    fn line_height(&self, request: FontRequest, font_size: f32) -> f32 {
+        match self
+            .set
+            .select_best(request.families, request.weight, request.italic)
+        {
             Some(font) => line_height_units(font) as f32 * scale(font, font_size),
             None => font_size * 1.2,
         }
