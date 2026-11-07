@@ -16,6 +16,7 @@ COMMANDS:
     -V, --version       Show the version
     --tree <file|->     Parse HTML and print the DOM tree as JSON
     --paint <file|->    Parse HTML, lay out, and print paint commands as JSON
+                        (add `--font <file>` to draw text as glyph outlines)
     --md <file|->       Convert Markdown to HTML
     --md-paint <file|-> View Markdown: convert, lay out, and print paint commands
     --csv <file|->      Convert CSV/TSV to an HTML table
@@ -45,7 +46,7 @@ fn main() -> ExitCode {
         }
         Ok(Command::Tree { path }) => run_tree(&path),
         Ok(Command::Caison { path }) => run_caison(&path),
-        Ok(Command::Paint { path }) => run_paint(&path),
+        Ok(Command::Paint { path, font }) => run_paint(&path, font.as_deref()),
         Ok(Command::Markdown { path }) => run_markdown(&path),
         Ok(Command::MarkdownPaint { path }) => run_markdown_paint(&path),
         Ok(Command::Csv { path }) => run_csv(&path),
@@ -110,22 +111,44 @@ fn run_caison(path: &str) -> ExitCode {
     }
 }
 
-fn run_paint(path: &str) -> ExitCode {
-    match read_source(path) {
-        Ok(html) => {
-            let engine = noonoo::engine::Engine::from_html(&html);
-            let list = engine.paint(
-                noonoo::geometry::Size::new(800.0, 600.0),
-                &noonoo::layout::MetricShaper,
-            );
-            println!("{}", list.to_json().to_string_pretty());
-            ExitCode::SUCCESS
-        }
+fn run_paint(path: &str, font_path: Option<&str>) -> ExitCode {
+    let html = match read_source(path) {
+        Ok(html) => html,
         Err(error) => {
             eprintln!("noonoo: {error}");
-            ExitCode::from(1)
+            return ExitCode::from(1);
         }
-    }
+    };
+    let engine = noonoo::engine::Engine::from_html(&html);
+    let viewport = noonoo::geometry::Size::new(800.0, 600.0);
+
+    let list = match font_path {
+        None => engine.paint(viewport, &noonoo::layout::MetricShaper),
+        Some(font_path) => {
+            let bytes = match std::fs::read(font_path) {
+                Ok(bytes) => bytes,
+                Err(error) => {
+                    eprintln!("noonoo: {font_path}: {error}");
+                    return ExitCode::from(1);
+                }
+            };
+            let font = match noonoo::ttf::Font::parse(&bytes) {
+                Ok(font) => font,
+                Err(error) => {
+                    eprintln!("noonoo: {font_path}: {error}");
+                    return ExitCode::from(1);
+                }
+            };
+            // Shape with the font's metrics and paint with its outlines, so the
+            // run's advances and its glyph shapes come from the same font.
+            let shaper = noonoo::ttf::FontShaper::new(&font);
+            let glyphs = noonoo::ttf::OutlineGlyphs::new(&font);
+            engine.paint_with(viewport, &shaper, &glyphs)
+        }
+    };
+
+    println!("{}", list.to_json().to_string_pretty());
+    ExitCode::SUCCESS
 }
 
 fn run_markdown(path: &str) -> ExitCode {

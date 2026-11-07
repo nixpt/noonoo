@@ -16,3 +16,5 @@ std = []
 [dependencies]
 noonoo-parse.workspace = true
 noonoo-text.workspace = true
+noonoo-geometry.workspace = true
+noonoo-paint.workspace = true

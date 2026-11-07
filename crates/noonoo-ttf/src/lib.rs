@@ -18,6 +18,10 @@
 //! units, and [`Outline::flatten`] turns them into polygons for the paint stream.
 //! CFF outlines are not parsed.
 //!
+//! [`OutlineGlyphs`] implements `noonoo_paint::Glyphs`, drawing a run as filled
+//! glyph outlines — pair it with [`FontShaper`] over the same font to render
+//! vector text through the normal paint stream.
+//!
 //! ```
 //! # fn demo(bytes: &[u8]) -> noonoo_parse::ParseResult<()> {
 //! let font = noonoo_ttf::Font::parse(bytes)?;
@@ -34,9 +38,11 @@
 mod cmap;
 mod glyf;
 mod reader;
+mod render;
 mod shaper;
 
 pub use glyf::{Contour, Outline, Point};
+pub use render::OutlineGlyphs;
 pub use shaper::FontShaper;
 
 use noonoo_parse::ParseResult;

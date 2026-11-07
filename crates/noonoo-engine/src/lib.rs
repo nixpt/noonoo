@@ -93,9 +93,22 @@ impl Engine {
         viewport: noonoo_geometry::Size,
         shaper: &dyn noonoo_layout::Shaper,
     ) -> noonoo_paint::CommandList {
+        self.paint_with(viewport, shaper, &noonoo_paint::TextRuns)
+    }
+
+    /// Lay out and paint the document, drawing text with `glyphs`.
+    ///
+    /// Use this with a font-backed shaper and matching glyph renderer to render
+    /// vector text (see `noonoo-ttf`'s `FontShaper` + `OutlineGlyphs`).
+    pub fn paint_with(
+        &self,
+        viewport: noonoo_geometry::Size,
+        shaper: &dyn noonoo_layout::Shaper,
+        glyphs: &dyn noonoo_paint::Glyphs,
+    ) -> noonoo_paint::CommandList {
         let styles = self.compute_styles();
         let layout = noonoo_layout::layout(&self.dom, &styles, viewport, shaper);
-        noonoo_paint::paint(&styles, &layout)
+        noonoo_paint::paint_with(&styles, &layout, glyphs)
     }
 
     /// Consume the engine and return its document.

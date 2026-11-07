@@ -23,6 +23,8 @@ pub enum Command {
     Paint {
         /// The input path, or `-` for stdin.
         path: String,
+        /// A font to render text as glyph outlines, if `--font` was given.
+        font: Option<String>,
     },
     /// Convert a Markdown file (or stdin for `-`) to HTML.
     Markdown {
@@ -83,12 +85,31 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
-    let mut args = args.into_iter().skip(1);
+    let mut raw: Vec<String> = args
+        .into_iter()
+        .skip(1)
+        .map(|arg| {
+            let value: &str = arg.as_ref();
+            value.to_owned()
+        })
+        .collect();
+
+    // `--font <path>` selects a font for `--paint`; it may appear anywhere.
+    let mut font = None;
+    if let Some(position) = raw.iter().position(|arg| arg == "--font") {
+        if position + 1 >= raw.len() {
+            return Err("`--font` needs a font file path".to_owned());
+        }
+        font = Some(raw.remove(position + 1));
+        raw.remove(position);
+    }
+
+    let mut args = raw.into_iter();
     let Some(first) = args.next() else {
         return Ok(Command::Help);
     };
 
-    match first.as_ref() {
+    match first.as_str() {
         "-h" | "--help" => Ok(Command::Help),
         "-V" | "--version" => Ok(Command::Version),
         "--tree" => Ok(Command::Tree {
@@ -97,12 +118,12 @@ where
         "--caison" => {
             let path = args
                 .next()
-                .map(|arg| arg.as_ref().to_owned())
                 .ok_or_else(|| "`--caison` needs a file path (or `-`)".to_owned())?;
             Ok(Command::Caison { path })
         }
         "--paint" => Ok(Command::Paint {
             path: next_or_stdin(&mut args),
+            font,
         }),
         "--md" => Ok(Command::Markdown {
             path: next_or_stdin(&mut args),
@@ -193,13 +214,29 @@ mod tests {
         assert_eq!(
             parse(["noonoo", "--paint", "page.html"]),
             Ok(Command::Paint {
-                path: "page.html".into()
+                path: "page.html".into(),
+                font: None,
             })
         );
         assert_eq!(
             parse(["noonoo", "--paint"]),
-            Ok(Command::Paint { path: "-".into() })
+            Ok(Command::Paint {
+                path: "-".into(),
+                font: None,
+            })
         );
+    }
+
+    #[test]
+    fn paint_takes_an_optional_font() {
+        assert_eq!(
+            parse(["noonoo", "--paint", "page.html", "--font", "DejaVu.ttf"]),
+            Ok(Command::Paint {
+                path: "page.html".into(),
+                font: Some("DejaVu.ttf".into()),
+            })
+        );
+        assert!(parse(["noonoo", "--paint", "page.html", "--font"]).is_err());
     }
 
     #[test]

@@ -6,6 +6,11 @@
 //! artifact — it can be diffed (as JSON), fed to a GPU rasterizer, or recorded
 //! by a test without a screen.
 //!
+//! Text sits behind the [`Glyphs`] seam: [`paint`] draws runs with [`TextRuns`],
+//! while [`paint_with`] takes a renderer — e.g. `noonoo-ttf`'s `OutlineGlyphs`,
+//! which emits one `FillPolygon` per glyph contour, so a real font renders as
+//! vector paths with no GPU text backend.
+//!
 //! This is Phase D of the dependency-exit plan (`docs/DEPENDENCY-EXIT.md`). The
 //! GPU backend (`anyrender`/`vello`) is deliberately **not** wired yet: this
 //! crate owns the translation, which is the part that is ours. See
@@ -14,7 +19,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-use noonoo_css::Color;
+pub use noonoo_css::Color;
 use noonoo_geometry::{Point, Rect};
 use noonoo_json::Json;
 use noonoo_layout::{BoxKind, LayoutBox, LayoutTree};
@@ -85,14 +90,59 @@ impl CommandList {
     }
 }
 
-/// Paint a laid-out document into a command list.
+/// Draws a text run — the seam between layout and the glyph shapes.
+///
+/// The default [`TextRuns`] emits a [`Command::DrawText`]. A font-backed renderer
+/// (e.g. `noonoo-ttf`'s `OutlineGlyphs`) emits glyph polygons instead. `origin`
+/// is `(x, baseline_y)` in window space.
+pub trait Glyphs {
+    /// Emit the commands that draw `text`.
+    fn draw(
+        &self,
+        text: &str,
+        origin: (f32, f32),
+        font_size: f32,
+        color: Color,
+        out: &mut CommandList,
+    );
+}
+
+/// The default [`Glyphs`]: one [`Command::DrawText`] per run.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct TextRuns;
+
+impl Glyphs for TextRuns {
+    fn draw(
+        &self,
+        text: &str,
+        (x, y): (f32, f32),
+        font_size: f32,
+        color: Color,
+        out: &mut CommandList,
+    ) {
+        out.0.push(Command::DrawText {
+            text: text.to_owned(),
+            x,
+            y,
+            font_size,
+            color,
+        });
+    }
+}
+
+/// Paint a laid-out document into a command list, drawing text as runs.
 pub fn paint(styles: &Styles, layout: &LayoutTree) -> CommandList {
+    paint_with(styles, layout, &TextRuns)
+}
+
+/// Paint a laid-out document, using `glyphs` to draw every text run.
+pub fn paint_with(styles: &Styles, layout: &LayoutTree, glyphs: &dyn Glyphs) -> CommandList {
     let mut list = CommandList(Vec::new());
     let boxes = layout.boxes();
     let mut roots = layout.root_indices().to_vec();
     roots.sort_by_key(|&root| (boxes[root].z_tier, boxes[root].z_index));
     for root in roots {
-        paint_box(root, boxes, styles, 0.0, 0.0, &mut list);
+        paint_box(root, boxes, styles, glyphs, 0.0, 0.0, &mut list);
     }
     list
 }
@@ -103,6 +153,7 @@ fn paint_box(
     index: usize,
     boxes: &[LayoutBox],
     styles: &Styles,
+    glyphs: &dyn Glyphs,
     tx: f32,
     ty: f32,
     out: &mut CommandList,
@@ -134,20 +185,14 @@ fn paint_box(
         let (font_size, color) = style
             .map(|s| (s.font_size, s.color))
             .unwrap_or((16.0, Color::BLACK));
-        out.0.push(Command::DrawText {
-            text: text.clone(),
-            x: rect.x,
-            y: rect.y + font_size * 0.8,
-            font_size,
-            color,
-        });
+        let baseline = rect.y + font_size * 0.8;
+        glyphs.draw(text, (rect.x, baseline), font_size, color, out);
 
         // Text decorations are bars across the run, in the text colour.
         if let Some(style) = style {
             let decoration = style.text_decoration;
             if !decoration.is_empty() {
                 let thickness = (font_size * 0.07).max(1.0);
-                let baseline = rect.y + font_size * 0.8;
                 for (flag, y) in [
                     (TextDecoration::UNDERLINE, baseline + font_size * 0.08),
                     (TextDecoration::OVERLINE, rect.y),
@@ -177,7 +222,7 @@ fn paint_box(
     let mut children = b.children.clone();
     children.sort_by_key(|&child| (boxes[child].z_tier, boxes[child].z_index));
     for child in children {
-        paint_box(child, boxes, styles, child_tx, child_ty, out);
+        paint_box(child, boxes, styles, glyphs, child_tx, child_ty, out);
     }
     if b.clips {
         out.0.push(Command::PopClip);
@@ -348,6 +393,42 @@ mod tests {
         let json = list.to_json().to_string();
         assert!(json.starts_with('['));
         assert!(json.contains("draw-text"));
+    }
+
+    #[test]
+    fn paint_with_uses_the_glyph_renderer() {
+        struct Marks;
+        impl Glyphs for Marks {
+            fn draw(
+                &self,
+                _text: &str,
+                _origin: (f32, f32),
+                _font_size: f32,
+                color: Color,
+                out: &mut CommandList,
+            ) {
+                out.0.push(Command::FillRect {
+                    rect: Rect::new(0.0, 0.0, 1.0, 1.0),
+                    color,
+                });
+            }
+        }
+
+        let doc = noonoo_html::parse(r#"<div style="color: #ff0000">hi</div>"#);
+        let styles = noonoo_style::compute(&doc, &[]);
+        let layout = noonoo_layout::layout(&doc, &styles, Size::new(100.0, 100.0), &MetricShaper);
+        let list = paint_with(&styles, &layout, &Marks);
+
+        // The renderer replaced the default `DrawText` with its own command.
+        assert!(list.commands().iter().any(
+            |c| matches!(c, Command::FillRect { color, .. } if *color == Color::rgb(255, 0, 0))
+        ));
+        assert!(
+            !list
+                .commands()
+                .iter()
+                .any(|c| matches!(c, Command::DrawText { .. }))
+        );
     }
 
     #[test]

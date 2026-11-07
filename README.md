@@ -48,7 +48,7 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | [`noonoo-net`](crates/noonoo-net) | Loading: `file:` + `data:` owned; `http` behind a feature |
 | [`noonoo-engine`](crates/noonoo-engine) | Orchestration: a working document |
 | [`noonoo-headless`](crates/noonoo-headless) | Tree dump, virtual clock, synthetic input |
-| [`noonoo-paint`](crates/noonoo-paint) | Layout → render commands (fills, text, clip), scene effects, overlays |
+| [`noonoo-paint`](crates/noonoo-paint) | Layout → render commands (fills, text runs or glyph outlines, clip) |
 | [`noonoo-shell`](crates/noonoo-shell) | Multi-document host: layers, input routing, focus, composition |
 | [`noonoo`](crates/noonoo) | Umbrella re-export + the `noonoo` command line |
 
@@ -93,6 +93,7 @@ Then the CLI:
 noonoo --tree page.html     # parse HTML (own tokenizer), print the DOM as JSON
 noonoo --tree -             # …or read from stdin
 noonoo --paint page.html    # parse → style → layout → paint, print commands as JSON
+noonoo --paint page.html --font DejaVuSans.ttf   # …drawing text as glyph outlines
 noonoo --md notes.md        # Markdown → HTML
 noonoo --md-paint notes.md  # Markdown viewer: layout + paint commands
 noonoo --csv data.csv       # CSV/TSV → HTML table

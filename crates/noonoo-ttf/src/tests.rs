@@ -279,3 +279,30 @@ fn lays_out_text_as_polygons() {
     // 'B' starts at 'A's advance (600) plus the composite offset (100).
     assert_eq!(polygons[1][0], (700.0, 0.0));
 }
+
+#[test]
+fn outline_glyphs_emit_polygons() {
+    use noonoo_paint::{Color, Command, CommandList, Glyphs};
+
+    let font = Font::parse(&minimal_font()).unwrap();
+    let mut list = CommandList::default();
+    OutlineGlyphs::new(&font).draw("A", (0.0, 0.0), 1000.0, Color::BLACK, &mut list);
+
+    let points = list
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            Command::FillPolygon { points, .. } => Some(points.clone()),
+            _ => None,
+        })
+        .expect("a glyph polygon");
+    // The triangle maps to screen space (y down) with the baseline at y = 0.
+    assert_eq!(
+        points,
+        vec![
+            noonoo_geometry::Point::new(0.0, 0.0),
+            noonoo_geometry::Point::new(700.0, 0.0),
+            noonoo_geometry::Point::new(0.0, -700.0),
+        ]
+    );
+}
