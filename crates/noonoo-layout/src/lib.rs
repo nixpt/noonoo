@@ -74,6 +74,7 @@ mod float;
 mod grid;
 mod margin;
 mod resolve;
+mod runs;
 
 use std::collections::{HashMap, HashSet};
 
@@ -707,6 +708,7 @@ impl Ctx<'_> {
         let (child_indices, content_height) = match style.display {
             Display::Flex | Display::InlineFlex => flex::layout_flex_children(
                 self,
+                node,
                 &style,
                 &children_nodes,
                 content_x,
@@ -900,6 +902,7 @@ impl Ctx<'_> {
         let (child_indices, content_height) = match style.display {
             Display::Flex | Display::InlineFlex => flex::layout_flex_children(
                 self,
+                node,
                 &style,
                 &children_nodes,
                 content_x,

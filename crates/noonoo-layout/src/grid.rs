@@ -28,13 +28,11 @@
 use std::collections::HashSet;
 
 use noonoo_dom::NodeId;
-use noonoo_geometry::Rect;
-use noonoo_style::{AlignItems, ComputedStyle, Edges, GridLine, Track};
+use noonoo_style::{AlignItems, ComputedStyle, GridLine, Track};
 
-use crate::block;
+use crate::Ctx;
 use crate::float;
 use crate::resolve;
-use crate::{BoxKind, Ctx, LayoutBox};
 
 /// One item's resolved placement in the grid (0-based, half-open spans).
 struct Placed {
@@ -279,7 +277,7 @@ pub(crate) fn layout_grid_children(
     for placed in &placements {
         let area = area_width(placed.column, placed.column_span);
         heights.push(match &placed.text {
-            Some(text) => text_height(ctx, text, style, area),
+            Some(text) => crate::runs::height(ctx, text, style, area),
             None => {
                 let margins = resolve::margins(&ctx.style(placed.node).margin, content_width);
                 ctx.measure_height(
@@ -333,7 +331,7 @@ pub(crate) fn layout_grid_children(
         if let Some(text) = &placed.text {
             // An anonymous text item wraps into line boxes in its cell,
             // aligned per the container's `text-align` (justify as start).
-            indices.extend(text_lines(
+            indices.extend(crate::runs::lines(
                 ctx,
                 placed.node,
                 parent,
@@ -373,84 +371,6 @@ pub(crate) fn layout_grid_children(
     let grid_height =
         row_heights.iter().sum::<f32>() + row_gap * row_heights.len().saturating_sub(1) as f32;
     (indices, grid_height.max(0.0))
-}
-
-/// An anonymous text item's wrapped height in a cell of `available_width`.
-fn text_height(ctx: &Ctx<'_>, text: &str, style: &ComputedStyle, available_width: f32) -> f32 {
-    let request = style.font_request();
-    let space = ctx.shaper.advance(" ", request, style.font_size);
-    let line_height = if style.line_height > 0.0 {
-        style.line_height
-    } else {
-        ctx.shaper.line_height(request, style.font_size)
-    };
-    let widths: Vec<f32> = text
-        .split_whitespace()
-        .map(|word| ctx.shaper.advance(word, request, style.font_size))
-        .collect();
-    let lines = noonoo_text::wrap(&widths, space, available_width);
-    lines.len() as f32 * line_height
-}
-
-/// Lay an anonymous text item out as one [`BoxKind::Text`] box per wrapped
-/// line, at `(x, y)` inside a cell of `available_width`.
-#[allow(clippy::too_many_arguments)]
-fn text_lines(
-    ctx: &mut Ctx<'_>,
-    node: NodeId,
-    parent: NodeId,
-    text: &str,
-    style: &ComputedStyle,
-    x: f32,
-    y: f32,
-    available_width: f32,
-) -> Vec<usize> {
-    let request = style.font_request();
-    let font_size = style.font_size;
-    let space = ctx.shaper.advance(" ", request, font_size);
-    let line_height = if style.line_height > 0.0 {
-        style.line_height
-    } else {
-        ctx.shaper.line_height(request, font_size)
-    };
-    let words: Vec<&str> = text.split_whitespace().collect();
-    let widths: Vec<f32> = words
-        .iter()
-        .map(|word| ctx.shaper.advance(word, request, font_size))
-        .collect();
-    let lines = noonoo_text::wrap(&widths, space, available_width);
-    let alignment = block::map_align(style.text_align);
-
-    let mut indices = Vec::new();
-    let mut cursor_y = y;
-    for line in &lines {
-        let used: f32 = line.iter().map(|&i| widths[i]).sum::<f32>()
-            + space * (line.len().saturating_sub(1)) as f32;
-        let free = (available_width - used).max(0.0);
-        let offset = noonoo_text::align(alignment, free, line.len());
-        let line_text = line.iter().map(|&i| words[i]).collect::<Vec<_>>().join(" ");
-        let index = ctx.push(LayoutBox {
-            node: Some(node),
-            style_node: parent,
-            kind: BoxKind::Text,
-            rect: Rect::new(x + offset.start, cursor_y, used, line_height),
-            text: Some(line_text),
-            margin: Edges::all(0.0),
-            padding: Edges::all(0.0),
-            border: Edges::all(0.0),
-            clips: false,
-            scroll_max_x: 0.0,
-            scroll_max_y: 0.0,
-            scroll_x: 0.0,
-            scroll_y: 0.0,
-            z_tier: 1,
-            z_index: 0,
-            children: Vec::new(),
-        });
-        indices.push(index);
-        cursor_y += line_height;
-    }
-    indices
 }
 
 /// One axis of a placement: `(start line 0-based, span)`, with `None` for an

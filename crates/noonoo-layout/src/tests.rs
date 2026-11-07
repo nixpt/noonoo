@@ -1022,3 +1022,32 @@ fn overflow_x_computes_a_horizontal_scroll_range() {
     assert_eq!(tree.scroll_by_x(strip, 400.0), 150.0);
     assert_eq!(tree.scroll_offset_x(strip), 150.0);
 }
+
+#[test]
+fn inline_flex_with_raw_text_lays_out() {
+    // Reduction of arniko's real button stylesheet. The panic ("layout only
+    // visits styled elements") came from flex running `ctx.style()` on a raw
+    // text child; text is an anonymous item styled by the container (see
+    // `runs`).
+    let (doc, tree) = page(
+        r#"<button id="btn">Save and exit</button>"#,
+        "#btn { display: inline-flex; align-items: center; justify-content: center; \
+         gap: 8px; white-space: nowrap; border-radius: 8px; font-size: 14px; \
+         font-weight: 500; cursor: pointer; border: none; padding: 8px 16px; \
+         height: 36px }",
+        400.0,
+    );
+    let button = tree.get(id(&doc, "btn")).unwrap();
+    assert_eq!(button.rect.height, 52.0);
+
+    // The anonymous run renders as a text box one line high, inside the
+    // button's content box (padding 16px on each side) — the whole spread of
+    // the old panic path is now covered by layout, no paint assert needed.
+    let lines: Vec<_> = tree
+        .boxes()
+        .iter()
+        .filter(|box_| box_.kind == BoxKind::Text)
+        .map(|box_| box_.rect.height)
+        .collect();
+    assert_eq!(lines.len(), 1);
+}
