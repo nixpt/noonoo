@@ -11,13 +11,15 @@ rust-version.workspace = true
 default-run = "noonoo"
 
 [features]
-default = ["std"]
+default = ["std", "a11y"]
 std = ["noonoo-dom/std", "noonoo-paint/std", "noonoo-net/std"]
 window = ["noonoo-shell/window"]
 gpu = ["noonoo-shell/gpu"]
 http = ["noonoo-net/http"]
+a11y = ["noonoo-shell/a11y"]
 
 [dependencies]
+noonoo-a11y.workspace = true
 noonoo-engine.workspace = true
 noonoo-dom.workspace = true
 noonoo-geometry.workspace = true

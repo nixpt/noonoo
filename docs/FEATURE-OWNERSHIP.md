@@ -27,7 +27,7 @@ it, that missing thing moves *into* Noonoo — not into the consumer's port.
 | **Overlay textures / custom paint sources** | forked `anyrender_vello` | First-class, not a spike |
 | Shell launch + lifecycle | `bliss-shell` | `resumed`/suspend must be real, not stubs |
 | Viewport / colour scheme | `bliss-traits::shell` | Belongs with the shell |
-| Accessibility | `bliss-shell` (Linux no-op) | Works by default (`noonoo-shell` `a11y`) |
+| Accessibility | `bliss-shell` (Linux no-op) | Owned tree (`noonoo-a11y`), on by default; the AccessKit bridge is opt-in |
 | **Sub-documents** | `bliss-dom` (half-built, unused) | The single biggest consumer want |
 | **Motion / spring timing** | planned (`BLISS-MOTION-1`) | Owned (`noonoo-motion`) |
 | **Headless tooling** (dump/clock/input) | absent; consumers hand-rolled | First-class (`noonoo-headless`) |
@@ -57,7 +57,7 @@ they are Noonoo's reason to exist beyond a straight port.
 | `stylo_taffy` as a separate published crate | **Dissolved**: the bridge is the style→layout seam, now expressed as the `noonoo-style` → `noonoo-layout` dependency. |
 | `bliss-html` ↔ `bliss-dom` | `noonoo-html` produces `noonoo-dom` trees; one direction. |
 | Umbrella crate (`arniko-bliss`) | **Kept** as `noonoo`, but documented as convenience-only; consumers are steered to specific crates. |
-| `accesskit_xplat` / `anyrender_vello` forks | **Not ported as forks.** The *capabilities* (Linux a11y backend; scene effects + custom paint) move into `noonoo-shell` / `noonoo-paint` behind features. |
+| `accesskit_xplat` / `anyrender_vello` forks | **Not ported as forks.** The *capabilities* (Linux a11y backend; scene effects + custom paint) move into `noonoo-a11y` / `noonoo-paint` behind features. |
 | A `Document` trait object (`Box<dyn Document>`) | **Avoid**: it is what made `downcast_mut` fail for consumers. Prefer a concrete `Document` + generics. |
 
 ## 4. The doctrine (inherited, and it holds)

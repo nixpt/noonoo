@@ -1,0 +1,23 @@
+[package]
+name = "noonoo-a11y"
+description = "Noonoo's accessibility tree: DOM + computed style + layout into an assistive model."
+version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+noonoo-dom.workspace = true
+noonoo-geometry.workspace = true
+noonoo-layout.workspace = true
+noonoo-style.workspace = true
+
+[dev-dependencies]
+noonoo-html.workspace = true

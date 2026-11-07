@@ -1,0 +1,22 @@
+[package]
+name = "noonoo-accesskit"
+version = "0.19.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+description = "Opt-in: project a Noonoo accessibility tree into AccessKit."
+
+# Deliberately OUTSIDE the noonoo workspace (see the root `exclude`): it pulls
+# AccessKit, which the engine's default build and lockfile must not pay for.
+# The tree is owned in `noonoo-a11y`; only the protocol model is borrowed, and
+# only here. The platform adapters (AT-SPI/UiKit/WinRT) sit on top of this.
+[dependencies]
+accesskit = "0.24"
+noonoo-a11y = { path = "../../crates/noonoo-a11y" }
+
+[dev-dependencies]
+noonoo-dom = { path = "../../crates/noonoo-dom" }
+noonoo-geometry = { path = "../../crates/noonoo-geometry" }
+noonoo-html = { path = "../../crates/noonoo-html" }
+noonoo-layout = { path = "../../crates/noonoo-layout" }
+noonoo-style = { path = "../../crates/noonoo-style" }

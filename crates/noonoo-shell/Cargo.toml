@@ -10,16 +10,18 @@ edition.workspace = true
 rust-version.workspace = true
 
 [features]
-default = ["std"]
+default = ["std", "a11y"]
 std = []
 # A real window + GPU surface (winit + wgpu/vello). Off by default: the host
 # model is testable headless, and the platform backend is a borrowed concern.
 window = []
 gpu = []
-# Accessibility tree (accesskit), behind a feature.
-a11y = []
+# The accessibility tree: owned, dependency-free, and on by default so it
+# cannot be left a no-op. `--no-default-features` drops it.
+a11y = ["dep:noonoo-a11y"]
 
 [dependencies]
+noonoo-a11y = { workspace = true, optional = true }
 noonoo-dom.workspace = true
 noonoo-engine.workspace = true
 noonoo-events.workspace = true

@@ -38,6 +38,7 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | [`noonoo-motion`](crates/noonoo-motion) | Springs, velocity-preserving retarget |
 | [`noonoo-style`](crates/noonoo-style) | Style ingestion and the cascade, including custom properties, `var()`, the math functions (`calc()`, `min()`, `max()`, `clamp()`), viewport units (`vw`, `vh`, `vmin`, `vmax`), and gradients |
 | [`noonoo-layout`](crates/noonoo-layout) | Box layout: computed style → boxes (block / inline / flex / grid / positioned / floated) + overflow & scroll containers |
+| [`noonoo-a11y`](crates/noonoo-a11y) | Accessibility tree: roles, names, descriptions, states, heading levels, and bounds from DOM + style + layout |
 | [`noonoo-markdown`](crates/noonoo-markdown) | Markdown (subset) → HTML |
 | [`noonoo-csv`](crates/noonoo-csv) | CSV/TSV → HTML table |
 | [`noonoo-ini`](crates/noonoo-ini) | INI → value model (JSON) |
@@ -72,8 +73,10 @@ parse → cascade → layout → paint — with **zero third-party dependencies*
 the engine's lockfile. Layout covers block, inline, flex, grid, and floats;
 the cascade covers custom properties, the math functions, viewport units, and
 gradients; fonts load via `@font-face`; `:hover`/`:focus`/`:active` style for
-real. The GPU and window backends are opt-in integrations outside the
-workspace (`docs/BACKEND.md`). The API is pre-1.0 and still moving.
+real; and the accessibility tree is owned and on by default (`noonoo-a11y`),
+with the AccessKit/AT-SPI bridge opt-in. The GPU and window backends are opt-in
+integrations outside the workspace (`docs/BACKEND.md`). The API is pre-1.0 and
+still moving.
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Building
@@ -98,6 +101,7 @@ Then the CLI:
 ```sh
 noonoo --tree page.html     # parse HTML (own tokenizer), print the DOM as JSON
 noonoo --tree -             # …or read from stdin
+noonoo --a11y page.html     # parse → style → layout, print the accessibility tree
 noonoo --paint page.html    # parse → style → layout → paint, print commands as JSON
 noonoo --paint page.html --font DejaVuSans.ttf   # …drawing text as glyph outlines
 noonoo --md notes.md        # Markdown → HTML
@@ -132,7 +136,7 @@ The workspace MSRV is **1.89**. CI checks it explicitly.
 - [`docs/FONTS.md`](docs/FONTS.md) — the font layer: what Noonoo owns, the seams, what is borrowed
 - [`docs/BACKEND.md`](docs/BACKEND.md) — the GPU and window passes (opt-in, outside the workspace)
 - [`docs/SHELL.md`](docs/SHELL.md) — the multi-document host: layers, routing, composition
-- [`docs/BACKEND.md`](docs/BACKEND.md) — GPU & window backends: the opt-in Vello pass and the winit window pass
+- [`docs/A11Y.md`](docs/A11Y.md) — the accessibility tree: roles, names, states, and the opt-in bridge
 - [`docs/XIP.md`](docs/XIP.md) — capability-gated DOM: the owned seam and the opt-in XIP adapter
 
 ## License

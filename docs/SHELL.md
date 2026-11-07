@@ -146,7 +146,12 @@ attached to a host node in a parent layer (`Host::add_sub_document`), the parent
 **sizes** it from that node's content box, and routing/hit-testing/input reach it
 through its own document — the texture-overlay pattern is gone.
 
-The real window/GPU backend (`window`/`gpu` features) and the a11y tree remain
-borrowed and unwired. **Wheel-scroll chaining is implemented** — `Host::wheel`
-scrolls the innermost layer under the pointer and passes any leftover to its
-parent, so a gesture never stops dead at a nested boundary.
+The real window/GPU backend (`window`/`gpu` features) remains borrowed and
+unwired. **The a11y tree is owned and wired**: `noonoo-a11y` builds it from the
+DOM, computed style, and layout, and [`Host::a11y`](../crates/noonoo-shell/src/lib.rs)
+composes every layer under one window root (bounds offset by layer position and
+scroll, ids renumbered). `integrations/noonoo-accesskit` projects it onto
+AccessKit; platform activation (AT-SPI/UiKit/WinRT) is the window backend's job.
+**Wheel-scroll chaining is implemented** — `Host::wheel` scrolls the innermost
+layer under the pointer and passes any leftover to its parent, so a gesture never
+stops dead at a nested boundary.

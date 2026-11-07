@@ -24,7 +24,7 @@
 
 ## The crates
 
-Seventeen crates in five tiers. Arrows point *downward only*.
+Twenty-nine crates in five tiers. Arrows point *downward only*.
 
 ```
 ┌─ facade ──────────────────────────────────────────────────────────────────┐
@@ -71,6 +71,7 @@ Seventeen crates in five tiers. Arrows point *downward only*.
 | `noonoo-motion` | springs, velocity-preserving retarget | — (owned) |
 | `noonoo-style` | the cascade: matching → inheritance → computed values | — (owned; replaces `stylo`) |
 | `noonoo-layout` | box layout: block, inline, flex, grid, floats, positioning, overflow & scroll containers | — (owned; replaces `taffy`) |
+| `noonoo-a11y` | accessibility tree: roles, names, descriptions, states, heading levels, bounds | protocol bridge via `noonoo-accesskit` (opt-in, outside the workspace) |
 | `noonoo-geometry` | `Point` / `Size` / `Rect` | — |
 | `noonoo-markdown` | Markdown (subset) → HTML | — (owned) |
 | `noonoo-csv` | CSV/TSV → HTML table | — (owned) |
@@ -85,7 +86,7 @@ Seventeen crates in five tiers. Arrows point *downward only*.
 | `noonoo-engine` | the working document (parse→style→layout) | — (orchestrates) |
 | `noonoo-headless` | tree dump, virtual clock, synthetic input | — |
 | `noonoo-paint` | render command stream (fills, gradients, layers, text or glyph outlines) | `vello` via `noonoo-vello` (opt-in, outside the workspace) |
-| `noonoo-shell` | multi-document host: layers, routing, focus/hover/active, composition | window/GPU borrowed; see `docs/BACKEND.md` |
+| `noonoo-shell` | multi-document host: layers, routing, focus/hover/active, composition, a11y aggregation | window/GPU borrowed; see `docs/BACKEND.md` |
 | `noonoo` | umbrella + CLI | — |
 
 **Parsers, the style engine, layout, and text are owned, not borrowed.** The

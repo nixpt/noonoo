@@ -3,7 +3,8 @@
 //! Run Noonoo with no display. Three deterministic capabilities:
 //!
 //! 1. **Tree dump** — the tree as JSON, so an agent or a test can assert on
-//!    structure without a screenshot ([`tree_json`]).
+//!    structure without a screenshot ([`tree_json`]). The accessibility tree has
+//!    its own dump ([`a11y_json`]) with the same guarantee.
 //! 2. **Virtual clock** — time advances only when the caller says so, so a
 //!    frame is reproducible ([`Clock`]).
 //! 3. **Synthetic input** — feed [`noonoo_events`] from a script ([`Script`]).
@@ -16,9 +17,12 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+use noonoo_a11y::{A11yNode, A11yTree, States};
 use noonoo_dom::{Document, NodeData, NodeId};
 use noonoo_events::{Event, EventListener, dispatch};
 use noonoo_json::Json;
+use noonoo_layout::LayoutTree;
+use noonoo_style::Styles;
 
 /// Serialize a document's tree to JSON.
 ///
@@ -91,6 +95,101 @@ fn object(pairs: Vec<(&str, Json)>) -> Json {
             .map(|(key, value)| (key.to_owned(), value))
             .collect(),
     )
+}
+
+/// Build a document's accessibility tree and serialize it to JSON.
+///
+/// The shape is stable and deterministic: `{"root": …, "focus": …}`, with each
+/// node carrying `id`, `role`, `name`, `description`, `value`, `level`, `node`
+/// (the source DOM index), `bounds`, `states`, and `children`, in that order.
+/// Passing a layout tree adds bounds in page coordinates.
+pub fn a11y_json(doc: &Document, styles: &Styles, layout: Option<&LayoutTree>) -> String {
+    let tree = noonoo_a11y::build_in(doc, styles, layout, None);
+    a11y_tree_json(&tree)
+}
+
+/// Serialize an already-built accessibility tree to JSON.
+pub fn a11y_tree_json(tree: &A11yTree) -> String {
+    host_object(tree).to_string()
+}
+
+fn host_object(tree: &A11yTree) -> Json {
+    object(vec![
+        ("root", a11y_node_json(&tree.root)),
+        ("focus", optional_number(tree.focus.map(|id| id as f64))),
+    ])
+}
+
+fn a11y_node_json(node: &A11yNode) -> Json {
+    object(vec![
+        ("id", Json::Number(node.id as f64)),
+        ("role", Json::String(node.role.as_str().to_owned())),
+        ("name", Json::String(node.name.clone())),
+        ("description", Json::String(node.description.clone())),
+        ("value", optional_string(&node.value)),
+        ("level", optional_number(node.level.map(f64::from))),
+        (
+            "node",
+            optional_number(node.node.map(|node| node.index() as f64)),
+        ),
+        ("bounds", bounds_json(node.bounds)),
+        ("states", states_json(&node.states)),
+        (
+            "children",
+            Json::Array(node.children.iter().map(a11y_node_json).collect()),
+        ),
+    ])
+}
+
+fn bounds_json(bounds: Option<noonoo_geometry::Rect>) -> Json {
+    match bounds {
+        None => Json::Null,
+        Some(rect) => object(vec![
+            ("x", Json::Number(f64::from(rect.x))),
+            ("y", Json::Number(f64::from(rect.y))),
+            ("width", Json::Number(f64::from(rect.width))),
+            ("height", Json::Number(f64::from(rect.height))),
+        ]),
+    }
+}
+
+fn states_json(states: &States) -> Json {
+    object(vec![
+        ("disabled", Json::Bool(states.disabled)),
+        ("focused", Json::Bool(states.focused)),
+        ("selected", Json::Bool(states.selected)),
+        ("required", Json::Bool(states.required)),
+        ("read-only", Json::Bool(states.read_only)),
+        ("busy", Json::Bool(states.busy)),
+        (
+            "expanded",
+            match states.expanded {
+                Some(value) => Json::Bool(value),
+                None => Json::Null,
+            },
+        ),
+        (
+            "checked",
+            match states.checked {
+                Some(value) => Json::String(value.as_str().to_owned()),
+                None => Json::Null,
+            },
+        ),
+    ])
+}
+
+fn optional_string(value: &Option<String>) -> Json {
+    match value {
+        Some(value) => Json::String(value.clone()),
+        None => Json::Null,
+    }
+}
+
+fn optional_number(value: Option<f64>) -> Json {
+    match value {
+        Some(value) => Json::Number(value),
+        None => Json::Null,
+    }
 }
 
 /// A virtual clock. Time moves only when [`Clock::advance`] says so.
@@ -220,6 +319,18 @@ mod tests {
             )
         );
         assert!(json.contains("{\"kind\":\"text\",\"text\":\"hi \\\"there\\\"\"}"));
+    }
+
+    #[test]
+    fn a11y_json_shape_is_stable() {
+        let doc = noonoo_html::parse("<h1 id=\"h\">Hi</h1><button disabled>Save</button>");
+        let styles = noonoo_style::compute(&doc, &[]);
+        let json = a11y_json(&doc, &styles, None);
+        assert!(json.starts_with("{\"root\":{\"id\":1.0,\"role\":\"document\""));
+        assert!(json.contains("\"role\":\"heading\""));
+        assert!(json.contains("\"level\":1.0"));
+        assert!(json.contains("\"disabled\":true"));
+        assert!(json.contains("\"focus\":null"));
     }
 
     #[test]

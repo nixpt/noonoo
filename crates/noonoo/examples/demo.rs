@@ -104,4 +104,14 @@ fn main() {
     let sub_commands = host.layer(sub).unwrap().commands().len();
     let parent_commands = host.layer(parent).unwrap().commands().len();
     println!("  composed commands: sub {sub_commands}, parent {parent_commands}");
+
+    // ---- 3. accessibility tree: owned, composed across layers ------------
+    println!("\n== accessibility tree ==");
+    let a11y = host.a11y();
+    println!(
+        "  window tree: {} nodes, {} layer roots",
+        a11y.count(),
+        a11y.root.children.len()
+    );
+    println!("  root role: {:?}", a11y.root.role);
 }

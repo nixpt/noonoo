@@ -16,12 +16,14 @@ them and **own** the integration.
 | `taffy` | — | **Owned.** Phase B replaced it with `noonoo-layout` (block / inline / flex); `taffy` is not a dependency. |
 | `parley` (+ `fontique`/`swash`/`skrifa`) | `noonoo-text` | **Keep for shaping.** Line breaking + alignment are owned (`noonoo-text`) and font *metrics* are owned (`noonoo-ttf`); only shaping — kerning, ligatures, complex scripts, family resolution — stays borrowed behind the `Shaper` seam. |
 | `anyrender` / `vello` / `wgpu` | `integrations/noonoo-vello` (`noonoo-winit` planned) | **Keep (backend).** The command stream is owned (`noonoo-paint`); the GPU *pass* (`noonoo-vello`, opt-in, outside the workspace) translates it to a `vello::Scene` — see [`BACKEND.md`](BACKEND.md). The window pass is the remaining opt-in slice. |
-| `winit`, `accesskit` | `integrations/noonoo-winit` (planned) | **Keep.** Windowing + a11y; a separate opt-in crate. |
+| `winit` | `integrations/noonoo-winit` | **Keep.** Windowing; a separate opt-in crate. |
+| `accesskit` | `integrations/noonoo-accesskit` | **Keep the bridge, own the tree.** The platform protocol/adapter is borrowed; `noonoo-a11y` owns the tree and its semantics. |
 
 ## The rules that keep the surface thin
 
 1. **One module per borrowed engine.** `taffy` is named only in `noonoo-layout`;
-   `parley` only in `noonoo-text`. The contact points are countable in one file,
+   `parley` only in `noonoo-text`; `accesskit` only in
+   `integrations/noonoo-accesskit`. The contact points are countable in one file,
    so "what would a swap cost?" has an answer.
 2. **No abstraction-for-its-own-sake.** These engines will not be swapped, so
    they are *not* hidden behind traits. A wrap-for-wrap's-sake layer costs more

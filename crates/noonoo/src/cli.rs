@@ -14,6 +14,11 @@ pub enum Command {
         /// The input path, or `-` for stdin.
         path: String,
     },
+    /// Parse, style, lay out, and print the accessibility tree as JSON.
+    A11y {
+        /// The input path, or `-` for stdin.
+        path: String,
+    },
     /// Parse a CAISON file (or stdin for `-`) and print its JSON projection.
     Caison {
         /// The input path, or `-` for stdin.
@@ -115,6 +120,9 @@ where
         "--tree" => Ok(Command::Tree {
             path: next_or_stdin(&mut args),
         }),
+        "--a11y" => Ok(Command::A11y {
+            path: next_or_stdin(&mut args),
+        }),
         "--caison" => {
             let path = args
                 .next()
@@ -195,6 +203,20 @@ mod tests {
         assert_eq!(
             parse(["noonoo", "--tree"]),
             Ok(Command::Tree { path: "-".into() })
+        );
+    }
+
+    #[test]
+    fn a11y_reads_a_path_or_stdin() {
+        assert_eq!(
+            parse(["noonoo", "--a11y", "page.html"]),
+            Ok(Command::A11y {
+                path: "page.html".into()
+            })
+        );
+        assert_eq!(
+            parse(["noonoo", "--a11y"]),
+            Ok(Command::A11y { path: "-".into() })
         );
     }
 

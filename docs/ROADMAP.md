@@ -7,7 +7,7 @@ API snapshots are captured early, and the port is measured against them.
 
 ## Slice 0 — Scaffold *(this slice)*
 
-Seventeen-crate workspace, decomposed along the boundaries in
+A workspace of small crates, decomposed along the boundaries in
 [`ARCHITECTURE.md`](ARCHITECTURE.md), design docs, CI, and a compiling,
 dependency-free skeleton. Working primitives with tests: the `noonoo-dom` arena +
 checked mutation, `noonoo-events` dispatch path, `noonoo-motion` spring, `noonoo-paint`
@@ -68,17 +68,26 @@ diff-able; scene effects + dirty regions are exposed.
 
 **Done when:** a fixture's command stream matches a golden file.
 
-## Slice 7 — Shell  ◑ host model shipped
+## Slice 7 — Shell  ◑ host model + a11y tree shipped
 
 The **multi-document host** (`noonoo-shell`): first-class layers (chrome +
 content), region routing, hit-testing, focus, per-layer composition, and origin
 gating — all headless-testable, zero deps. Delivered.
 
+The **accessibility tree** is owned (`noonoo-a11y`) and on by default. It
+projects roles, accessible names/descriptions, values, states, heading levels,
+and bounds from the DOM, computed style, and layout; `Host::a11y` composes every
+layer under one window root with offset bounds and unique ids. The opt-in
+`integrations/noonoo-accesskit` projects that tree onto AccessKit, and the
+platform adapters (AT-SPI/UiKit/WinRT) are the window backend's concern — a
+consumer never re-enables a no-op Linux path.
+
 The **borrowed backend** (a feature-gated window via `winit` + `wgpu`/`vello`)
-and the a11y tree are the remainder of this slice.
+is the remainder of this slice.
 
 **Done when:** `cargo run -p noonoo --features window,gpu` opens a window and the
-a11y tree reaches AT-SPI on Linux without consumer re-enabling.
+a11y tree reaches AT-SPI on Linux without consumer re-enabling. *(The tree and
+its AccessKit projection are shipped; platform activation remains.)*
 
 ## Slice 8 — Sub-documents  ◑ anchored layers + scroll chaining shipped
 
@@ -133,5 +142,6 @@ The borrowed engines are scored in `DEPENDENCY-EXIT.md`. The path to dropping
 
 ## Later
 
-SVG, networking capabilities (`exo://`), rendering capsules, a11y-complete tree.
+SVG, networking capabilities (`exo://`), rendering capsules, and the remaining
+ARIA/HTML edge cases in the a11y tree.
 Each enters behind its feature and its own crate boundary.

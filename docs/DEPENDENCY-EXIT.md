@@ -109,13 +109,15 @@ Codec support is a swamp with a security surface; a curated dependency is right.
 ### accesskit — **KEEP the bridge, own the tree** ➖
 The protocol + platform bridges (AT-SPI/UiKit/WinRT) are not ours to write; the
 a11y *tree* built from our DOM is (and the old engine's Linux path was a no-op
-anyway).
+anyway). Shipped: `noonoo-a11y` owns the tree (roles, names, states, bounds) and
+`integrations/noonoo-accesskit` projects it onto AccessKit. Platform activation
+is the window backend's concern and stays opt-in.
 
 ## 3. The buy-line (do not build)
 
 > **Own** the integration-critical, moderately-sized layers: the DOM, **CSS
 > (subset)**, **layout**, text *line-breaking*, the paint command stream, events,
-> headless tooling, and the parsers.
+> headless tooling, the parsers, and the **accessibility tree**.
 > **Buy** the genuinely enormous engines: **font shaping**, **GPU
 > rasterization**, **platform windowing**, **TLS**, and **image codecs**.
 

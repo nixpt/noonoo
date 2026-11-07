@@ -14,6 +14,13 @@ default = ["std"]
 std = []
 
 [dependencies]
+noonoo-a11y.workspace = true
 noonoo-dom.workspace = true
 noonoo-events.workspace = true
+noonoo-geometry.workspace = true
 noonoo-json.workspace = true
+noonoo-layout.workspace = true
+noonoo-style.workspace = true
+
+[dev-dependencies]
+noonoo-html.workspace = true

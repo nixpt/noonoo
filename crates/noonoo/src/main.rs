@@ -15,6 +15,7 @@ COMMANDS:
     -h, --help          Show this help
     -V, --version       Show the version
     --tree <file|->     Parse HTML and print the DOM tree as JSON
+    --a11y <file|->     Parse, lay out, and print the accessibility tree as JSON
     --paint <file|->    Parse HTML, lay out, and print paint commands as JSON
                         (add `--font <file>` to draw text as glyph outlines)
     --md <file|->       Convert Markdown to HTML
@@ -45,6 +46,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Ok(Command::Tree { path }) => run_tree(&path),
+        Ok(Command::A11y { path }) => run_a11y(&path),
         Ok(Command::Caison { path }) => run_caison(&path),
         Ok(Command::Paint { path, font }) => run_paint(&path, font.as_deref()),
         Ok(Command::Markdown { path }) => run_markdown(&path),
@@ -89,6 +91,30 @@ fn run_tree(path: &str) -> ExitCode {
             ExitCode::from(1)
         }
     }
+}
+
+fn run_a11y(path: &str) -> ExitCode {
+    let html = match read_source(path) {
+        Ok(html) => html,
+        Err(error) => {
+            eprintln!("noonoo: {error}");
+            return ExitCode::from(1);
+        }
+    };
+    let engine = noonoo::engine::Engine::from_html(&html);
+    let viewport = noonoo::geometry::Size::new(800.0, 600.0);
+    let styles = engine.compute_styles_for(viewport);
+    let layout = noonoo::layout::layout(
+        engine.dom(),
+        &styles,
+        viewport,
+        &noonoo::layout::MetricShaper,
+    );
+    println!(
+        "{}",
+        noonoo::headless::a11y_json(engine.dom(), &styles, Some(&layout))
+    );
+    ExitCode::SUCCESS
 }
 
 fn run_caison(path: &str) -> ExitCode {

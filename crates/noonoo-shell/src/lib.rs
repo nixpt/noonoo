@@ -16,8 +16,11 @@
 //! `:hover`/`:active`/`:focus` style the elements they name.
 //!
 //! The host model is dependency-free and testable headless. The actual window
-//! and GPU surface (`window`/`gpu`) are a borrowed backend behind features, and
-//! the a11y tree (`a11y`) is deferred — the model is what this crate delivers.
+//! and GPU surface (`window`/`gpu`) are a borrowed backend behind features. The
+//! accessibility tree is **owned** (`a11y`, on by default): [`Host::a11y`]
+//! composes each layer's tree under one window root, with bounds offset and ids
+//! renumbered, so a platform bridge (see `integrations/noonoo-accesskit`) can
+//! pass it straight to AT-SPI/UiKit/WinRT.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -130,6 +133,13 @@ impl Layer {
     /// viewport height, floored at zero).
     pub fn max_scroll_y(&self) -> f32 {
         (self.layout.content_height() - self.rect.height).max(0.0)
+    }
+
+    /// This layer's accessibility tree, with bounds in the layer's own
+    /// coordinates and `focus` marked on the source node.
+    #[cfg(feature = "a11y")]
+    pub fn a11y(&self, focus: Option<NodeId>) -> noonoo_a11y::A11yTree {
+        noonoo_a11y::build_in(self.engine.dom(), self.styles(), Some(self.layout()), focus)
     }
 }
 
@@ -427,6 +437,28 @@ impl Host {
             }
         }
         chain
+    }
+
+    /// The window's accessibility tree: every layer under one `window` root.
+    ///
+    /// Bounds are translated by each layer's position (minus its scroll), and
+    /// nodes are renumbered so ids are unique across the window. The focused
+    /// node, if any, is marked and reported as [`noonoo_a11y::A11yTree::focus`].
+    #[cfg(feature = "a11y")]
+    pub fn a11y(&self) -> noonoo_a11y::A11yTree {
+        let mut trees = Vec::with_capacity(self.layers.len());
+        for (index, layer) in self.layers.iter().enumerate() {
+            let focused = match self.focus {
+                Some((layer_index, node)) if layer_index == index => Some(node),
+                _ => None,
+            };
+            let tree = layer.a11y(focused);
+            let offset = Point::new(layer.rect.x - layer.scroll.x, layer.rect.y - layer.scroll.y);
+            trees.push((tree, offset));
+        }
+        let layers: Vec<(&noonoo_a11y::A11yTree, Point)> =
+            trees.iter().map(|(tree, offset)| (tree, *offset)).collect();
+        noonoo_a11y::compose("", &layers)
     }
 }
 
@@ -789,6 +821,40 @@ mod tests {
         );
         assert_eq!(host.layer(index).unwrap().scroll().y, 50.0);
         assert_eq!(chain, vec![(index, 50.0)]);
+    }
+
+    #[cfg(feature = "a11y")]
+    #[test]
+    fn a11y_composes_layers_with_bounds_and_focus() {
+        let mut host = host();
+        let node = host
+            .layer(1)
+            .unwrap()
+            .engine()
+            .dom()
+            .get_element_by_id("page")
+            .unwrap();
+        host.set_focus(1, node);
+
+        let tree = host.a11y();
+        assert_eq!(tree.root.role, noonoo_a11y::Role::Window);
+        assert_eq!(tree.root.children.len(), 2);
+
+        let focused = tree.focus.unwrap();
+        let node = tree.find_by_id(focused).unwrap();
+        assert_eq!(
+            node.node,
+            Some(
+                host.layer(1)
+                    .unwrap()
+                    .engine()
+                    .dom()
+                    .get_element_by_id("page")
+                    .unwrap()
+            )
+        );
+        assert_eq!(node.role, noonoo_a11y::Role::Generic);
+        assert!(node.bounds.unwrap().y >= 24.0);
     }
 
     #[test]
