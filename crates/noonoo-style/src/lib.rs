@@ -11,7 +11,7 @@
 //! come from [`noonoo_css`]; this crate owns the matching-to-computed-values
 //! step that the borrowed engine used to provide.
 //!
-//! ## Custom properties
+//! ## Custom properties and `calc()`
 //!
 //! `--x` declarations are kept as substitution tokens and inherited like any
 //! inherited property. A `var(--x, fallback)` in a declaration is replaced at
@@ -19,11 +19,19 @@
 //! follows cascade and inheritance (see the `vars` module). An unresolvable
 //! `var()` drops the declaration, which then keeps its inherited or initial
 //! value.
+//!
+//! `calc()` is evaluated in the same pass, when `em`/`rem` have a font size to
+//! resolve against (see the `calc` module). It is typed: lengths and
+//! percentages add and subtract, numbers multiply and divide them, and adding a
+//! bare number to a length is invalid. A result that mixes a percentage with an
+//! absolute part (`calc(100% - 20px)`) stays unresolved until layout knows the
+//! containing block.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 mod apply;
+mod calc;
 mod cascade;
 pub mod computed;
 pub mod ua;
@@ -262,5 +270,63 @@ mod tests {
         );
         let p = doc.get_elements_by_tag_name("p")[0];
         assert_eq!(styles.get(p).unwrap().color, Color::rgb(0, 0, 255));
+    }
+
+    #[test]
+    fn calc_absolute_lengths_resolve_to_pixels() {
+        let (doc, styles) = styled(
+            "<p>x</p>",
+            "p { margin: calc(4px + 2px); padding-left: calc(2px * 3) }",
+        );
+        let p = doc.get_elements_by_tag_name("p")[0];
+        let s = styles.get(p).unwrap();
+        assert_eq!(s.margin.top, Dimension::Px(6.0));
+        assert_eq!(s.padding.left, Length::Px(6.0));
+    }
+
+    #[test]
+    fn calc_keeps_a_mixed_percentage() {
+        let (doc, styles) = styled("<p>x</p>", "p { width: calc(100% - 20px) }");
+        let p = doc.get_elements_by_tag_name("p")[0];
+        assert_eq!(
+            styles.get(p).unwrap().width,
+            Dimension::Calc {
+                px: -20.0,
+                percent: 100.0
+            }
+        );
+    }
+
+    #[test]
+    fn calc_uses_the_computed_font_size_and_combines_with_var() {
+        let (doc, styles) = styled(
+            "<div><p>x</p></div>",
+            "div { font-size: 20px } p { --gap: 4px; margin-top: calc(2em - var(--gap)) }",
+        );
+        let p = doc.get_elements_by_tag_name("p")[0];
+        assert_eq!(styles.get(p).unwrap().margin.top, Dimension::Px(36.0));
+    }
+
+    #[test]
+    fn calc_font_size_resolves_against_the_parent() {
+        let (doc, styles) = styled(
+            "<div><p>x</p></div>",
+            "div { font-size: 16px } p { font-size: calc(10px + 1em) }",
+        );
+        let p = doc.get_elements_by_tag_name("p")[0];
+        assert_eq!(styles.get(p).unwrap().font_size, 26.0);
+    }
+
+    #[test]
+    fn an_invalid_calc_unsets_the_property() {
+        let (doc, styles) = styled(
+            "<div><p>x</p></div>",
+            "div { margin-top: 12px; color: red } p { margin-top: calc(1px + 2) }",
+        );
+        let p = doc.get_elements_by_tag_name("p")[0];
+        // Adding a number to a length is invalid at computed-value time; a
+        // non-inherited property then falls back to its initial value.
+        assert_eq!(styles.get(p).unwrap().margin.top, Dimension::Px(0.0));
+        assert_eq!(styles.get(p).unwrap().color, Color::rgb(255, 0, 0));
     }
 }

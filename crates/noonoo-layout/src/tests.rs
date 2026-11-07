@@ -28,6 +28,30 @@ fn blocks_stack_vertically_and_fill_width() {
 }
 
 #[test]
+fn calc_mixes_percentage_and_pixels_against_the_containing_block() {
+    let (doc, tree) = page(
+        r#"<div id="a"></div>"#,
+        "#a { width: calc(100% - 20px); height: 10px }",
+        400.0,
+    );
+    let a = tree.get(id(&doc, "a")).unwrap();
+    assert_eq!(a.rect.width, 380.0);
+}
+
+#[test]
+fn calc_padding_resolves_and_clamps() {
+    let (doc, tree) = page(
+        r#"<div id="a"></div>"#,
+        "#a { width: 100px; height: 10px; padding-left: calc(10% - 2px); padding-right: calc(2px - 10%) }",
+        400.0,
+    );
+    let a = tree.get(id(&doc, "a")).unwrap();
+    // 38px resolved on the left; the negative one clamps to zero.
+    assert_eq!(a.content_box().width, 100.0);
+    assert_eq!(a.rect.width, 138.0);
+}
+
+#[test]
 fn padding_and_border_use_box_sizing() {
     let (doc, tree) = page(
         r#"<div id="a"></div>"#,

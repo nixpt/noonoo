@@ -2,31 +2,59 @@
 //! applying each property.
 
 use noonoo_css::Property;
-use noonoo_css::value::{Length as CssLength, LengthUnit as CssLengthUnit, Value};
+use noonoo_css::value::Value;
 
+use crate::calc::{self, CalcValue, to_px};
 use crate::computed::*;
 // --- value resolution ------------------------------------------------------
 
-fn to_px(length: &CssLength, font_size: f32, root_font_size: f32) -> f32 {
-    let value = length.value;
-    match length.unit {
-        CssLengthUnit::Px => value,
-        CssLengthUnit::Em => value * font_size,
-        CssLengthUnit::Rem => value * root_font_size,
-        CssLengthUnit::Ex | CssLengthUnit::Ch => value * font_size * 0.5,
-        CssLengthUnit::Pt => value * 96.0 / 72.0,
-        CssLengthUnit::Pc => value * 16.0,
-        CssLengthUnit::In => value * 96.0,
-        CssLengthUnit::Cm => value * 96.0 / 2.54,
-        CssLengthUnit::Mm => value * 96.0 / 25.4,
-        CssLengthUnit::Q => value * 96.0 / 101.6,
-        // Viewport-relative units need a viewport; approximate with the root.
-        CssLengthUnit::Vw | CssLengthUnit::Vh | CssLengthUnit::Vmin | CssLengthUnit::Vmax => value,
-        CssLengthUnit::Other(_) => 0.0,
+/// The arguments of a lone `calc()` in `values`.
+fn calc_args(values: &[Value]) -> Option<&[Value]> {
+    match values {
+        [Value::Function { name, args }] if name.eq_ignore_ascii_case("calc") => Some(args),
+        _ => None,
+    }
+}
+
+/// Normalise a `calc()` result into a [`Dimension`].
+fn calc_dimension(value: CalcValue) -> Option<Dimension> {
+    match value {
+        CalcValue::Number(number) => Some(Dimension::Px(number)),
+        CalcValue::Length { px, percent } => Some(if percent == 0.0 {
+            Dimension::Px(px)
+        } else if px == 0.0 {
+            Dimension::Percent(percent)
+        } else {
+            Dimension::Calc { px, percent }
+        }),
+    }
+}
+
+/// Normalise a `calc()` result into a [`Length`].
+///
+/// The absolute part keeps its sign here; layout clamps *after* adding the
+/// percentage, so `calc(100% - 20px)` stays correct for a narrow container.
+fn calc_length(value: CalcValue) -> Option<Length> {
+    match value {
+        CalcValue::Number(number) => Some(Length::Px(number)),
+        CalcValue::Length { px, percent } => Some(if percent == 0.0 {
+            Length::Px(px)
+        } else if px == 0.0 {
+            Length::Percent(percent)
+        } else {
+            Length::Calc { px, percent }
+        }),
     }
 }
 
 pub(crate) fn resolve_font_size(values: &[Value], parent: f32, root: f32) -> Option<f32> {
+    if let Some(args) = calc_args(values) {
+        return match calc::evaluate(args, parent, root)? {
+            // A percentage in `font-size` is relative to the parent font size.
+            CalcValue::Length { px, percent } => Some((px + parent * percent / 100.0).max(0.0)),
+            CalcValue::Number(number) => Some(number.max(0.0)),
+        };
+    }
     match values {
         [Value::Length(length)] => Some(to_px(length, parent, root).max(0.0)),
         [Value::Percentage(percent)] => Some((parent * percent / 100.0).max(0.0)),
@@ -55,6 +83,9 @@ fn keyword(values: &[Value]) -> Option<&str> {
 }
 
 fn dimension(values: &[Value], font_size: f32, root: f32) -> Option<Dimension> {
+    if let Some(args) = calc_args(values) {
+        return calc_dimension(calc::evaluate(args, font_size, root)?);
+    }
     match values {
         [Value::Keyword(keyword)] if keyword == "auto" => Some(Dimension::Auto),
         [Value::Length(length)] => Some(Dimension::Px(to_px(length, font_size, root))),
@@ -65,6 +96,9 @@ fn dimension(values: &[Value], font_size: f32, root: f32) -> Option<Dimension> {
 }
 
 fn length(values: &[Value], font_size: f32, root: f32) -> Option<Length> {
+    if let Some(args) = calc_args(values) {
+        return calc_length(calc::evaluate(args, font_size, root)?);
+    }
     match values {
         [Value::Length(l)] => Some(Length::Px(to_px(l, font_size, root).max(0.0))),
         [Value::Percentage(percent)] => Some(Length::Percent(*percent)),
@@ -82,6 +116,13 @@ fn color(values: &[Value]) -> Option<noonoo_css::Color> {
 }
 
 fn border_width_px(values: &[Value], font_size: f32) -> Option<f32> {
+    if let Some(args) = calc_args(values) {
+        return match calc::evaluate(args, font_size, 16.0)? {
+            CalcValue::Length { px, percent: 0.0 } => Some(px.max(0.0)),
+            CalcValue::Number(number) => Some(number.max(0.0)),
+            _ => None,
+        };
+    }
     match values {
         [Value::Keyword(keyword)] => match keyword.as_str() {
             "thin" => Some(1.0),
@@ -409,12 +450,20 @@ fn font_family(values: &[Value]) -> Vec<String> {
 }
 
 fn set_line_height(slot: &mut f32, values: &[Value], font_size: f32) {
-    let value = match values {
-        [Value::Number(number)] => font_size * *number,
-        [Value::Length(l)] => to_px(l, font_size, font_size),
-        [Value::Percentage(percent)] => font_size * percent / 100.0,
-        [Value::Keyword(k)] if k == "normal" => font_size * 1.2,
-        _ => return,
+    let value = if let Some(args) = calc_args(values) {
+        match calc::evaluate(args, font_size, font_size) {
+            Some(CalcValue::Number(number)) => font_size * number,
+            Some(CalcValue::Length { px, percent }) => px + font_size * percent / 100.0,
+            None => return,
+        }
+    } else {
+        match values {
+            [Value::Number(number)] => font_size * *number,
+            [Value::Length(l)] => to_px(l, font_size, font_size),
+            [Value::Percentage(percent)] => font_size * percent / 100.0,
+            [Value::Keyword(k)] if k == "normal" => font_size * 1.2,
+            _ => return,
+        }
     };
     *slot = value;
 }

@@ -8,6 +8,7 @@ pub fn dimension(value: Dimension, reference: f32) -> Option<f32> {
         Dimension::Auto => None,
         Dimension::Px(px) => Some(px.max(0.0)),
         Dimension::Percent(percent) => Some((reference * percent / 100.0).max(0.0)),
+        Dimension::Calc { px, percent } => Some((px + reference * percent / 100.0).max(0.0)),
     }
 }
 
@@ -15,6 +16,7 @@ fn length(value: Length, reference: f32) -> f32 {
     match value {
         Length::Px(px) => px,
         Length::Percent(percent) => reference * percent / 100.0,
+        Length::Calc { px, percent } => (px + reference * percent / 100.0).max(0.0),
     }
 }
 
@@ -27,6 +29,7 @@ pub fn margins(edges: &Edges<LengthOrAuto>, reference: f32) -> Edges<f32> {
         Dimension::Auto => 0.0,
         Dimension::Px(px) => px,
         Dimension::Percent(percent) => reference * percent / 100.0,
+        Dimension::Calc { px, percent } => px + reference * percent / 100.0,
     };
     Edges {
         top: resolve(edges.top),
@@ -91,6 +94,7 @@ pub fn insets(edges: &Edges<Dimension>, reference: f32) -> Edges<Option<f32>> {
         Dimension::Auto => None,
         Dimension::Px(px) => Some(px),
         Dimension::Percent(percent) => Some(reference * percent / 100.0),
+        Dimension::Calc { px, percent } => Some(px + reference * percent / 100.0),
     };
     Edges {
         top: resolve(edges.top),

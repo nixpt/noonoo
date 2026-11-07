@@ -223,6 +223,9 @@ pub enum Value {
         /// Its arguments, as component values.
         args: Vec<Value>,
     },
+    /// A parenthesised group of component values, e.g. the `(1px + 2px)` in
+    /// `calc((1px + 2px) * 2)`.
+    Group(Vec<Value>),
     /// A `,` separator.
     Comma,
     /// A `/` separator.
@@ -278,6 +281,17 @@ fn parse_components(tokens: &[Token], mut pos: usize) -> ParseResult<(Vec<Value>
                 pos += 1;
             }
             TokenKind::CloseParen => break,
+            TokenKind::OpenParen => {
+                let (inner, next) = parse_components(tokens, pos + 1)?;
+                if !matches!(
+                    tokens.get(next).map(|t| &t.kind),
+                    Some(TokenKind::CloseParen)
+                ) {
+                    return Err(ParseError::new(token.start, "unclosed parenthesis"));
+                }
+                values.push(Value::Group(inner));
+                pos = next + 1;
+            }
             TokenKind::Comma => {
                 values.push(Value::Comma);
                 pos += 1;
@@ -454,5 +468,15 @@ mod tests {
     fn parses_unknown_functions() {
         let values = parse_values("calc(1px + 2px)").unwrap();
         assert!(matches!(&values[0], Value::Function { name, .. } if name == "calc"));
+    }
+
+    #[test]
+    fn parses_grouping_inside_functions() {
+        let values = parse_values("calc((1px + 2px) * 2)").unwrap();
+        let Value::Function { name, args } = &values[0] else {
+            panic!("expected a function, got {values:?}");
+        };
+        assert_eq!(name, "calc");
+        assert!(args.iter().any(|value| matches!(value, Value::Group(_))));
     }
 }

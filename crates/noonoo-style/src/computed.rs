@@ -50,6 +50,13 @@ pub enum Dimension {
     Px(f32),
     /// A percentage of the containing block.
     Percent(f32),
+    /// A `calc()` result that mixes a percentage and an absolute part.
+    Calc {
+        /// The absolute part, in pixels.
+        px: f32,
+        /// The percentage part (`50.0` for `50%`).
+        percent: f32,
+    },
 }
 
 /// A margin: a dimension that may be `auto`.
@@ -62,6 +69,13 @@ pub enum Length {
     Px(f32),
     /// A percentage.
     Percent(f32),
+    /// A `calc()` result that mixes a percentage and an absolute part.
+    Calc {
+        /// The absolute part, in pixels.
+        px: f32,
+        /// The percentage part (`50.0` for `50%`).
+        percent: f32,
+    },
 }
 
 impl Length {
