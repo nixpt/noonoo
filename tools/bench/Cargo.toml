@@ -1,0 +1,19 @@
+[package]
+name = "noonoo-bench"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Noonoo tooling: dependency-free parser and pipeline benchmarks."
+
+# Deliberately OUTSIDE the noonoo workspace (root `exclude`): benchmark
+# scaffolding is tooling, not engine surface. It still pulls only path crates,
+# so it stays dependency-free like the engine.
+[dependencies]
+noonoo-a11y = { path = "../../crates/noonoo-a11y" }
+noonoo-css = { path = "../../crates/noonoo-css" }
+noonoo-engine = { path = "../../crates/noonoo-engine" }
+noonoo-geometry = { path = "../../crates/noonoo-geometry" }
+noonoo-html = { path = "../../crates/noonoo-html" }
+noonoo-json = { path = "../../crates/noonoo-json" }
+noonoo-layout = { path = "../../crates/noonoo-layout" }
+noonoo-toml = { path = "../../crates/noonoo-toml" }

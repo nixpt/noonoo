@@ -34,11 +34,22 @@ pub enum Json {
     Object(Vec<(String, Json)>),
 }
 
+/// The deepest nesting the parser accepts.
+///
+/// A hand-written recursive parser must refuse pathological nesting rather
+/// than trusting the stack. `MAX_DEPTH` configurations still fit comfortably;
+/// anything deeper is a fuzzing artifact, not a document. The limit is a
+/// public constant so tests can push right up to it.
+pub const MAX_DEPTH: u32 = 512;
+
 impl Json {
     /// Parse a complete JSON document. Trailing non-whitespace is an error.
+    ///
+    /// Nesting deeper than [`MAX_DEPTH`] is rejected instead of risking a
+    /// stack overflow on pathological input.
     pub fn parse(input: &str) -> ParseResult<Json> {
         let mut cursor = Cursor::new(input);
-        let value = parse_value(&mut cursor)?;
+        let value = parse_value(&mut cursor, 0)?;
         skip_ws(&mut cursor);
         if !cursor.is_eof() {
             return Err(cursor.error("trailing characters after JSON value"));
@@ -104,12 +115,17 @@ fn skip_ws(cursor: &mut Cursor<'_>) {
     cursor.skip_while(|ch| matches!(ch, ' ' | '\t' | '\n' | '\r'));
 }
 
-fn parse_value(cursor: &mut Cursor<'_>) -> ParseResult<Json> {
+fn parse_value(cursor: &mut Cursor<'_>, depth: u32) -> ParseResult<Json> {
+    if depth > MAX_DEPTH {
+        return Err(cursor.error(format!(
+            "nesting is deeper than the MAX_DEPTH limit ({MAX_DEPTH})"
+        )));
+    }
     skip_ws(cursor);
     match cursor.peek() {
         None => Err(cursor.error("unexpected end of input")),
-        Some('{') => parse_object(cursor),
-        Some('[') => parse_array(cursor),
+        Some('{') => parse_object(cursor, depth),
+        Some('[') => parse_array(cursor, depth),
         Some('"') => Ok(Json::String(parse_string(cursor)?)),
         Some('t') => expect_literal(cursor, "true").map(|()| Json::Bool(true)),
         Some('f') => expect_literal(cursor, "false").map(|()| Json::Bool(false)),
@@ -127,7 +143,7 @@ fn expect_literal(cursor: &mut Cursor<'_>, literal: &str) -> ParseResult<()> {
     }
 }
 
-fn parse_object(cursor: &mut Cursor<'_>) -> ParseResult<Json> {
+fn parse_object(cursor: &mut Cursor<'_>, depth: u32) -> ParseResult<Json> {
     cursor.bump(); // '{'
     let mut pairs = Vec::new();
     skip_ws(cursor);
@@ -144,7 +160,7 @@ fn parse_object(cursor: &mut Cursor<'_>) -> ParseResult<Json> {
         if !cursor.eat(':') {
             return Err(cursor.error("expected `:` after object key"));
         }
-        let value = parse_value(cursor)?;
+        let value = parse_value(cursor, depth + 1)?;
         pairs.push((key, value));
         skip_ws(cursor);
         if cursor.eat(',') {
@@ -157,7 +173,7 @@ fn parse_object(cursor: &mut Cursor<'_>) -> ParseResult<Json> {
     }
 }
 
-fn parse_array(cursor: &mut Cursor<'_>) -> ParseResult<Json> {
+fn parse_array(cursor: &mut Cursor<'_>, depth: u32) -> ParseResult<Json> {
     cursor.bump(); // '['
     let mut items = Vec::new();
     skip_ws(cursor);
@@ -165,7 +181,7 @@ fn parse_array(cursor: &mut Cursor<'_>) -> ParseResult<Json> {
         return Ok(Json::Array(items));
     }
     loop {
-        items.push(parse_value(cursor)?);
+        items.push(parse_value(cursor, depth + 1)?);
         skip_ws(cursor);
         if cursor.eat(',') {
             continue;

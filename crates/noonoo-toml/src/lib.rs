@@ -17,6 +17,13 @@
 use noonoo_json::Json;
 use noonoo_parse::{Cursor, ParseError, ParseResult};
 
+/// The deepest nesting the parser accepts.
+///
+/// The parser recurses once per `[array]` or `{inline table}` level; refusing
+/// pathological depth is safer than trusting the stack. The limit is a public
+/// constant so tests can push right up to it.
+pub const MAX_DEPTH: u32 = 512;
+
 /// Parse TOML into a [`Json`] object.
 pub fn to_json(source: &str) -> ParseResult<Json> {
     let mut cursor = Cursor::new(source);
@@ -51,7 +58,7 @@ pub fn to_json(source: &str) -> ParseResult<Json> {
             if !cursor.eat('=') {
                 return Err(cursor.error("expected `=`"));
             }
-            let value = parse_value(&mut cursor)?;
+            let value = parse_value(&mut cursor, 0)?;
 
             let mut full = path.clone();
             full.append(&mut keys);
@@ -118,13 +125,18 @@ fn parse_key(cursor: &mut Cursor<'_>) -> ParseResult<String> {
 
 // --- values ----------------------------------------------------------------
 
-fn parse_value(cursor: &mut Cursor<'_>) -> ParseResult<Json> {
+fn parse_value(cursor: &mut Cursor<'_>, depth: u32) -> ParseResult<Json> {
+    if depth > MAX_DEPTH {
+        return Err(cursor.error(format!(
+            "nesting is deeper than the MAX_DEPTH limit ({MAX_DEPTH})"
+        )));
+    }
     skip_inline_space(cursor);
     match cursor.peek() {
         Some('"') => parse_basic_string(cursor).map(Json::String),
         Some('\'') => parse_literal_string(cursor).map(Json::String),
-        Some('[') => parse_array(cursor),
-        Some('{') => parse_inline_table(cursor),
+        Some('[') => parse_array(cursor, depth),
+        Some('{') => parse_inline_table(cursor, depth),
         _ => parse_bare_value(cursor),
     }
 }
@@ -167,7 +179,7 @@ fn parse_literal_string(cursor: &mut Cursor<'_>) -> ParseResult<String> {
     Err(cursor.error("unterminated literal string"))
 }
 
-fn parse_array(cursor: &mut Cursor<'_>) -> ParseResult<Json> {
+fn parse_array(cursor: &mut Cursor<'_>, depth: u32) -> ParseResult<Json> {
     cursor.bump(); // '['
     let mut items = Vec::new();
     loop {
@@ -175,7 +187,7 @@ fn parse_array(cursor: &mut Cursor<'_>) -> ParseResult<Json> {
         if cursor.eat(']') {
             return Ok(Json::Array(items));
         }
-        items.push(parse_value(cursor)?);
+        items.push(parse_value(cursor, depth + 1)?);
         skip_trivia(cursor);
         if cursor.eat(',') {
             continue;
@@ -188,7 +200,7 @@ fn parse_array(cursor: &mut Cursor<'_>) -> ParseResult<Json> {
     }
 }
 
-fn parse_inline_table(cursor: &mut Cursor<'_>) -> ParseResult<Json> {
+fn parse_inline_table(cursor: &mut Cursor<'_>, depth: u32) -> ParseResult<Json> {
     cursor.bump(); // '{'
     let mut pairs: Vec<(String, Json)> = Vec::new();
     loop {
@@ -201,7 +213,7 @@ fn parse_inline_table(cursor: &mut Cursor<'_>) -> ParseResult<Json> {
         if !cursor.eat('=') {
             return Err(cursor.error("expected `=` in inline table"));
         }
-        let value = parse_value(cursor)?;
+        let value = parse_value(cursor, depth + 1)?;
         if pairs.iter().any(|(k, _)| k == &key) {
             return Err(cursor.error(format!("duplicate key `{key}`")));
         }
@@ -237,6 +249,11 @@ fn parse_bare_value(cursor: &mut Cursor<'_>) -> ParseResult<Json> {
 }
 
 // --- structural insertion --------------------------------------------------
+
+// NOTE: `descend` scans a container's pairs linearly on every table header, so
+// TOML documents with many unique sibling tables are superlinear. The
+// benchmark (`tools/bench` → `toml/parse`) tracks this; fixing it needs a
+// position cache over the `Json` value model, not a rescan.
 
 fn descend<'a>(node: &'a mut Json, segment: &str) -> ParseResult<&'a mut Json> {
     match node {

@@ -1,0 +1,5 @@
+body { color: red; margin: 0 }
+.item { display: flex; --x: calc(2 * 3px) }
+@media screen { a { color: blue } }
+@font-face { font-family: A; src: url(a.ttf); font-weight: bold }
+.b { border: 1px solid #fff; background: linear-gradient(a, b) }

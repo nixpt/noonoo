@@ -88,6 +88,9 @@ cargo test --workspace
 cargo run -p noonoo -- --version
 ```
 
+Benchmarks and fuzzing live outside the workspace: `tools/bench/` (dependency-free)
+and `fuzz/` (cargo-fuzz targets for the parsers) — see those READMEs.
+
 ## Try it
 
 The parser crates are wired into the engine, so the CLI works today. First, an
