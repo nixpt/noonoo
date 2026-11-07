@@ -36,6 +36,7 @@ pub use noonoo_style as style;
 pub use noonoo_svg as svg;
 pub use noonoo_text as text;
 pub use noonoo_toml as toml;
+pub use noonoo_ttf as ttf;
 pub use noonoo_xml as xml;
 
 /// The version of the Noonoo engine, taken from the workspace.
@@ -45,6 +46,6 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub mod prelude {
     pub use crate::{
         caison, caps, css, csv, dom, engine, events, geometry, headless, html, hx, ini, json,
-        layout, markdown, motion, net, paint, parse, selectors, style, svg, text, toml, xml,
+        layout, markdown, motion, net, paint, parse, selectors, style, svg, text, toml, ttf, xml,
     };
 }

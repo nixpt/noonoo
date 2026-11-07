@@ -7,7 +7,8 @@
 //! **shaping** — turning a string into positioned glyphs, with fonts, kerning
 //! and complex scripts — stays a borrowed concern behind [`Shaper`]. The crate
 //! ships [`MetricShaper`] (a dependency-free advance model) so text lays out
-//! deterministically today; real shaping plugs in behind the same trait.
+//! deterministically today; a real-font metrics shaper (`FontShaper`, over a
+//! parsed TrueType/OpenType face) lives in `noonoo-ttf`.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]

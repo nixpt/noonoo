@@ -121,7 +121,8 @@ The borrowed engines are scored in `DEPENDENCY-EXIT.md`. The path to dropping
   containers, and `z-index` stacking order)*
 - **Phase C — text (trims `parley`).** line-breaking + `text-align`; shaping
   stays borrowed.
-  *✅ (line breaking, wrapping, and alignment owned; shaping behind the `Shaper` seam)*
+  *✅ (line breaking, wrapping, and alignment owned; real font metrics via
+  `noonoo-ttf`; shaping behind the `Shaper` seam)*
 - **Phase D — paint.** the command stream + a recording backend (keep the GPU).
   *✅ (backend-neutral command stream + JSON recording; GPU backend deferred)*
 - **Phase E — net / SVG.** thin HTTP client; SVG subset.

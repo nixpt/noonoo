@@ -14,7 +14,7 @@ them and **own** the integration.
 | --- | --- | --- |
 | `stylo` (+ `selectors`, `cssparser`) | — | **Owned.** Phase A replaced it with a documented CSS subset (`noonoo-css` + `noonoo-style`); `stylo` is not a dependency. See [`DEPENDENCY-EXIT.md`](DEPENDENCY-EXIT.md). |
 | `taffy` | — | **Owned.** Phase B replaced it with `noonoo-layout` (block / inline / flex); `taffy` is not a dependency. |
-| `parley` (+ `fontique`/`swash`/`skrifa`) | `noonoo-text` | **Keep for shaping.** Line breaking + alignment are owned (`noonoo-text`); shaping plugs in behind the `Shaper` seam. |
+| `parley` (+ `fontique`/`swash`/`skrifa`) | `noonoo-text` | **Keep for shaping.** Line breaking + alignment are owned (`noonoo-text`) and font *metrics* are owned (`noonoo-ttf`); only shaping — kerning, ligatures, complex scripts, family resolution — stays borrowed behind the `Shaper` seam. |
 | `anyrender` / `vello` / `wgpu` | `noonoo-paint`, `noonoo-shell` | **Keep (backend).** The command stream is owned (`noonoo-paint`); the GPU 2D backend is behind a feature, not wired yet. |
 | `winit`, `accesskit` | `noonoo-shell` | **Keep.** Windowing + a11y, behind features. |
 
@@ -53,9 +53,9 @@ because the standard library or an already-present dependency covers them:
 One class of dependency Noonoo *does* write itself: **format parsers**. The
 parser crates — `noonoo-parse`, `noonoo-json`, `noonoo-css`, `noonoo-selectors`,
 `noonoo-caison`, `noonoo-html`, `noonoo-markdown`, `noonoo-csv`, `noonoo-ini`,
-`noonoo-toml`, `noonoo-xml`, and `noonoo-svg` — are dependency-free and exist
-because a parser is a *syntax* layer: small, spec-defined, and load-bearing for
-the engine's own formats.
+`noonoo-toml`, `noonoo-xml`, `noonoo-ttf`, and `noonoo-svg` — are dependency-free
+and exist because a parser is a *syntax* layer: small, spec-defined, and
+load-bearing for the engine's own formats.
 
 - **JSON** (`noonoo-json`) is needed to *project* other formats into a
   machine-readable shape (CAISON does this), so owning it removes a ubiquitous
@@ -69,6 +69,9 @@ the engine's own formats.
   CDATA, comments); it is the honest base the SVG layer should sit on.
 - **TOML** (`noonoo-toml`) projects into the JSON value model like INI and
   CAISON, so configuration has an owned parser with no incidental dependency.
+- **Fonts** (`noonoo-ttf`) parses TrueType/OpenType *metrics* (`head`, `maxp`,
+  `hhea`/`hmtx`, `cmap`) into real advance widths and line metrics, behind the
+  `Shaper` seam — so text measures against a real font without owning shaping.
 - **CSS** (`noonoo-css` + `noonoo-style`) is **owned end to end** — tokens, selectors,
   the value/property model, and the cascade (`docs/DEPENDENCY-EXIT.md` Phase A).
   No `stylo`, no `cssparser`.

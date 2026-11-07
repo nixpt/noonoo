@@ -19,6 +19,7 @@ members = [
     "crates/noonoo-ini",
     "crates/noonoo-toml",
     "crates/noonoo-xml",
+    "crates/noonoo-ttf",
     "crates/noonoo-svg",
     # engine — one borrowed engine per crate, one module per boundary
     "crates/noonoo-style",
@@ -78,6 +79,7 @@ noonoo-csv = { path = "crates/noonoo-csv", version = "0.5.0" }
 noonoo-ini = { path = "crates/noonoo-ini", version = "0.5.0" }
 noonoo-toml = { path = "crates/noonoo-toml", version = "0.5.0" }
 noonoo-xml = { path = "crates/noonoo-xml", version = "0.5.0" }
+noonoo-ttf = { path = "crates/noonoo-ttf", version = "0.5.0" }
 noonoo-svg = { path = "crates/noonoo-svg", version = "0.5.0" }
 noonoo-net = { path = "crates/noonoo-net", version = "0.5.0" }
 noonoo-engine = { path = "crates/noonoo-engine", version = "0.5.0" }

@@ -75,11 +75,13 @@ block + inline + flexbox first, grid later. A focused box-layout engine is
 `stylo_taffy` bridge).
 
 ### parley (+ fontique/swash/skrifa) — **PARTIAL** ⚠️ keep shaping
-Shaping (OpenType features, complex scripts, BiDi) and font management are
-100k+-LOC problems and a genuine swamp. **Do not own shaping.** What we *can*
-own is the layer above: simple line-breaking, `text-align`, and box/text
-integration — behind our own `noonoo-text`, with shaping still delegated. This
-trims the *integration* without re-deriving GSUB/GPOS.
+Shaping (OpenType features, complex scripts, BiDi) is a 100k+-LOC swamp and a
+genuine one. **Do not own shaping.** What we *do* own: simple line-breaking and
+`text-align` (`noonoo-text`), the box/text integration, and — since — font
+**file parsing to metrics** (`noonoo-ttf`: `head`/`maxp`/`hhea`/`hmtx`/`cmap`),
+which feeds real advance widths and line metrics in behind the `Shaper` seam.
+What stays delegated is GSUB/GPOS and font *management* (family resolution,
+system enumeration) — `fontique`'s job, not ours.
 
 ### vello / wgpu / winit — **KEEP** ❌ (not a dependency to drop)
 GPU 2D, the GPU API, and platform windowing are the "buy" line. What we own is

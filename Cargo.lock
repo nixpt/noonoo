@@ -31,6 +31,7 @@ dependencies = [
  "noonoo-svg",
  "noonoo-text",
  "noonoo-toml",
+ "noonoo-ttf",
  "noonoo-xml",
 ]
 
@@ -224,6 +225,14 @@ version = "0.5.0"
 dependencies = [
  "noonoo-json",
  "noonoo-parse",
+]
+
+[[package]]
+name = "noonoo-ttf"
+version = "0.5.0"
+dependencies = [
+ "noonoo-parse",
+ "noonoo-text",
 ]
 
 [[package]]
