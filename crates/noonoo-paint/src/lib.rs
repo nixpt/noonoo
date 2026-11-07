@@ -256,7 +256,11 @@ fn paint_box(
         }
     }
 
-    if let Some(text) = &b.text {
+    // Empty runs are dropped: an element with nothing to show (a `<br>`, a
+    // placeholder-less `<img>`) must not emit a `draw-text` for nothing.
+    if let Some(text) = &b.text
+        && !text.is_empty()
+    {
         let (font_size, color) = style
             .map(|s| (s.font_size, s.color))
             .unwrap_or((16.0, Color::BLACK));
@@ -1206,5 +1210,24 @@ mod tests {
             .iter()
             .position(|c| matches!(c, Command::FillRect { color: c, .. } if *c == color))
             .expect("a rect of that colour")
+    }
+
+    #[test]
+    fn empty_text_runs_are_dropped() {
+        // Finding 7 of docs/REVIEW-2026-11-07.md: a `<br>` used to emit a
+        // `draw-text` with empty text; an `<img>` without `alt`, too.
+        let list = render(r#"<p>H<br><img src="x" alt=""></p>"#, "p { margin: 0 }");
+        assert!(
+            list.commands()
+                .iter()
+                .any(|c| matches!(c, Command::DrawText { text, .. } if text == "H"))
+        );
+        assert!(
+            list.commands()
+                .iter()
+                .all(|c| !matches!(c, Command::DrawText { text, .. } if text.is_empty())),
+            "no empty text runs: {:?}",
+            list.commands()
+        );
     }
 }

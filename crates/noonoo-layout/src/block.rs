@@ -265,7 +265,15 @@ pub(crate) fn layout_inline_run(
                     continue;
                 }
                 let style = ctx.style(node).clone();
+                // Replaced content (`<img alt>`, `<input value>`) shows its
+                // placeholder text, like a browser while the source is
+                // missing; otherwise an element is just its own text.
                 let content = ctx.document.text_content(node);
+                let content = if content.is_empty() {
+                    element.placeholder_text().to_owned()
+                } else {
+                    content
+                };
                 let height = if style.line_height > 0.0 {
                     style.line_height
                 } else {

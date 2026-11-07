@@ -1123,3 +1123,21 @@ fn trailing_break_adds_no_line() {
         .expect("the H line box");
     assert_eq!(text.rect.height, 20.0);
 }
+
+#[test]
+fn replaced_elements_show_their_placeholder_text() {
+    // Finding 7 of docs/REVIEW-2026-11-07.md: `<img alt>` and `<input value>`
+    // used to paint nothing (an empty run that nothing could draw).
+    let (_doc, tree) = page(
+        r#"<p><img src="x" alt="pic"></p><p><input value="a"></p>"#,
+        "p, img { margin: 0 }",
+        400.0,
+    );
+    let words: Vec<&str> = tree
+        .boxes()
+        .iter()
+        .filter(|b| !b.text.as_deref().unwrap_or_default().is_empty())
+        .map(|b| b.text.as_deref().unwrap_or_default())
+        .collect();
+    assert_eq!(words, vec!["pic", "a"]);
+}

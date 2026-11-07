@@ -57,6 +57,23 @@ impl ElementData {
         self.classes().any(|c| c == class)
     }
 
+    /// The text this element shows in place of its media or control — an
+    /// `<img>`'s `alt` text, an `<input>`'s `value` — empty for every other
+    /// name.
+    ///
+    /// This is the engine's *documented placeholder* for replaced content:
+    /// `noonoo-paint` has no image or form-control operations yet, so the
+    /// layout tree carries the fallback text through plain text runs the way
+    /// a browser shows it while the source fails to load. An
+    /// element with nothing to show paints nothing, per the empty-run rule.
+    pub fn placeholder_text(&self) -> &str {
+        match self.name.as_str() {
+            "img" => self.attr("alt").unwrap_or(""),
+            "input" => self.attr("value").unwrap_or(""),
+            _ => "",
+        }
+    }
+
     pub(crate) fn set_attr(&mut self, name: &str, value: impl Into<String>) {
         let value = value.into();
         match self.attrs.iter_mut().find(|a| a.name == name) {
