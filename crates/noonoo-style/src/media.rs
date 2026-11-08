@@ -14,14 +14,23 @@
 //!   spec (§6 legacy syntax) defines both;
 //! - media types: `screen` (a window-backed engine) and `all` match, and
 //!   everything else — notably `print` — does not;
-//! - features: `min-width`, `max-width`, `min-height`, `max-height`, with
-//!   `px` values (`0` may be unitless). An unrecognised feature is a failed
-//!   expression, which fails the whole alternative, so an unknown condition
-//!   never matches by accident.
+//! - range features: `width`, `height` (`px`, or `em`/`rem` against the
+//!   initial 16px), `aspect-ratio` (`16/9`), `resolution` (`dppx`, `x`,
+//!   `dpi`, `dpcm`; a window is 1dppx for now) and
+//!   `-webkit-device-pixel-ratio`, each with `min-`/`max-` prefixes or in
+//!   level 4 range syntax (`(width >= 600px)`, `(400px <= width < 800px)`);
+//! - discrete features, answered for a desktop window whose host states no
+//!   preferences: `orientation`, `hover`/`any-hover: hover`,
+//!   `pointer`/`any-pointer: fine`, `prefers-color-scheme: light`, and
+//!   `no-preference` for `prefers-reduced-motion`, `-contrast` and
+//!   `-reduced-transparency`;
+//! - an unrecognised feature or value is a failed expression, which fails
+//!   the whole alternative, so an unknown condition never matches by
+//!   accident.
 //!
-//! The rest of the media-query grammar (range syntax, `or`, nested
-//! conditions in parens, environment functions) is not supported: a
-//! condition outside the subset evaluates false.
+//! The rest of the media-query grammar (`or`, nested conditions in parens,
+//! environment functions) is not supported: a condition outside the
+//! subset evaluates false.
 
 use crate::Viewport;
 
@@ -112,60 +121,227 @@ fn type_or_feature(text: &str, viewport: &Viewport) -> bool {
     }
 }
 
-/// One feature expression: `(feature)` or `(feature: value)`.
+/// One feature expression: `(feature)`, `(feature: value)`, or a range
+/// such as `(width >= 600px)` or `(400px <= width < 800px)`.
 fn feature(text: &str, viewport: &Viewport) -> bool {
     let trimmed = text.trim();
-    let Some(inner) = trimmed.strip_prefix('(') else {
+    let Some(inner) = trimmed
+        .strip_prefix('(')
+        .and_then(|inner| inner.strip_suffix(')'))
+    else {
         return false;
     };
-    let Some(inner) = inner.strip_suffix(')') else {
-        return false;
-    };
-    let inner = inner.trim();
+    let inner = inner.trim().to_ascii_lowercase();
     if inner.is_empty() {
         return false;
     }
-    // `(feature)` alone is true when the feature applies; unsupported
-    // booleans are false.
-    let (name, value) = match inner.split_once(':') {
-        Some((name, value)) => (name.trim().to_ascii_lowercase(), value.trim()),
-        None => {
-            return matches!(
-                inner.to_ascii_lowercase().as_str(),
-                "width" | "height" | "aspect-ratio" | "color"
-            );
-        }
-    };
+    if inner.contains(['<', '>', '=']) {
+        return range(&inner, viewport);
+    }
+    match inner.split_once(':') {
+        None => boolean(&inner, viewport),
+        Some((name, value)) => plain(name.trim(), value.trim(), viewport),
+    }
+}
 
-    let Some(length) = parse_px(value) else {
-        // An unparsable value fails the expression, per unknown feature.
-        return false;
+/// The answers to the discrete features, for a desktop window whose host
+/// states no preferences.
+fn discrete(name: &str, viewport: &Viewport) -> Option<&'static str> {
+    Some(match name {
+        "orientation" if viewport.height >= viewport.width => "portrait",
+        "orientation" => "landscape",
+        "hover" | "any-hover" => "hover",
+        "pointer" | "any-pointer" => "fine",
+        "prefers-color-scheme" => "light",
+        "prefers-reduced-motion" | "prefers-reduced-transparency" | "prefers-contrast" => {
+            "no-preference"
+        }
+        _ => return None,
+    })
+}
+
+/// A range feature's value: pixels for sizes, width over height for
+/// `aspect-ratio`, dots per pixel for resolutions.
+fn actual(name: &str, viewport: &Viewport) -> Option<f32> {
+    match name {
+        "width" => Some(viewport.width),
+        "height" => Some(viewport.height),
+        "aspect-ratio" => (viewport.height > 0.0).then(|| viewport.width / viewport.height),
+        "resolution" | "-webkit-device-pixel-ratio" => Some(1.0),
+        "color" => Some(8.0),
+        _ => None,
+    }
+}
+
+/// `(feature)` alone: true when the feature isn't zero or `none`.
+fn boolean(name: &str, viewport: &Viewport) -> bool {
+    if let Some(value) = discrete(name, viewport) {
+        return value != "none" && value != "no-preference";
+    }
+    actual(name, viewport).is_some_and(|value| value != 0.0)
+}
+
+/// `(feature: value)`, `(min-feature: value)` or `(max-feature: value)`.
+fn plain(name: &str, value: &str, viewport: &Viewport) -> bool {
+    if let Some(answer) = discrete(name, viewport) {
+        return answer == value;
+    }
+    let (name, compare) = if let Some(rest) = name.strip_prefix("-webkit-min-") {
+        (format!("-webkit-{rest}"), Compare::Ge)
+    } else if let Some(rest) = name.strip_prefix("-webkit-max-") {
+        (format!("-webkit-{rest}"), Compare::Le)
+    } else if let Some(rest) = name.strip_prefix("min-") {
+        (rest.to_owned(), Compare::Ge)
+    } else if let Some(rest) = name.strip_prefix("max-") {
+        (rest.to_owned(), Compare::Le)
+    } else {
+        (name.to_owned(), Compare::Eq)
     };
-    match name.as_str() {
-        "min-width" => viewport.width >= length,
-        "max-width" => viewport.width <= length,
-        "min-height" => viewport.height >= length,
-        "max-height" => viewport.height <= length,
+    match (actual(&name, viewport), parse_value(&name, value)) {
+        (Some(actual), Some(expected)) => compare.holds(actual, expected),
         _ => false,
     }
 }
 
-/// A `px` length (`0` may be unitless). Other units are unsupported.
-fn parse_px(value: &str) -> Option<f32> {
-    let value = value.trim();
-    let number = if value.eq_ignore_ascii_case("0px") {
-        "0"
-    } else if let Some(stripped) = value.strip_suffix("px") {
-        stripped
-    } else {
-        // Unitless zero is the only valid bare length.
-        if value == "0" {
-            "0"
-        } else {
-            return None;
+#[derive(Clone, Copy)]
+enum Compare {
+    Lt,
+    Le,
+    Eq,
+    Ge,
+    Gt,
+}
+
+impl Compare {
+    /// `actual <op> expected`.
+    fn holds(self, actual: f32, expected: f32) -> bool {
+        match self {
+            Compare::Lt => actual < expected,
+            Compare::Le => actual <= expected,
+            Compare::Eq => actual == expected,
+            Compare::Ge => actual >= expected,
+            Compare::Gt => actual > expected,
         }
+    }
+
+    /// The same comparison with its sides swapped (`a < b` is `b > a`).
+    fn flipped(self) -> Self {
+        match self {
+            Compare::Lt => Compare::Gt,
+            Compare::Le => Compare::Ge,
+            Compare::Eq => Compare::Eq,
+            Compare::Ge => Compare::Le,
+            Compare::Gt => Compare::Lt,
+        }
+    }
+}
+
+/// `name op value`, `value op name`, or `value op name op value`.
+fn range(text: &str, viewport: &Viewport) -> bool {
+    let mut parts = Vec::new();
+    let mut operators = Vec::new();
+    let mut rest = text;
+    loop {
+        let Some(at) = rest.find(['<', '>', '=']) else {
+            parts.push(rest.trim());
+            break;
+        };
+        parts.push(rest[..at].trim());
+        let tail = &rest[at..];
+        let (operator, length) = if tail.starts_with("<=") {
+            (Compare::Le, 2)
+        } else if tail.starts_with(">=") {
+            (Compare::Ge, 2)
+        } else if tail.starts_with('<') {
+            (Compare::Lt, 1)
+        } else if tail.starts_with('>') {
+            (Compare::Gt, 1)
+        } else {
+            (Compare::Eq, 1)
+        };
+        operators.push(operator);
+        rest = &tail[length..];
+    }
+    let is_name = |part: &str| actual(part, viewport).is_some();
+    // Each comparison reads as `actual <op> value` once the name is on the left.
+    let check = |name: &str, operator: Compare, value: &str| match (
+        actual(name, viewport),
+        parse_value(name, value),
+    ) {
+        (Some(actual), Some(value)) => operator.holds(actual, value),
+        _ => false,
     };
-    number.parse::<f32>().ok()
+    match (parts.as_slice(), operators.as_slice()) {
+        ([name, value], [operator]) if is_name(name) => check(name, *operator, value),
+        ([value, name], [operator]) if is_name(name) => check(name, operator.flipped(), value),
+        ([low, name, high], [first, second]) if is_name(name) => {
+            check(name, first.flipped(), low) && check(name, *second, high)
+        }
+        _ => false,
+    }
+}
+
+/// A feature's value in the units [`actual`] reports.
+fn parse_value(name: &str, value: &str) -> Option<f32> {
+    let value = value.trim();
+    match name {
+        "width" | "height" => parse_length(value),
+        "aspect-ratio" => parse_ratio(value),
+        "resolution" => parse_resolution(value),
+        "-webkit-device-pixel-ratio" | "color" => value.parse().ok(),
+        _ => None,
+    }
+}
+
+/// A length in pixels: `px`, or `em`/`rem` against the initial 16px font
+/// size (a media query has no element to inherit from); `0` may be
+/// unitless. Other units are unsupported.
+fn parse_length(value: &str) -> Option<f32> {
+    if value == "0" {
+        return Some(0.0);
+    }
+    let (number, scale) = if let Some(number) = value.strip_suffix("rem") {
+        (number, 16.0)
+    } else if let Some(number) = value.strip_suffix("em") {
+        (number, 16.0)
+    } else {
+        (value.strip_suffix("px")?, 1.0)
+    };
+    number
+        .trim()
+        .parse::<f32>()
+        .ok()
+        .map(|number| number * scale)
+}
+
+/// `width / height` (or a bare number); both sides positive.
+fn parse_ratio(value: &str) -> Option<f32> {
+    let (width, height) = match value.split_once('/') {
+        Some((width, height)) => (
+            width.trim().parse::<f32>().ok()?,
+            height.trim().parse::<f32>().ok()?,
+        ),
+        None => (value.parse::<f32>().ok()?, 1.0),
+    };
+    (width > 0.0 && height > 0.0).then(|| width / height)
+}
+
+/// Dots per CSS pixel: `dppx`/`x`, `dpi` (96 per pixel) or `dpcm`.
+fn parse_resolution(value: &str) -> Option<f32> {
+    let (number, per_dppx) = if let Some(number) = value.strip_suffix("dppx") {
+        (number, 1.0)
+    } else if let Some(number) = value.strip_suffix("dpcm") {
+        (number, 96.0 / 2.54)
+    } else if let Some(number) = value.strip_suffix("dpi") {
+        (number, 96.0)
+    } else {
+        (value.strip_suffix('x')?, 1.0)
+    };
+    number
+        .trim()
+        .parse::<f32>()
+        .ok()
+        .map(|number| number / per_dppx)
 }
 
 #[cfg(test)]
@@ -227,10 +403,81 @@ mod tests {
     }
 
     #[test]
+    fn orientation_exact_sizes_and_aspect_ratio() {
+        let tall = at(400.0, 600.0);
+        assert!(matches("(orientation: portrait)", &tall));
+        assert!(!matches("(orientation: landscape)", &tall));
+        assert!(matches("(orientation: landscape)", &at(800.0, 600.0)));
+        assert!(matches("(width: 400px) and (height: 600px)", &tall));
+        assert!(!matches("(width: 401px)", &tall));
+        assert!(matches("(aspect-ratio: 2/3)", &tall));
+        assert!(matches(
+            "(min-aspect-ratio: 1/2) and (max-aspect-ratio: 1 / 1)",
+            &tall
+        ));
+        assert!(!matches("(min-aspect-ratio: 16/9)", &tall));
+        assert!(!matches("(aspect-ratio: 0/0)", &tall));
+        assert!(!matches("(min-aspect-ratio: 0/1)", &tall), "degenerate");
+    }
+
+    #[test]
+    fn em_and_rem_lengths_use_the_initial_font_size() {
+        let vp = at(400.0, 600.0);
+        assert!(matches("(min-width: 25em)", &vp));
+        assert!(!matches("(min-width: 25.1rem)", &vp));
+        assert!(matches("(max-width: 30em)", &vp));
+    }
+
+    #[test]
+    fn range_syntax() {
+        let vp = at(400.0, 600.0);
+        assert!(matches("(width >= 400px)", &vp));
+        assert!(!matches("(width > 400px)", &vp));
+        assert!(matches("(width < 401px)", &vp));
+        assert!(matches("(400px <= width)", &vp));
+        assert!(matches("(300px <= width)", &vp));
+        assert!(!matches("(500px <= width)", &vp));
+        assert!(!matches("(400px < width)", &vp));
+        assert!(matches("(300px < width <= 400px)", &vp));
+        assert!(!matches("(300px < width < 400px)", &vp));
+        assert!(matches("(500px > height > 0)", &at(400.0, 100.0)));
+        assert!(matches("(height = 600px)", &vp));
+        assert!(!matches("(colour >= 1px)", &vp));
+        assert!(matches("screen and (width >= 25em)", &vp));
+        assert!(!matches("screen and (width >= 30em)", &vp));
+    }
+
+    #[test]
+    fn interaction_and_preference_features_describe_a_desktop_window() {
+        let vp = at(400.0, 600.0);
+        assert!(matches("(hover: hover) and (pointer: fine)", &vp));
+        assert!(matches("(hover)", &vp));
+        assert!(!matches("(hover: none)", &vp));
+        assert!(matches("(any-hover: hover) and (any-pointer: fine)", &vp));
+        assert!(!matches("(pointer: coarse)", &vp));
+        assert!(matches("(prefers-color-scheme: light)", &vp));
+        assert!(!matches("(prefers-color-scheme: dark)", &vp));
+        assert!(matches("(prefers-reduced-motion: no-preference)", &vp));
+        assert!(!matches("(prefers-reduced-motion)", &vp));
+        assert!(matches(
+            "(min-resolution: 1dppx) and (max-resolution: 96dpi)",
+            &vp
+        ));
+        assert!(!matches("(min-resolution: 2dppx)", &vp));
+        assert!(matches("(min-resolution: 95dpi)", &vp));
+        assert!(!matches("(min-resolution: 97dpi)", &vp));
+        assert!(matches("(min-resolution: 37dpcm)", &vp));
+        assert!(!matches("(min-resolution: 39dpcm)", &vp));
+        assert!(matches("(color) and (min-color: 1)", &vp));
+        assert!(matches("(-webkit-min-device-pixel-ratio: 1)", &vp));
+        assert!(!matches("(-webkit-min-device-pixel-ratio: 1.5)", &vp));
+    }
+
+    #[test]
     fn unsupported_conditions_fail() {
         let vp = at(400.0, 600.0);
-        assert!(!matches("(orientation: landscape)", &vp));
-        assert!(!matches("(min-width: 10em)", &vp));
+        assert!(!matches("(scan: interlace)", &vp));
+        assert!(!matches("(min-width: 10vw)", &vp));
         assert!(!matches("(min-width)", &vp));
         assert!(!matches("(min-width: )", &vp));
         // An unknown type name is a failed alternative.
