@@ -114,3 +114,20 @@ fn the_view_hands_out_its_frame_hooks() {
     assert!(view.frame_hooks().device().is_none());
     assert!(view.window().is_none());
 }
+
+#[test]
+fn a_surface_resize_resizes_the_host_and_runs_the_resize_hook() {
+    use std::cell::Cell;
+    use winit::dpi::PhysicalSize;
+
+    let seen = Rc::new(Cell::new(None));
+    let record = seen.clone();
+    let (view, _) = view();
+    let mut view = view.with_resize_hook(move |_, size| record.set(Some(size)));
+    view.update();
+    view.window_event(WindowEvent::SurfaceResized(PhysicalSize::new(400, 300)));
+    // No window yet, so the scale factor is 1.
+    assert_eq!(view.host().viewport, Size::new(400.0, 300.0));
+    assert_eq!(seen.get(), Some(Size::new(400.0, 300.0)));
+    assert!(view.update(), "the new size is laid out");
+}

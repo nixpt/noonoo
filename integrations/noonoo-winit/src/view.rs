@@ -431,6 +431,13 @@ impl View {
                 .get_or_insert_with(move || a11y::Bridge::new(move || proxy.wake_up()));
             bridge.set_window_bounds(window.as_ref());
         }
+        // The window may not have the size it asked for (a tiling or
+        // space-constrained desktop picks its own): lay out and render at
+        // the size it got.
+        if let Some(window) = &self.window {
+            let size = window.surface_size();
+            self.resized(size.width, size.height);
+        }
         self.dirty = true;
         self.update();
         self.update_cursor();
@@ -457,6 +464,7 @@ impl View {
                     self.resized(size.width, size.height);
                 }
             }
+            WindowEvent::SurfaceResized(size) => self.resized(size.width, size.height),
             WindowEvent::ModifiersChanged(modifiers) => self.modifiers = modifiers.state(),
             WindowEvent::Destroyed => self.window = None,
             event => match input::translate(&event, self.scale, self.modifiers) {
@@ -473,10 +481,9 @@ impl View {
                     self.host.wheel(self.cursor, delta_y);
                     self.invalidate();
                 }
-                Some(Action::Resized(_)) => {
-                    // SurfaceResized carries physical pixels; sizing runs
-                    // through `resized` so the scale factor is applied once.
-                }
+                // Handled above: sizing runs through `resized`, which
+                // applies the scale factor once.
+                Some(Action::Resized(_)) => {}
                 Some(Action::Redraw) => self.draw(),
                 Some(Action::Close) => return Flow::Close,
                 None => {}
