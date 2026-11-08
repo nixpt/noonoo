@@ -495,6 +495,13 @@ pub(crate) fn apply(
                 set_px(&mut style.letter_spacing, values, font_size, root, viewport);
             }
         }
+        Property::Transform => {
+            if keyword(values) == Some("none") {
+                style.transform.clear();
+            } else if let Some(list) = transform_list(values, font_size, root, viewport) {
+                style.transform = list;
+            }
+        }
         Property::TextTransform => {
             if let Some(k) = keyword(values) {
                 style.text_transform = match k {
@@ -667,6 +674,58 @@ fn set_text_align(slot: &mut TextAlign, values: &[Value]) {
     };
 }
 
+/// A `transform` function list, or `None` if any function is invalid
+/// (which drops the whole declaration).
+fn transform_list(
+    values: &[Value],
+    font_size: f32,
+    root: f32,
+    viewport: Viewport,
+) -> Option<Vec<Transform>> {
+    let mut list = Vec::new();
+    for value in values {
+        let Value::Function { name, args } = value else {
+            return None;
+        };
+        let args: Vec<&[Value]> = args
+            .split(|arg| matches!(arg, Value::Comma))
+            .filter(|arg| !arg.is_empty())
+            .collect();
+        let offset = |arg: &[Value]| match dimension(arg, font_size, root, viewport)? {
+            Dimension::Auto => None,
+            length => Some(length),
+        };
+        let number = |arg: &[Value]| match arg {
+            [Value::Number(n)] => Some(*n),
+            [Value::Percentage(p)] => Some(p / 100.0),
+            _ => None,
+        };
+        let zero = Dimension::Px(0.0);
+        list.push(
+            match (name.to_ascii_lowercase().as_str(), args.as_slice()) {
+                ("translate", [x]) => Transform::Translate(offset(x)?, zero),
+                ("translate", [x, y]) => Transform::Translate(offset(x)?, offset(y)?),
+                ("translatex", [x]) => Transform::Translate(offset(x)?, zero),
+                ("translatey", [y]) => Transform::Translate(zero, offset(y)?),
+                ("scale", [s]) => {
+                    let s = number(s)?;
+                    Transform::Scale(s, s)
+                }
+                ("scale", [x, y]) => Transform::Scale(number(x)?, number(y)?),
+                ("scalex", [x]) => Transform::Scale(number(x)?, 1.0),
+                ("scaley", [y]) => Transform::Scale(1.0, number(y)?),
+                ("rotate", [a]) => Transform::Rotate(match a {
+                    [Value::Length(length)] => crate::gradient::angle(length)?,
+                    [Value::Number(n)] if *n == 0.0 => 0.0,
+                    _ => return None,
+                }),
+                _ => return None,
+            },
+        );
+    }
+    Some(list)
+}
+
 fn set_white_space(slot: &mut WhiteSpace, values: &[Value]) {
     let Some(k) = keyword(values) else { return };
     *slot = match k {
@@ -802,6 +861,7 @@ fn copy_property(dst: &mut ComputedStyle, src: &ComputedStyle, property: &Proper
         Property::WhiteSpace => dst.white_space = src.white_space,
         Property::LetterSpacing => dst.letter_spacing = src.letter_spacing,
         Property::TextTransform => dst.text_transform = src.text_transform,
+        Property::Transform => dst.transform = src.transform.clone(),
         Property::Opacity => dst.opacity = src.opacity,
         Property::OverflowX => dst.overflow_x = src.overflow_x,
         Property::OverflowY => dst.overflow_y = src.overflow_y,

@@ -156,7 +156,7 @@ fn linear_direction(group: &[Value]) -> Option<LinearDirection> {
     }
 }
 
-fn angle(length: &Length) -> Option<f32> {
+pub(crate) fn angle(length: &Length) -> Option<f32> {
     let value = length.value;
     match &length.unit {
         LengthUnit::Other(unit) if unit.eq_ignore_ascii_case("deg") => Some(value),

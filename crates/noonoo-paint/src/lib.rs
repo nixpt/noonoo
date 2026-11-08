@@ -123,6 +123,16 @@ pub enum Command {
     },
     /// End the most recent [`Command::PushLayer`].
     PopLayer,
+    /// Draw subsequent commands through `matrix` — `[a, b, c, d, e, f]`,
+    /// mapping `(x, y)` to `(a·x + c·y + e, b·x + d·y + f)` — composed with
+    /// any enclosing transform, until the matching
+    /// [`Command::PopTransform`]. CSS `transform`.
+    PushTransform {
+        /// The affine matrix.
+        matrix: [f32; 6],
+    },
+    /// End the most recent [`Command::PushTransform`].
+    PopTransform,
 }
 
 /// An ordered list of [`Command`]s.
@@ -232,6 +242,46 @@ pub fn paint_with(styles: &Styles, layout: &LayoutTree, glyphs: &dyn Glyphs) -> 
     list
 }
 
+/// The matrix for a `transform` list on a box with border box `rect`:
+/// the functions compose left to right, about the box's centre
+/// (`transform-origin` is always `50% 50%`).
+fn transform_matrix(list: &[noonoo_style::Transform], rect: Rect) -> [f32; 6] {
+    use noonoo_style::Transform;
+    let (ox, oy) = (rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+    let mut m = [1.0, 0.0, 0.0, 1.0, ox, oy];
+    for function in list {
+        let step = match function {
+            Transform::Translate(x, y) => [
+                1.0,
+                0.0,
+                0.0,
+                1.0,
+                x.resolve(rect.width).unwrap_or(0.0),
+                y.resolve(rect.height).unwrap_or(0.0),
+            ],
+            Transform::Scale(x, y) => [*x, 0.0, 0.0, *y, 0.0, 0.0],
+            Transform::Rotate(degrees) => {
+                let (sin, cos) = degrees.to_radians().sin_cos();
+                [cos, sin, -sin, cos, 0.0, 0.0]
+            }
+        };
+        m = multiply(m, step);
+    }
+    multiply(m, [1.0, 0.0, 0.0, 1.0, -ox, -oy])
+}
+
+/// `a · b`: apply `b`, then `a`.
+fn multiply(a: [f32; 6], b: [f32; 6]) -> [f32; 6] {
+    [
+        a[0] * b[0] + a[2] * b[1],
+        a[1] * b[0] + a[3] * b[1],
+        a[0] * b[2] + a[2] * b[3],
+        a[1] * b[2] + a[3] * b[3],
+        a[0] * b[4] + a[2] * b[5] + a[4],
+        a[1] * b[4] + a[3] * b[5] + a[5],
+    ]
+}
+
 /// `tx`/`ty` are the accumulated horizontal/vertical scroll of enclosing scroll
 /// containers: a box's content is drawn shifted by them.
 fn paint_box(
@@ -254,6 +304,17 @@ fn paint_box(
             alpha: opacity,
         });
     }
+    // A `transform` draws the box and its subtree through one matrix; it
+    // never moves the layout.
+    let transformed = match style {
+        Some(style) if b.kind != BoxKind::Text && !style.transform.is_empty() => {
+            out.0.push(Command::PushTransform {
+                matrix: transform_matrix(&style.transform, rect),
+            });
+            true
+        }
+        _ => false,
+    };
 
     // Background and borders belong to element boxes; a text run draws only text
     // (it shares its element's style, which was already painted).
@@ -355,6 +416,9 @@ fn paint_box(
     }
     if b.clips {
         out.0.push(Command::PopLayer);
+    }
+    if transformed {
+        out.0.push(Command::PopTransform);
     }
     if opacity < 1.0 {
         out.0.push(Command::PopLayer);
@@ -539,6 +603,14 @@ fn command_json(command: &Command) -> Json {
             object(pairs)
         }
         Command::PopLayer => object(vec![("op", Json::String("pop-layer".into()))]),
+        Command::PushTransform { matrix } => object(vec![
+            ("op", Json::String("push-transform".into())),
+            (
+                "matrix",
+                Json::Array(matrix.iter().map(|&v| Json::Number(v as f64)).collect()),
+            ),
+        ]),
+        Command::PopTransform => object(vec![("op", Json::String("pop-transform".into()))]),
     }
 }
 
@@ -876,6 +948,96 @@ mod tests {
         let glyphs = Spacing(Default::default());
         paint_with(&styles, &layout, &glyphs);
         assert_eq!(*glyphs.0.borrow(), [3.0]);
+    }
+
+    fn transforms(list: &CommandList) -> Vec<[f32; 6]> {
+        list.commands()
+            .iter()
+            .filter_map(|c| match c {
+                Command::PushTransform { matrix } => Some(*matrix),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn close(a: [f32; 6], b: [f32; 6]) -> bool {
+        a.iter().zip(&b).all(|(x, y)| (x - y).abs() < 1e-4)
+    }
+
+    #[test]
+    fn a_transform_wraps_the_box_and_its_children() {
+        let list = render(
+            r#"<div id="a"><p id="b">x</p></div><div id="c"></div>"#,
+            "div { height: 50px } #a { width: 100px; background: red; transform: translateX(-50%) }
+             #c { background: blue }",
+        );
+        assert_eq!(transforms(&list), [[1.0, 0.0, 0.0, 1.0, -50.0, 0.0]]);
+        let commands = list.commands();
+        let push = commands
+            .iter()
+            .position(|c| matches!(c, Command::PushTransform { .. }))
+            .unwrap();
+        let pop = commands
+            .iter()
+            .position(|c| matches!(c, Command::PopTransform))
+            .unwrap();
+        let red = commands
+            .iter()
+            .position(
+                |c| matches!(c, Command::FillRect { color, .. } if *color == Color::rgb(255, 0, 0)),
+            )
+            .unwrap();
+        let text = commands
+            .iter()
+            .position(|c| matches!(c, Command::DrawText { .. }))
+            .unwrap();
+        let blue = commands
+            .iter()
+            .position(
+                |c| matches!(c, Command::FillRect { color, .. } if *color == Color::rgb(0, 0, 255)),
+            )
+            .unwrap();
+        assert!(push < red && red < text && text < pop && pop < blue);
+    }
+
+    /// Scale and rotate act about the border box's centre.
+    #[test]
+    fn scale_and_rotate_act_about_the_box_centre() {
+        let list = render(
+            r#"<div id="a"></div>"#,
+            "#a { width: 100px; height: 50px; transform: scale(2) }",
+        );
+        assert!(close(
+            transforms(&list)[0],
+            [2.0, 0.0, 0.0, 2.0, -50.0, -25.0]
+        ));
+
+        let list = render(
+            r#"<div id="a"></div>"#,
+            "#a { width: 100px; height: 50px; transform: rotate(90deg) }",
+        );
+        // About (50, 25): x' = -y + 75, y' = x - 25.
+        assert!(close(
+            transforms(&list)[0],
+            [0.0, 1.0, -1.0, 0.0, 75.0, -25.0]
+        ));
+    }
+
+    #[test]
+    fn transforms_serialize() {
+        let list = CommandList(vec![
+            Command::PushTransform {
+                matrix: [1.0, 0.0, 0.0, 1.0, 5.0, 6.0],
+            },
+            Command::PopTransform,
+        ]);
+        let json = list.to_json().to_string();
+        assert!(json.contains(r#""op":"push-transform""#), "{json}");
+        assert!(
+            json.contains(r#""matrix":[1.0,0.0,0.0,1.0,5.0,6.0]"#),
+            "{json}"
+        );
+        assert!(json.contains(r#""op":"pop-transform""#), "{json}");
     }
 
     #[test]

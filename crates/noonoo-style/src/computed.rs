@@ -410,6 +410,18 @@ pub enum TextAlign {
     Justify,
 }
 
+/// One `transform` function. Lengths stay unresolved: a percentage
+/// translation is of the element's own border box, known only at paint.
+#[derive(Clone, PartialEq, Debug)]
+pub enum Transform {
+    /// `translate()` / `translateX()` / `translateY()`.
+    Translate(Dimension, Dimension),
+    /// `scale()` / `scaleX()` / `scaleY()`.
+    Scale(f32, f32),
+    /// `rotate()`, in degrees, clockwise.
+    Rotate(f32),
+}
+
 /// `text-transform`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum TextTransform {
@@ -703,6 +715,8 @@ pub struct ComputedStyle {
     pub visibility: Visibility,
     /// `opacity`.
     pub opacity: f32,
+    /// `transform`, in the order written (empty for `none`).
+    pub transform: Vec<Transform>,
     /// `width`.
     pub width: Dimension,
     /// `min-width`.
@@ -790,6 +804,7 @@ impl Default for ComputedStyle {
             text_transform: TextTransform::None,
             visibility: Visibility::Visible,
             opacity: 1.0,
+            transform: Vec::new(),
             width: Dimension::Auto,
             min_width: Dimension::Auto,
             max_width: Dimension::Auto,

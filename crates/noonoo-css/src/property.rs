@@ -151,6 +151,8 @@ pub enum Property {
     LetterSpacing,
     /// `text-transform`.
     TextTransform,
+    /// `transform`.
+    Transform,
     /// `opacity`.
     Opacity,
     /// `overflow-x`.
@@ -247,6 +249,7 @@ impl Property {
             "white-space" => Self::WhiteSpace,
             "letter-spacing" => Self::LetterSpacing,
             "text-transform" => Self::TextTransform,
+            "transform" => Self::Transform,
             "opacity" => Self::Opacity,
             "overflow-x" => Self::OverflowX,
             "overflow-y" => Self::OverflowY,
@@ -338,6 +341,7 @@ impl Property {
             Self::WhiteSpace => "white-space",
             Self::LetterSpacing => "letter-spacing",
             Self::TextTransform => "text-transform",
+            Self::Transform => "transform",
             Self::Opacity => "opacity",
             Self::OverflowX => "overflow-x",
             Self::OverflowY => "overflow-y",

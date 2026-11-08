@@ -66,7 +66,7 @@ pub use computed::{
     Cursor, Dimension, Display, Edges, Extreme, FlexDirection, FlexWrap, Float, FontStyle,
     Gradient, GradientKind, GradientStop, GridLine, GridRange, JustifyContent, Length,
     LengthOrAuto, LinearDirection, Overflow, Position, RadialShape, RadialSize, TextAlign,
-    TextDecoration, TextTransform, Track, Visibility, WhiteSpace, ZIndex,
+    TextDecoration, TextTransform, Track, Transform, Visibility, WhiteSpace, ZIndex,
 };
 pub use edit::{StyleEditError, remove_style_property, set_style_property};
 
@@ -202,6 +202,38 @@ mod tests {
         );
         assert_eq!(get("b").transformed_text("straße"), "STRASSE");
         assert_eq!(get("d").transformed_text("ÀB"), "àb");
+    }
+
+    #[test]
+    fn transform_lists_parse_in_order_and_do_not_inherit() {
+        let (doc, styles) = styled(
+            r#"<div id="a"><p id="b">x</p></div><div id="c"></div><div id="d"></div>"#,
+            "#a { transform: translateX(-50%) translate(4px, 10%) scale(2) rotate(0.25turn) }
+             #c { transform: translateY(3px) scale(1, 0.5) scaleX(3) rotate(-90deg) }
+             #d { transform: translateX(10px) bogus(1) }",
+        );
+        let get = |id: &str| styles.get(doc.get_element_by_id(id).unwrap()).unwrap();
+        assert_eq!(
+            get("a").transform,
+            [
+                Transform::Translate(Dimension::Percent(-50.0), Dimension::Px(0.0)),
+                Transform::Translate(Dimension::Px(4.0), Dimension::Percent(10.0)),
+                Transform::Scale(2.0, 2.0),
+                Transform::Rotate(90.0),
+            ]
+        );
+        assert!(get("b").transform.is_empty());
+        assert_eq!(
+            get("c").transform,
+            [
+                Transform::Translate(Dimension::Px(0.0), Dimension::Px(3.0)),
+                Transform::Scale(1.0, 0.5),
+                Transform::Scale(3.0, 1.0),
+                Transform::Rotate(-90.0),
+            ]
+        );
+        // One bad function invalidates the whole declaration.
+        assert!(get("d").transform.is_empty());
     }
 
     #[test]

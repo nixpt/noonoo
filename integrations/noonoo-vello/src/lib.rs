@@ -47,7 +47,10 @@ pub fn scene(commands: &CommandList) -> Scene {
 
 /// Draw a Noonoo command stream into an existing Vello scene.
 pub fn draw(scene: &mut Scene, commands: &CommandList) {
+    // `PushTransform`s compose; every fill and layer uses the innermost.
+    let mut transforms = vec![Affine::IDENTITY];
     for command in commands.commands() {
+        let transform = *transforms.last().expect("the identity is never popped");
         match command {
             Command::FillRect {
                 rect,
@@ -60,7 +63,7 @@ pub fn draw(scene: &mut Scene, commands: &CommandList) {
                     } else {
                         rounded_rect(*rect, *radius)
                     };
-                scene.fill(Fill::NonZero, Affine::IDENTITY, brush(*color), None, &shape);
+                scene.fill(Fill::NonZero, transform, brush(*color), None, &shape);
             }
             Command::FillGradient {
                 rect,
@@ -89,18 +92,12 @@ pub fn draw(scene: &mut Scene, commands: &CommandList) {
                     _ => None,
                 };
                 let shape = kurbo_rect(*rect);
-                scene.fill(
-                    Fill::NonZero,
-                    Affine::IDENTITY,
-                    &brush,
-                    brush_transform,
-                    &shape,
-                );
+                scene.fill(Fill::NonZero, transform, &brush, brush_transform, &shape);
             }
             Command::FillPolygon { points, color } => {
                 if points.len() >= 3 {
                     let path = bez_path(points);
-                    scene.fill(Fill::NonZero, Affine::IDENTITY, brush(*color), None, &path);
+                    scene.fill(Fill::NonZero, transform, brush(*color), None, &path);
                 }
             }
             Command::FillContours { contours, color } => {
@@ -111,7 +108,7 @@ pub fn draw(scene: &mut Scene, commands: &CommandList) {
                     path.extend(bez_path(contour));
                 }
                 if !path.elements().is_empty() {
-                    scene.fill(Fill::NonZero, Affine::IDENTITY, brush(*color), None, &path);
+                    scene.fill(Fill::NonZero, transform, brush(*color), None, &path);
                 }
             }
             // A plain text run carries no outlines; use `OutlineGlyphs` so Vello
@@ -136,11 +133,20 @@ pub fn draw(scene: &mut Scene, commands: &CommandList) {
                     Fill::NonZero,
                     BlendMode::default(),
                     *alpha,
-                    Affine::IDENTITY,
+                    transform,
                     &shape,
                 );
             }
             Command::PopLayer => scene.pop_layer(),
+            Command::PushTransform { matrix } => {
+                let [a, b, c, d, e, f] = matrix.map(f64::from);
+                transforms.push(transform * Affine::new([a, b, c, d, e, f]));
+            }
+            Command::PopTransform => {
+                if transforms.len() > 1 {
+                    transforms.pop();
+                }
+            }
         }
     }
 }
@@ -286,6 +292,51 @@ mod tests {
             scene.encoding().path_tags.len(),
             scene.encoding().draw_tags.len(),
         )
+    }
+
+    fn red_square() -> Command {
+        Command::FillRect {
+            rect: NRect::new(0.0, 0.0, 10.0, 10.0),
+            color: Color::rgb(255, 0, 0),
+            radius: (0.0, 0.0, 0.0, 0.0),
+        }
+    }
+
+    /// Each push composes with the enclosing transform; a pop restores it.
+    #[test]
+    fn transforms_stack_over_the_fills_inside_them() {
+        let scene = scene(&CommandList(vec![
+            Command::PushTransform {
+                matrix: [1.0, 0.0, 0.0, 1.0, 5.0, 6.0],
+            },
+            Command::PushTransform {
+                matrix: [2.0, 0.0, 0.0, 2.0, 0.0, 0.0],
+            },
+            red_square(),
+            Command::PopTransform,
+            red_square(),
+            Command::PopTransform,
+            red_square(),
+        ]));
+        let transforms: Vec<([f32; 4], [f32; 2])> = scene
+            .encoding()
+            .transforms
+            .iter()
+            .map(|t| (t.matrix, t.translation))
+            .collect();
+        assert!(
+            transforms.contains(&([2.0, 0.0, 0.0, 2.0], [5.0, 6.0])),
+            "{transforms:?}"
+        );
+        assert!(
+            transforms.contains(&([1.0, 0.0, 0.0, 1.0], [5.0, 6.0])),
+            "{transforms:?}"
+        );
+        assert_eq!(
+            transforms.last(),
+            Some(&([1.0, 0.0, 0.0, 1.0], [0.0, 0.0])),
+            "{transforms:?}"
+        );
     }
 
     #[test]
