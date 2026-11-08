@@ -309,10 +309,26 @@ fn preferred_content(ctx: &Ctx<'_>, node: NodeId) -> f32 {
     }
     let mut widest = 0.0f32;
     let mut run = 0.0f32;
+    // A row's cells, or a run of cells outside a table, sit side by side.
+    let mut cells = 0.0f32;
     for child in child_nodes(ctx.document, node) {
         if ctx.is_hidden(child) || ctx.is_out_of_flow(child) {
             continue;
         }
+        let is_cell = ctx
+            .styles
+            .get(child)
+            .is_some_and(|child| child.display == Display::TableCell);
+        if is_cell {
+            let margins = resolve::margins(&ctx.style(child).margin, 0.0);
+            cells += preferred_width(ctx, child) + margins.left + margins.right;
+            continue;
+        }
+        if ctx.is_text(child) && cells > 0.0 && ctx.document.text_content(child).trim().is_empty() {
+            continue; // Whitespace between cells.
+        }
+        widest = widest.max(cells);
+        cells = 0.0;
         if ctx.is_text(child) {
             // Text has no style of its own; it inherits the container's.
             let text = ctx.document.text_content(child);
@@ -327,7 +343,7 @@ fn preferred_content(ctx: &Ctx<'_>, node: NodeId) -> f32 {
             widest = widest.max(preferred_width(ctx, child) + margins.left + margins.right);
         }
     }
-    widest.max(run)
+    widest.max(run).max(cells)
 }
 
 /// The border-box width a box takes when it wraps wherever it can

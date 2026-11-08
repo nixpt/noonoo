@@ -19,8 +19,11 @@
 //! - `border-collapse: collapse` paints a shared edge once: the cell to the
 //!   left of (or above) an internal edge drops its right (bottom) border,
 //!   and the table's own border handles the frame;
-//! - `border-spacing`, captions, `table-layout: fixed`, and the remaining
-//!   anonymous fixup are not modelled; stray content contributes nothing.
+//! - table parts outside a table (cells or rows in a block) are wrapped in
+//!   an anonymous shrink-to-fit table by block flow (see `block.rs`);
+//! - `border-spacing`, captions, `table-layout: fixed`, and the rest of the
+//!   anonymous fixup (stray content inside a table or row) are not
+//!   modelled; stray content contributes nothing.
 
 use noonoo_dom::NodeId;
 use noonoo_style::{BorderCollapse, BoxSizing, ComputedStyle, Display};

@@ -1954,3 +1954,69 @@ fn reusing_measured_heights_changes_no_box() {
         }
     }
 }
+
+#[test]
+fn table_cells_in_a_block_sit_side_by_side_in_an_anonymous_table() {
+    let (doc, tree) = page(
+        "<div id=p><p id=before>x</p><div id=a class=c>aa</div>\n  <div id=b class=c>bbbb</div>\n<p id=after>x</p></div>",
+        ".c { display: table-cell; padding: 2px } p { margin: 0 } #before { margin-bottom: 10px }",
+        400.0,
+    );
+    let (a, b) = (
+        tree.get(id(&doc, "a")).unwrap().rect,
+        tree.get(id(&doc, "b")).unwrap().rect,
+    );
+    let before = tree.get(id(&doc, "before")).unwrap().rect;
+    assert_eq!(a.y, before.y + before.height + 10.0, "below the margin");
+    assert_eq!(a.y, b.y, "one row");
+    assert_eq!(b.x, a.x + a.width, "b follows a");
+    // The anonymous table shrinks to its cells' contents.
+    assert!(b.x + b.width < 400.0, "{b:?}");
+    let after = tree.get(id(&doc, "after")).unwrap().rect;
+    assert_eq!(after.y, a.y + a.height, "the next block goes below the row");
+}
+
+#[test]
+fn a_table_row_in_a_block_lays_its_cells_out_side_by_side() {
+    let (doc, tree) = page(
+        "<div><div class=r><div id=a class=c>a</div><div id=b class=c>b</div></div>\n\
+         <div class=r><div class=c>wider</div><div id=d class=c>d</div></div></div>",
+        ".r { display: table-row } .c { display: table-cell }",
+        400.0,
+    );
+    let (a, b) = (
+        tree.get(id(&doc, "a")).unwrap().rect,
+        tree.get(id(&doc, "b")).unwrap().rect,
+    );
+    assert_eq!(a.y, b.y);
+    // The rows share columns: the first is as wide as its widest cell.
+    let d = tree.get(id(&doc, "d")).unwrap().rect;
+    assert_eq!(b.x, d.x, "{b:?} lines up with {d:?}");
+    assert!(d.y > b.y);
+}
+
+#[test]
+fn a_shrink_to_fit_box_holding_table_cells_is_as_wide_as_the_row() {
+    let (doc, tree) = page(
+        "<div id=f><div id=a class=c>aaaa</div>\n<div id=b class=c>bbbb</div><p>x</p><div class=c>cc</div></div>",
+        "#f { float: left } .c { display: table-cell }",
+        400.0,
+    );
+    let (a, b) = (
+        tree.get(id(&doc, "a")).unwrap().rect,
+        tree.get(id(&doc, "b")).unwrap().rect,
+    );
+    let float = tree.get(id(&doc, "f")).unwrap().rect;
+    assert_eq!(a.y, b.y);
+    // Not squeezed: as wide as the same cell with room to spare.
+    let (alone_doc, alone) = page(
+        "<div><div id=a class=c>aaaa</div></div>",
+        ".c { display: table-cell }",
+        400.0,
+    );
+    assert_eq!(a.width, alone.get(id(&alone_doc, "a")).unwrap().rect.width);
+    assert!(
+        (float.width - (a.width + b.width)).abs() < 0.01,
+        "{float:?} holds {a:?} and {b:?}"
+    );
+}

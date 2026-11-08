@@ -84,6 +84,41 @@ pub(crate) fn layout_block_children(
             continue;
         }
 
+        if is_table_part(ctx, child) {
+            // Table parts outside a table (CSS 2 §17.2.1): a run of them,
+            // with the whitespace between, is wrapped in an anonymous
+            // shrink-to-fit table, so cells sit side by side in one row.
+            let mut run = Vec::new();
+            while i < children.len() {
+                let candidate = children[i];
+                if is_display_none(ctx, candidate) || is_blank_text(ctx, candidate) {
+                    i += 1;
+                    continue;
+                }
+                if !is_table_part(ctx, candidate) {
+                    break;
+                }
+                run.push(candidate);
+                i += 1;
+            }
+            if let Some(margin) = pending.take() {
+                cursor += margin;
+            }
+            let anonymous = ComputedStyle::default();
+            let (mut placed, height) = crate::table::layout_table_children(
+                ctx,
+                &anonymous,
+                &run,
+                content_x,
+                cursor,
+                content_width,
+            );
+            indices.append(&mut placed);
+            cursor += height;
+            has_content = true;
+            continue;
+        }
+
         if ctx.is_inline_level(child) {
             let mut run = Vec::new();
             while i < children.len() {
@@ -438,4 +473,20 @@ pub(crate) fn layout_inline_run(
     // placing it enqueued them again.
     ctx.prune_pending();
     (indices, cursor_y - y)
+}
+
+/// Whether `node` is a table part (a cell, row or row group), which needs a
+/// table around it.
+pub(crate) fn is_table_part(ctx: &Ctx<'_>, node: NodeId) -> bool {
+    ctx.styles.get(node).is_some_and(|style| {
+        matches!(
+            style.display,
+            Display::TableCell | Display::TableRow | Display::TableRowGroup
+        )
+    })
+}
+
+/// Whether `node` is text with nothing but whitespace.
+fn is_blank_text(ctx: &Ctx<'_>, node: NodeId) -> bool {
+    ctx.is_text(node) && ctx.document.text_content(node).trim().is_empty()
 }
