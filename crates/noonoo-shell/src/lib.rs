@@ -286,6 +286,18 @@ impl Host {
         Some((index, node))
     }
 
+    /// The topmost layer and *element* under `point`: a hit on text resolves
+    /// to the element containing it, which is what `:hover`, `:active`,
+    /// focus and `cursor` apply to.
+    pub fn element_hit(&self, point: Point) -> Option<(usize, NodeId)> {
+        let (index, mut node) = self.hit(point)?;
+        let dom = self.layers[index].engine().dom();
+        while dom.element(node).is_none() {
+            node = dom.tree().parent(node)?;
+        }
+        Some((index, node))
+    }
+
     /// The layer that last received a pointer event.
     pub fn focus(&self) -> Option<(usize, NodeId)> {
         self.focus
@@ -301,7 +313,7 @@ impl Host {
     /// Returns whether it changed — a caller re-layouts to restyle, which is
     /// when `:hover` takes effect.
     pub fn hover(&mut self, point: Point) -> bool {
-        let hit = self.hit(point);
+        let hit = self.element_hit(point);
         if hit != self.hovered {
             self.hovered = hit;
             true
@@ -317,7 +329,7 @@ impl Host {
 
     /// Mark the node under `point` as pressed (`:active`).
     pub fn press(&mut self, point: Point) {
-        self.active = self.hit(point);
+        self.active = self.element_hit(point);
     }
 
     /// Release the press (`:active` ends).
@@ -333,7 +345,7 @@ impl Host {
     /// The computed `cursor` of the node under `point` (`Auto` when nothing
     /// is there). Call after a layout, so the styles are fresh.
     pub fn cursor_at(&self, point: Point) -> Cursor {
-        match self.hit(point) {
+        match self.element_hit(point) {
             Some((index, node)) => self.layers[index]
                 .styles
                 .get(node)
@@ -366,7 +378,7 @@ impl Host {
         event: &Event,
         listener: &impl EventListener,
     ) -> Option<(usize, NodeId)> {
-        let (index, node) = self.hit(point)?;
+        let (index, node) = self.element_hit(point)?;
         self.focus = Some((index, node));
         dispatch(
             self.layers[index].engine().dom().tree(),
@@ -612,6 +624,43 @@ mod tests {
         );
         // It composed its own command stream.
         assert!(!host.layer(sub_index).unwrap().commands().is_empty());
+    }
+
+    #[test]
+    fn pointing_at_text_hovers_and_presses_its_element() {
+        let mut host = Host::new(Size::new(400.0, 300.0));
+        host.add_content(
+            engine(
+                "<p>hello</p>",
+                "body { margin: 0 } p { margin: 0; cursor: pointer }
+                 p:hover { background: red }",
+            ),
+            Rect::new(0.0, 0.0, 400.0, 300.0),
+        );
+        host.layout(&MetricShaper);
+        // The point is on the text "hello", not just its paragraph.
+        let point = Point::new(2.0, 2.0);
+        let (_, deepest) = host.hit(point).unwrap();
+        let dom = host.layer(0).unwrap().engine().dom();
+        assert!(dom.element(deepest).is_none(), "the hit is the text node");
+
+        assert_eq!(host.cursor_at(point), Cursor::Pointer);
+        host.hover(point);
+        host.press(point);
+        let p = host.hovered().unwrap().1;
+        let dom = host.layer(0).unwrap().engine().dom();
+        assert_eq!(dom.element(p).unwrap().name, "p");
+        assert_eq!(host.active().unwrap().1, p);
+        host.layout(&MetricShaper);
+        assert_eq!(
+            host.layer(0)
+                .unwrap()
+                .styles()
+                .get(p)
+                .unwrap()
+                .background_color,
+            Color::rgb(255, 0, 0)
+        );
     }
 
     #[test]
