@@ -301,6 +301,9 @@ fn preferred_flex_content(ctx: &Ctx<'_>, node: NodeId, style: &ComputedStyle) ->
 /// widest), inline content flows on one unwrapped line (take the sum).
 fn preferred_content(ctx: &Ctx<'_>, node: NodeId) -> f32 {
     let style = ctx.style(node);
+    if let Some((width, _)) = ctx.image_size(node, style, f32::INFINITY, None) {
+        return width;
+    }
     if let Some(text) = ctx.placeholder(node) {
         return text_width(ctx, &text, style);
     }
@@ -410,6 +413,9 @@ pub(crate) fn min_content_of_contents(ctx: &Ctx<'_>, node: NodeId) -> f32 {
 /// The min-content width of a box's contents. A single-line flex row keeps
 /// its items side by side; everything else may break between items.
 fn min_content(ctx: &Ctx<'_>, node: NodeId, style: &ComputedStyle) -> f32 {
+    if let Some((width, _)) = ctx.image_size(node, style, f32::INFINITY, None) {
+        return width;
+    }
     if let Some(text) = ctx.placeholder(node) {
         return text_min_width(ctx, &text, style);
     }

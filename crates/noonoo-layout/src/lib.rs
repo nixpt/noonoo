@@ -76,6 +76,7 @@ mod float;
 mod grid;
 pub mod image;
 mod margin;
+mod replaced;
 mod resolve;
 mod runs;
 mod table;
@@ -209,6 +210,8 @@ pub struct LayoutTree {
     /// How far the host has scrolled the page (see
     /// [`LayoutTree::set_page_scroll`]).
     page_scroll: Point,
+    /// The image each `<img>` with a loaded source draws.
+    images: HashMap<NodeId, EncodedImage>,
 }
 
 /// A `position: sticky` box and how far it's currently shifted from its
@@ -221,6 +224,12 @@ struct StickyBox {
 }
 
 impl LayoutTree {
+    /// The image `node` draws over its content box, if it's an `<img>`
+    /// whose source was loaded (see [`layout_with_images`]).
+    pub fn image(&self, node: NodeId) -> Option<&EncodedImage> {
+        self.images.get(&node)
+    }
+
     /// The box for `node`, if it produced one.
     pub fn get(&self, node: NodeId) -> Option<&LayoutBox> {
         self.index.get(&node).map(|&i| &self.boxes[i])
@@ -625,6 +634,19 @@ pub fn layout(
     viewport: Size,
     shaper: &dyn Shaper,
 ) -> LayoutTree {
+    layout_with_images(document, styles, viewport, shaper, &Images::new())
+}
+
+/// [`layout`], with `images` holding the loaded `<img>` sources: an image
+/// whose `src` is there is sized from it and drawn (see
+/// [`LayoutTree::image`]); one that isn't shows its `alt` text.
+pub fn layout_with_images(
+    document: &Document,
+    styles: &Styles,
+    viewport: Size,
+    shaper: &dyn Shaper,
+    images: &Images,
+) -> LayoutTree {
     let with_generated = with_generated_content(document, styles);
     let document = with_generated.as_ref().unwrap_or(document);
     let mut ctx = Ctx {
@@ -632,6 +654,7 @@ pub fn layout(
         styles,
         shaper,
         viewport,
+        images,
         pending: Vec::new(),
         floats: Vec::new(),
         tree: LayoutTree::default(),
@@ -739,6 +762,8 @@ pub(crate) struct Ctx<'a> {
     pub styles: &'a Styles,
     pub shaper: &'a dyn Shaper,
     pub viewport: Size,
+    /// Loaded `<img>` sources.
+    pub images: &'a Images,
     /// Out-of-flow nodes awaiting pass 2.
     pub pending: Vec<NodeId>,
     /// The block formatting context stack; the top holds the floats visible to
@@ -1143,9 +1168,11 @@ impl Ctx<'_> {
             .flexed_width
             .take_if(|(flexed, _)| *flexed == node)
             .map(|(_, width)| width);
-        let border_box_width = match flexed_width {
-            Some(width) => width,
-            None => {
+        let replaced = self.image_size(node, &style, available_width, self.percent_basis());
+        let border_box_width = match (flexed_width, replaced) {
+            (Some(width), _) => width,
+            (None, Some((width, _))) => width + horizontal,
+            (None, None) => {
                 let mut width = specified.unwrap_or_else(|| available_width.max(0.0));
                 if let Some(maximum) = maximum {
                     width = width.min(maximum);
@@ -1224,6 +1251,7 @@ impl Ctx<'_> {
             .take_if(|(flexed, _)| *flexed == node)
             .map(|(_, height)| height);
         let definite_border_height = flexed
+            .or(replaced.map(|(_, height)| height + vertical))
             .or(specified_height)
             .or(definite_height)
             .map(clamp_height);
@@ -1237,6 +1265,7 @@ impl Ctx<'_> {
 
         let placeholder = self.placeholder(node);
         let (child_indices, content_height) = match style.display {
+            _ if replaced.is_some() => self.record_image(node),
             _ if placeholder.is_some() => self.layout_placeholder(
                 node,
                 &style,
@@ -1445,7 +1474,8 @@ impl Ctx<'_> {
             (Some(left), Some(right)) => Some((cb_width - left - right - horizontal).max(0.0)),
             _ => None,
         };
-        let definite_width = specified.or(stretched);
+        let replaced = self.image_size(node, &style, cb_width, Some(cb_height));
+        let definite_width = replaced.map(|(width, _)| width).or(specified).or(stretched);
         let available = match (inset.left, inset.right) {
             (Some(left), None) => {
                 (containing.right() - (containing.x + left) - horizontal).max(0.0)
@@ -1493,13 +1523,16 @@ impl Ctx<'_> {
             }
             _ => None,
         };
-        let definite_height =
-            resolve::dimension(style.height.clone(), cb_height).or(stretched_height);
+        let definite_height = replaced
+            .map(|(_, height)| height)
+            .or(resolve::dimension(style.height.clone(), cb_height))
+            .or(stretched_height);
         self.heights.push(definite_height);
 
         let children_nodes = child_nodes(self.document, node);
         let placeholder = self.placeholder(node);
         let (child_indices, content_height) = match style.display {
+            _ if replaced.is_some() => self.record_image(node),
             _ if placeholder.is_some() => self.layout_placeholder(
                 node,
                 &style,
