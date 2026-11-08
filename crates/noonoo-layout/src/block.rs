@@ -540,6 +540,9 @@ pub(crate) fn layout_inline_run(
     // fresh line, and an empty group is the blank line between two breaks.
     let mut groups: Vec<Vec<Item>> = vec![Vec::new()];
     let mut had_break = false;
+    // Blocks inside inline elements (CSS 2 §9.2.1.1), each with the group
+    // that resumes the inline content after it.
+    let mut blocks: Vec<(usize, NodeId)> = Vec::new();
     let mut walk = InlineWalk::default();
     // The inline content in document order. A worklist, not recursion:
     // deep inline nesting mustn't cost stack per level. An element's `Exit`
@@ -672,6 +675,15 @@ pub(crate) fn layout_inline_run(
                     walk.push(ctx, width, &mut groups, item, true);
                     continue;
                 }
+                // A block inside an inline ends the line and sits between
+                // the inline content before and after it.
+                if !ctx.is_inline_level(node) && !is_table_part(ctx, node) {
+                    groups.push(Vec::new());
+                    walk.new_line();
+                    walk.after_atomic = false;
+                    blocks.push((groups.len() - 1, node));
+                    continue;
+                }
                 // An inline element: its content joins the line inside it.
                 walk.enter(node);
                 stack.push(Step::Exit(node));
@@ -708,7 +720,7 @@ pub(crate) fn layout_inline_run(
         }
     }
 
-    if groups.iter().all(|group| group.is_empty()) {
+    if blocks.is_empty() && groups.iter().all(|group| group.is_empty()) {
         // No content at all — but a lone `<br>` still generates one (empty)
         // line box; that is the classic trick that gives an otherwise empty
         // container a line's height.
@@ -723,13 +735,36 @@ pub(crate) fn layout_inline_run(
     // content follows, so the run's trailing break collapses.
     let last_holding = groups.iter().rposition(|group| !group.is_empty());
 
+    // Consecutive blocks' margins collapse; a line between them stops that.
+    let mut block_margin: Option<f32> = None;
     for (group_index, items) in groups.iter().enumerate() {
+        for &(_, block) in blocks.iter().filter(|(before, _)| *before == group_index) {
+            let margin = margin::effective_margins(ctx, block, width);
+            cursor_y = cursor_y.max(ctx.floats().clearance(ctx.style(block).clear, cursor_y));
+            cursor_y += match block_margin {
+                Some(previous) => margin::collapse(previous, margin.top) - previous,
+                None => margin.top,
+            };
+            let available = flow_width(ctx, block, width);
+            let height = ctx.layout_element(block, x + margin.left, cursor_y, available, None);
+            if let Some(index) = ctx.tree_index(block) {
+                apply_auto_margins(ctx, block, index, width);
+                indices.push(index);
+            }
+            cursor_y += height + margin.bottom;
+            block_margin = Some(margin.bottom);
+        }
         if items.is_empty() {
-            if last_holding.is_some_and(|last| last > group_index) {
+            // An empty group a `<br>` ended is a blank line; one a block
+            // ended is nothing.
+            let ended_by_block = blocks.iter().any(|(before, _)| *before == group_index + 1);
+            if !ended_by_block && last_holding.is_some_and(|last| last > group_index) {
                 cursor_y += line_height;
+                block_margin = None;
             }
             continue;
         }
+        block_margin = None;
         let mut start = 0;
 
         // Lines wrap one at a time so each line's band reflects the floats

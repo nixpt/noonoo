@@ -2801,3 +2801,52 @@ fn an_empty_inline_elements_edges_count_in_a_shrink_to_fit_width() {
     );
     assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 28.0);
 }
+
+/// A block inside an inline (CSS 2 §9.2.1.1) breaks the line: it is laid
+/// out as a block between the inline content before and after it, with its
+/// own width, height and margins. MetricShaper lines are 19.2px.
+#[test]
+fn a_block_inside_an_inline_is_laid_out_as_a_block() {
+    let (doc, tree) = page(
+        r#"<div id="c"><a>x <div id="b"></div> y</a></div><p id="after">z</p>"#,
+        "p { margin: 0 } #b { width: 10px; height: 10px; margin: 3px 2px 6px }",
+        400.0,
+    );
+    let block = tree.get(id(&doc, "b")).unwrap().rect;
+    assert_eq!(
+        (block.x, block.y, block.width, block.height),
+        (2.0, 22.2, 10.0, 10.0)
+    );
+    assert_eq!(
+        text_lines(&tree),
+        vec![
+            ("x".to_owned(), 0.0),
+            ("y".to_owned(), 38.2),
+            ("z".to_owned(), 57.4)
+        ]
+    );
+    assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.height, 57.4);
+}
+
+/// A block alone in an inline makes no blank lines around it.
+#[test]
+fn a_lone_block_inside_an_inline_adds_no_lines() {
+    let (doc, tree) = page(
+        r#"<div id="c"><a href="x"><div id="b"></div></a></div>"#,
+        "#b { width: 10px; height: 10px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.y, 0.0);
+    assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.height, 10.0);
+}
+
+/// A shrink-to-fit container sizes around a block inside an inline.
+#[test]
+fn a_block_inside_an_inline_counts_in_a_shrink_to_fit_width() {
+    let (doc, tree) = page(
+        r#"<div id="f"><a href="x"><div id="b"></div></a></div>"#,
+        "#f { float: left } #b { width: 10px; height: 10px; margin: 0 2px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 14.0);
+}
