@@ -295,3 +295,39 @@ fn removing_a_subtree_needs_write_on_every_guard_inside_it() {
     let mut writer = GatedMutator::new(&mut document, &gate, &policy, &editor);
     writer.remove(open).unwrap();
 }
+
+#[test]
+fn style_property_writes_are_gated() {
+    let (mut document, public, secret) = fixture();
+    let mut gate = Gate::new();
+    gate.guard(secret, secret_scope());
+    let subject = Subject::anonymous();
+    let policy = Policy::new();
+    let mut writer = GatedMutator::new(&mut document, &gate, &policy, &subject);
+
+    assert!(matches!(
+        writer.set_style_property(secret, "display", "none", false),
+        Err(CapsError::Denied(_))
+    ));
+    assert!(matches!(
+        writer.remove_style_property(secret, "display"),
+        Err(CapsError::Denied(_))
+    ));
+    assert!(matches!(
+        writer.set_style_property(public, "color", "red; x: y", false),
+        Err(CapsError::Style(_))
+    ));
+    writer
+        .set_style_property(public, "color", "red", false)
+        .unwrap();
+    writer
+        .set_style_property(public, "width", "1px", true)
+        .unwrap();
+    writer.remove_style_property(public, "color").unwrap();
+
+    assert_eq!(document.element(secret).unwrap().attr("style"), None);
+    assert_eq!(
+        document.element(public).unwrap().attr("style"),
+        Some("width: 1px !important")
+    );
+}

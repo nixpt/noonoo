@@ -59,6 +59,7 @@ dependencies = [
 name = "noonoo-caps"
 version = "0.20.0"
 dependencies = [
+ "noonoo-css",
  "noonoo-dom",
  "noonoo-html",
 ]

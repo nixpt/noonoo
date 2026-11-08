@@ -4,6 +4,7 @@
 use core::fmt;
 use std::collections::BTreeMap;
 
+use noonoo_css::{InlineStyleError, remove_inline_property, set_inline_property};
 use noonoo_dom::{Document, ElementData, MutError, NodeData, NodeId};
 
 use crate::policy::{Authorizer, Decision, Denied};
@@ -17,6 +18,8 @@ pub enum CapsError {
     Denied(Denied),
     /// The subject was allowed, but the DOM rejected the change.
     Mutation(MutError),
+    /// The subject was allowed, but the style edit was not valid CSS.
+    Style(InlineStyleError),
 }
 
 impl From<MutError> for CapsError {
@@ -30,6 +33,7 @@ impl fmt::Display for CapsError {
         match self {
             CapsError::Denied(denied) => write!(f, "{denied}"),
             CapsError::Mutation(error) => write!(f, "mutation rejected: {error:?}"),
+            CapsError::Style(error) => write!(f, "style edit rejected: {error}"),
         }
     }
 }
@@ -314,6 +318,51 @@ impl<'a> GatedMutator<'a> {
             self.require_scope(scope)?;
         }
         Ok(())
+    }
+
+    /// Set one inline style property (`style.setProperty`), if the subject
+    /// may write `element`. An empty value removes the property.
+    pub fn set_style_property(
+        &mut self,
+        element: NodeId,
+        name: &str,
+        value: &str,
+        important: bool,
+    ) -> Result<(), CapsError> {
+        self.require(element)?;
+        let style = self.inline_style(element)?;
+        let style =
+            set_inline_property(&style, name, value, important).map_err(CapsError::Style)?;
+        self.write_style(element, &style)
+    }
+
+    /// Remove one inline style property (`style.removeProperty`), if the
+    /// subject may write `element`.
+    pub fn remove_style_property(&mut self, element: NodeId, name: &str) -> Result<(), CapsError> {
+        self.require(element)?;
+        let style = self.inline_style(element)?;
+        self.write_style(element, &remove_inline_property(&style, name))
+    }
+
+    fn inline_style(&self, element: NodeId) -> Result<String, CapsError> {
+        let document: &Document = self.document;
+        let node = document
+            .node(element)
+            .ok_or(CapsError::Mutation(MutError::NoSuchNode(element)))?;
+        let data = node
+            .as_element()
+            .ok_or(CapsError::Mutation(MutError::NotAnElement(element)))?;
+        Ok(data.attr("style").unwrap_or_default().to_owned())
+    }
+
+    fn write_style(&mut self, element: NodeId, style: &str) -> Result<(), CapsError> {
+        let mut mutator = self.document.mutate();
+        if style.is_empty() {
+            mutator.remove_attribute(element, "style")
+        } else {
+            mutator.set_attribute(element, "style", style)
+        }
+        .map_err(CapsError::Mutation)
     }
 
     /// Set an attribute, if the subject may write `element`.
