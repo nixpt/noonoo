@@ -8,7 +8,7 @@ use crate::float;
 use crate::margin;
 use crate::{BoxKind, Ctx, LayoutBox};
 
-fn no_edges() -> Edges<f32> {
+pub(crate) fn no_edges() -> Edges<f32> {
     Edges::all(0.0)
 }
 
@@ -190,8 +190,20 @@ struct Item {
     style_node: NodeId,
     kind: BoxKind,
     text: String,
+    /// The space it takes on the line: for an atomic inline, its margin box.
     width: f32,
     height: f32,
+    /// Set for an atomic inline: laid out as a box of its own at placement.
+    atomic: Option<Atomic>,
+}
+
+/// How to lay out an atomic inline once the line places it.
+#[derive(Clone, Copy)]
+struct Atomic {
+    /// The width to hand `layout_element` (see `float::shrink_wrapped_width`).
+    available: f32,
+    margin_left: f32,
+    margin_top: f32,
 }
 
 /// Lay out an inline formatting context: text and inline boxes wrapped into
@@ -255,6 +267,7 @@ pub(crate) fn layout_inline_run(
                             text: word.to_owned(),
                             width: ctx.shaper.advance(word, request, font),
                             height: line_height,
+                            atomic: None,
                         });
                 }
             }
@@ -265,6 +278,32 @@ pub(crate) fn layout_inline_run(
                     continue;
                 }
                 let style = ctx.style(node).clone();
+                if crate::is_atomic_inline(style.display) {
+                    // A box of its own: shrink-wrapped (or its set width),
+                    // measured by a trial layout, placed on the line like a
+                    // word by its margin box.
+                    let margin = crate::resolve::margins(&style.margin, width);
+                    let (available, border_box_width) =
+                        float::shrink_wrapped_width(ctx, node, &style, width);
+                    let height = ctx.measure_height(node, 0.0, 0.0, available, None);
+                    groups
+                        .last_mut()
+                        .expect("the first group always exists")
+                        .push(Item {
+                            node,
+                            style_node: node,
+                            kind: BoxKind::Inline,
+                            text: String::new(),
+                            width: margin.left + border_box_width + margin.right,
+                            height: margin.top + height + margin.bottom,
+                            atomic: Some(Atomic {
+                                available,
+                                margin_left: margin.left,
+                                margin_top: margin.top,
+                            }),
+                        });
+                    continue;
+                }
                 // Replaced content (`<img alt>`, `<input value>`) shows its
                 // placeholder text, like a browser while the source is
                 // missing; otherwise an element is just its own text.
@@ -292,6 +331,7 @@ pub(crate) fn layout_inline_run(
                             .advance(&content, style.font_request(), style.font_size),
                         text: content,
                         height,
+                        atomic: None,
                     });
             }
             _ => {}
@@ -354,6 +394,20 @@ pub(crate) fn layout_inline_run(
                 }
                 let item = &items[start + i];
                 line_h = line_h.max(item.height);
+                if let Some(atomic) = item.atomic {
+                    ctx.layout_element(
+                        item.node,
+                        cursor_x + atomic.margin_left,
+                        cursor_y + atomic.margin_top,
+                        atomic.available,
+                        None,
+                    );
+                    if let Some(index) = ctx.tree_index(item.node) {
+                        indices.push(index);
+                    }
+                    cursor_x += item.width;
+                    continue;
+                }
                 let index = ctx.push(LayoutBox {
                     node: Some(item.node),
                     style_node: item.style_node,
@@ -380,5 +434,8 @@ pub(crate) fn layout_inline_run(
         }
     }
 
+    // Measuring an atomic inline enqueued its out-of-flow descendants, and
+    // placing it enqueued them again.
+    ctx.prune_pending();
     (indices, cursor_y - y)
 }

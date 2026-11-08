@@ -119,33 +119,8 @@ pub(crate) fn place(ctx: &mut Ctx<'_>, node: NodeId, content_x: f32, content_wid
     let side = style.float;
 
     let margin = resolve::margins(&style.margin, content_width);
-    let padding = resolve::paddings(&style.padding, content_width);
-    let border = resolve::borders(&style);
-    let horizontal = padding.left + padding.right + border.left + border.right;
-
-    // Width: explicit widths resolve against the containing block; `auto`
-    // shrinks to fit the content, capped by the space available.
-    let specified = resolve::dimension(style.width.clone(), content_width);
-    let (available_for_layout, border_box_width) = match specified {
-        Some(width) => {
-            // Percentages must resolve against the container, so
-            // `layout_element` sees the container's width; the absolute value
-            // is unaffected.
-            (
-                content_width,
-                match style.box_sizing {
-                    BoxSizing::BorderBox => width,
-                    BoxSizing::ContentBox => width + horizontal,
-                },
-            )
-        }
-        None => {
-            let fit = shrink_to_fit(ctx, node, content_width);
-            // `layout_element`'s auto branch derives `fit` from
-            // `available - horizontal`.
-            (fit + horizontal, fit + horizontal)
-        }
-    };
+    let (available_for_layout, border_box_width) =
+        shrink_wrapped_width(ctx, node, &style, content_width);
     let outer_width = border_box_width + margin.left + margin.right;
 
     // Drop down past earlier floats until the float fits beside them.
@@ -184,6 +159,45 @@ pub(crate) fn place(ctx: &mut Ctx<'_>, node: NodeId, content_x: f32, content_wid
     );
 }
 
+/// The width a shrink-wrapped box (a float, an atomic inline) takes in a
+/// containing block `content_width` wide: `(available, border_box_width)`,
+/// where `available` is what to hand [`Ctx::layout_element`] so it lays the
+/// box out at `border_box_width`.
+///
+/// An explicit width resolves against the containing block; `auto` shrinks to
+/// fit the content, capped by the space available.
+pub(crate) fn shrink_wrapped_width(
+    ctx: &Ctx<'_>,
+    node: NodeId,
+    style: &ComputedStyle,
+    content_width: f32,
+) -> (f32, f32) {
+    let padding = resolve::paddings(&style.padding, content_width);
+    let border = resolve::borders(style);
+    let horizontal = padding.left + padding.right + border.left + border.right;
+    match resolve::dimension(style.width.clone(), content_width) {
+        Some(width) => {
+            // Percentages must resolve against the container, so
+            // `layout_element` sees the container's width; the absolute value
+            // is unaffected.
+            (
+                content_width,
+                match style.box_sizing {
+                    BoxSizing::BorderBox => width,
+                    BoxSizing::ContentBox => width + horizontal,
+                },
+            )
+        }
+        None => {
+            // `shrink_to_fit` is already a border-box width, and
+            // `layout_element`'s auto branch derives the content width as
+            // `available - horizontal`.
+            let fit = shrink_to_fit(ctx, node, content_width);
+            (fit, fit)
+        }
+    }
+}
+
 /// A float's shrink-to-fit content width: `min(max-content, available)`.
 pub(crate) fn shrink_to_fit(ctx: &Ctx<'_>, node: NodeId, available: f32) -> f32 {
     preferred_width(ctx, node).min(available).max(0.0)
@@ -211,6 +225,9 @@ pub(crate) fn preferred_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
 /// widest), inline content flows on one unwrapped line (take the sum).
 fn preferred_content(ctx: &Ctx<'_>, node: NodeId) -> f32 {
     let style = ctx.style(node);
+    if let Some(text) = ctx.placeholder(node) {
+        return text_width(ctx, &text, style);
+    }
     let mut widest = 0.0f32;
     let mut run = 0.0f32;
     for child in child_nodes(ctx.document, node) {

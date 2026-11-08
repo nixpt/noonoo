@@ -162,6 +162,17 @@ impl LayoutBox {
     }
 }
 
+/// Whether `display` makes an *atomic* inline-level box: one that sits on a
+/// line like a word but is a box of its own, with its own width, height,
+/// padding, border, and interior layout (`inline-block`, `inline-flex`,
+/// `inline-grid`, and through the UA sheet, form controls and images).
+pub(crate) fn is_atomic_inline(display: Display) -> bool {
+    matches!(
+        display,
+        Display::InlineBlock | Display::InlineFlex | Display::InlineGrid
+    )
+}
+
 /// The result of a layout pass: every box, plus a node → box index.
 #[derive(Clone, Debug, Default)]
 pub struct LayoutTree {
@@ -486,15 +497,62 @@ impl Ctx<'_> {
         matches!(self.document.node(node), Some(NodeData::Text(_)))
     }
 
-    /// Whether `node` is inline-level (text, or an inline/inline-block element).
+    /// Whether `node` is inline-level: text, an inline element, or an atomic
+    /// inline (see [`is_atomic_inline`]).
     pub fn is_inline_level(&self, node: NodeId) -> bool {
         if self.is_text(node) {
             return true;
         }
-        matches!(
-            self.style(node).display,
-            Display::Inline | Display::InlineBlock
-        )
+        let display = self.style(node).display;
+        display == Display::Inline || is_atomic_inline(display)
+    }
+
+    /// The text a childless replaced element shows in place of its content
+    /// (`<img alt>`, `<input value>`), if any.
+    pub(crate) fn placeholder(&self, node: NodeId) -> Option<String> {
+        let element = self.document.element(node)?;
+        let text = element.placeholder_text();
+        (!text.is_empty() && self.document.tree().children(node).is_empty())
+            .then(|| text.to_owned())
+    }
+
+    /// Lay out a replaced element's placeholder as its content: one line of
+    /// text at the content origin. The box carries no node, so the element
+    /// keeps its own entry in the node index.
+    fn layout_placeholder(
+        &mut self,
+        node: NodeId,
+        style: &ComputedStyle,
+        text: &str,
+        content_x: f32,
+        content_y: f32,
+    ) -> (Vec<usize>, f32) {
+        let request = style.font_request();
+        let height = if style.line_height > 0.0 {
+            style.line_height
+        } else {
+            self.shaper.line_height(request, style.font_size)
+        };
+        let width = self.shaper.advance(text, request, style.font_size);
+        let index = self.push(LayoutBox {
+            node: None,
+            style_node: node,
+            kind: BoxKind::Text,
+            rect: Rect::new(content_x, content_y, width, height),
+            text: Some(text.to_owned()),
+            margin: block::no_edges(),
+            padding: block::no_edges(),
+            border: block::no_edges(),
+            clips: false,
+            scroll_max_x: 0.0,
+            scroll_max_y: 0.0,
+            scroll_x: 0.0,
+            scroll_y: 0.0,
+            z_tier: 1,
+            z_index: 0,
+            children: Vec::new(),
+        });
+        (vec![index], height)
     }
 
     /// Whether `node` is `display: none`.
@@ -710,7 +768,15 @@ impl Ctx<'_> {
             self.push_bfc();
         }
 
+        let placeholder = self.placeholder(node);
         let (child_indices, content_height) = match style.display {
+            _ if placeholder.is_some() => self.layout_placeholder(
+                node,
+                &style,
+                placeholder.as_deref().unwrap_or_default(),
+                content_x,
+                content_y,
+            ),
             Display::Flex | Display::InlineFlex => flex::layout_flex_children(
                 self,
                 node,
@@ -912,7 +978,15 @@ impl Ctx<'_> {
         let content_y = border_y + border.top + padding.top;
 
         let children_nodes = child_nodes(self.document, node);
+        let placeholder = self.placeholder(node);
         let (child_indices, content_height) = match style.display {
+            _ if placeholder.is_some() => self.layout_placeholder(
+                node,
+                &style,
+                placeholder.as_deref().unwrap_or_default(),
+                content_x,
+                content_y,
+            ),
             Display::Flex | Display::InlineFlex => flex::layout_flex_children(
                 self,
                 node,

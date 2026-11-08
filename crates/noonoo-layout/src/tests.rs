@@ -1189,3 +1189,123 @@ fn border_collapse_paints_a_shared_edge_once() {
     assert_eq!(border.left, 1.0);
     assert_eq!(border.top, 1.0);
 }
+
+// ── Atomic inline-level boxes: inline-block, inline-flex, form controls ────
+
+#[test]
+fn an_inline_block_has_its_own_size_padding_and_border_on_the_line() {
+    let (doc, tree) = page(
+        r#"<p id="p">ab<span id="s">x</span>cd</p>"#,
+        "p { margin: 0 } #s { display: inline-block; width: 50px; height: 30px; \
+         padding: 5px; border: 2px solid red }",
+        400.0,
+    );
+    let s = tree.get(id(&doc, "s")).unwrap().rect;
+    assert_eq!(
+        (s.width, s.height),
+        (64.0, 44.0),
+        "50 + 2×5 + 2×2, 30 + 2×5 + 2×2"
+    );
+    let p = tree.get(id(&doc, "p")).unwrap().rect;
+    assert!(p.height >= 44.0, "the line grows to hold it: {p:?}");
+    let text_after = text_boxes(&doc, &tree, "cd");
+    assert_eq!(text_after.len(), 1);
+    assert!(text_after[0].x >= s.right(), "{text_after:?} after {s:?}");
+    assert!(s.x >= 16.0, "after `ab`: {s:?}");
+}
+
+#[test]
+fn an_inline_flex_button_shrinks_to_its_content_and_sits_beside_the_next() {
+    let (doc, tree) = page(
+        r#"<div><button id="b">Save</button><button id="c">Go</button></div>"#,
+        "button { display: inline-flex; border: none; padding: 8px 16px; \
+         font-size: 16px; box-sizing: content-box }",
+        400.0,
+    );
+    let b = tree.get(id(&doc, "b")).unwrap().rect;
+    let c = tree.get(id(&doc, "c")).unwrap().rect;
+    assert_eq!(b.width, 4.0 * 8.0 + 32.0, "{b:?}");
+    assert_eq!(c.width, 2.0 * 8.0 + 32.0, "{c:?}");
+    assert_eq!(b.y, c.y, "one line");
+    assert!(c.x >= b.right(), "{c:?} after {b:?}");
+}
+
+#[test]
+fn an_input_takes_its_specified_width() {
+    let (doc, tree) = page(
+        r#"<p><input id="i"></p>"#,
+        "input { width: 100px; padding: 2px; border: 1px solid black; \
+         box-sizing: content-box }",
+        400.0,
+    );
+    let i = tree.get(id(&doc, "i")).unwrap().rect;
+    assert_eq!(i.width, 106.0, "{i:?}");
+}
+
+#[test]
+fn an_inline_blocks_content_is_laid_out_inside_it() {
+    let (doc, tree) = page(
+        r#"<p><span id="s">hello world</span></p>"#,
+        "#s { display: inline-block; width: 60px; padding: 4px }",
+        400.0,
+    );
+    let s = tree.get(id(&doc, "s")).unwrap().rect;
+    let words = [
+        text_boxes(&doc, &tree, "hello"),
+        text_boxes(&doc, &tree, "world"),
+    ];
+    for word in words.iter().flatten() {
+        assert!(
+            word.x >= s.x + 4.0 && word.y >= s.y + 4.0 && word.bottom() <= s.bottom(),
+            "{word:?} inside {s:?}"
+        );
+    }
+    // 60px holds "hello" (40px) but not "hello world" (88px): two lines.
+    assert!(words[1][0].y > words[0][0].y);
+}
+
+#[test]
+fn inline_blocks_wrap_like_words() {
+    let (doc, tree) = page(
+        r#"<div><i id="a"></i><i id="b"></i><i id="c"></i></div>"#,
+        "i { display: inline-block; width: 40px; height: 10px }",
+        100.0,
+    );
+    let [a, b, c] = ["a", "b", "c"].map(|n| tree.get(id(&doc, n)).unwrap().rect);
+    assert_eq!(a.y, b.y);
+    assert!(c.y > a.y, "the third wraps: {a:?} {b:?} {c:?}");
+}
+
+#[test]
+fn a_block_after_a_tall_inline_block_starts_below_it() {
+    let (doc, tree) = page(
+        r#"<div><span id="s"></span></div><p id="after">x</p>"#,
+        "#s { display: inline-block; width: 10px; height: 100px } p { margin: 0 }",
+        400.0,
+    );
+    let s = tree.get(id(&doc, "s")).unwrap().rect;
+    let after = tree.get(id(&doc, "after")).unwrap().rect;
+    assert!(after.y >= s.bottom(), "{after:?} below {s:?}");
+}
+
+/// The text boxes holding exactly `word`.
+fn text_boxes(doc: &Document, tree: &LayoutTree, word: &str) -> Vec<Rect> {
+    let _ = doc;
+    tree.boxes()
+        .iter()
+        .filter(|b| b.kind == BoxKind::Text && b.text.as_deref() == Some(word))
+        .map(|b| b.rect)
+        .collect()
+}
+
+#[test]
+fn an_auto_width_float_counts_its_padding_and_border_once() {
+    let (doc, tree) = page(
+        r#"<div><span id="f">Save</span></div>"#,
+        "#f { float: left; padding: 0 16px; border: 2px solid black; \
+         box-sizing: content-box }",
+        400.0,
+    );
+    let f = tree.get(id(&doc, "f")).unwrap().rect;
+    assert_eq!(f.width, 4.0 * 8.0 + 32.0 + 4.0, "{f:?}");
+}
