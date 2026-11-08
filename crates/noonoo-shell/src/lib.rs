@@ -680,7 +680,7 @@ mod tests {
             .unwrap();
         let sub = engine(
             r#"<p id="emb">embedded</p>"#,
-            "p { height: 40px; background-color: #eeeeee }",
+            "p { margin: 0; height: 40px; background-color: #eeeeee }",
         );
         let sub_index = host.add_sub_document(parent, slot, sub);
         host.layout(&MetricShaper);
