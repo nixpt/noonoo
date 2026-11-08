@@ -79,6 +79,10 @@ helpers surfer hand-rolled. Each is a small, headless-testable add.
    fine for small pages, quadratic-ish for big ones. The seam to own is
    invalidation: style scope → layout scope → paint scope, mirroring surfer's
    `InvalidationScope` experiment.
+   *Status (2026-11-08):* style is incremental — the DOM records a change log
+   and `Engine::restyle` restyles only the subtrees an edit can reach (9 µs for
+   one class change on a 4,000-element page, against 79 ms before). Layout
+   still recomputes the page (5 ms there), but is linear in depth.
 7. **A resource loader seam**: fonts already have `@font-face` (`src` goes
    through the host); images and `<style src>` need the same precedent, and
    `noonoo-net::load` should grow a `Loader` trait injection so surfer's hardened
@@ -86,6 +90,7 @@ helpers surfer hand-rolled. Each is a small, headless-testable add.
    dependency-free. The dormant `http`/TLS feature stays borrowed regardless.
 8. **Node positioning helpers**: `bounding_client_rect`/`absolute_position` —
    nearly free once `LayoutTree` boxes are exposed (`Rect` in page coordinates).
+   *Status (2026-11-08):* `LayoutTree::bounding_client_rect` is in.
 
 ## Tier 3 — architectural notes
 

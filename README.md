@@ -90,13 +90,17 @@ yet:
   and the box lays out untransformed. Hosts must not rely on it (they also
   lose `translate`/`rotate`-based centering tricks inside `position`).
 - Tables: only the auto-layout subset — `border-spacing`, captions,
-  `table-layout: fixed`, and the anonymous-cell fixup are not modelled, and
-  a `colspan` cell's demand spreads evenly across its columns.
-- `@media` evaluates the common subset (comma alternatives, `and`,
-  `not`/`only`, `screen`/`all`, and the `min/max`-width/height features in
-  `px`); other features and the range syntax fail the condition.
-- `position: sticky` lays out like `relative` (no scroll offsets);
-  `@keyframes` animations and `::before`/`::after` are not implemented.
+  `table-layout: fixed`, and wrapping stray content inside a table or row
+  are not modelled (table parts outside a table do get an anonymous
+  table), and a `colspan` cell's demand spreads evenly across its columns.
+- `@media` covers sizes (`px`/`em`/`rem`, `min-`/`max-` and range syntax),
+  `aspect-ratio`, `resolution`, `orientation` and the interaction and
+  preference features, answered for a desktop window with no stated
+  preferences; `or`, nested conditions and host-supplied preferences (dark
+  mode, HiDPI) are not supported.
+- The HTML parser implements the common implied end tags and table
+  sections, but not foster parenting or active formatting elements.
+- `@keyframes` animations are not implemented.
 
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
