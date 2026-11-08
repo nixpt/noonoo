@@ -1397,3 +1397,23 @@ fn a_table_cell_contains_its_floats() {
     let after = text_boxes(&doc, &tree, "after");
     assert_eq!(after[0].x, 0.0, "the float escaped the table cell");
 }
+
+/// Flex rows, grids and inline-blocks measure each child with a trial
+/// layout before placing it. Without remembering those heights the cost
+/// doubled per nesting level: 20 nested flex rows took 0.5 s.
+#[test]
+fn nested_measured_boxes_lay_out_in_polynomial_time() {
+    for display in ["flex", "inline-flex", "grid", "inline-block"] {
+        let (done, wait) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let depth = 60;
+            let html = format!("{}x{}", "<div>".repeat(depth), "</div>".repeat(depth));
+            let (_, tree) = page(&html, &format!("div {{ display: {display} }}"), 800.0);
+            let _ = done.send(tree.boxes.len());
+        });
+        let boxes = wait
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap_or_else(|_| panic!("60 nested {display} boxes did not lay out in 5 s"));
+        assert!(boxes >= 60);
+    }
+}

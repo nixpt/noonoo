@@ -416,6 +416,7 @@ pub fn layout(
         floats: Vec::new(),
         tree: LayoutTree::default(),
         margins: Default::default(),
+        measured: HashMap::new(),
     };
     // The root's children share one block formatting context.
     ctx.push_bfc();
@@ -466,6 +467,8 @@ pub(crate) struct Ctx<'a> {
     /// Collapsed vertical margins, which depend only on the document, the
     /// styles and the containing width, so they are computed once per layout.
     pub margins: crate::margin::Cache,
+    /// [`Ctx::measure_height`] results by node, width and definite height.
+    pub measured: HashMap<(NodeId, u32, Option<u32>), f32>,
 }
 
 impl Ctx<'_> {
@@ -754,36 +757,7 @@ impl Ctx<'_> {
             && matches!(style.height, Dimension::Auto)
             && !clips;
 
-        // A new block formatting context isolates floats: clipping boxes,
-        // floats, out-of-flow boxes, flex/grid containers and their items,
-        // inline-blocks and table cells start fresh, and their own floats do
-        // not escape to their siblings. That also makes their height
-        // independent of where they're placed, which measuring relies on.
-        let in_flex_or_grid = self
-            .document
-            .tree()
-            .parent(node)
-            .and_then(|parent| self.styles.get(parent))
-            .is_some_and(|parent| {
-                matches!(
-                    parent.display,
-                    Display::Flex | Display::InlineFlex | Display::Grid | Display::InlineGrid
-                )
-            });
-        let establishes_bfc = clips
-            || in_flex_or_grid
-            || style.float != noonoo_style::Float::None
-            || matches!(style.position, Position::Absolute | Position::Fixed)
-            || matches!(
-                style.display,
-                Display::Flex
-                    | Display::InlineFlex
-                    | Display::Grid
-                    | Display::InlineGrid
-                    | Display::InlineBlock
-                    | Display::Table
-                    | Display::TableCell
-            );
+        let establishes_bfc = self.establishes_bfc(node, &style);
         if establishes_bfc {
             self.push_bfc();
         }
@@ -905,6 +879,12 @@ impl Ctx<'_> {
     /// before they place (flex lines, grid rows). Out-of-flow descendants
     /// discovered during measurement are enqueued; call [`Ctx::prune_pending`]
     /// after a measurement pass.
+    ///
+    /// A box that starts a block formatting context has a height that
+    /// depends only on its width and definite height, so that is remembered
+    /// for the rest of the layout: nested flex rows, grids and inline-blocks
+    /// each measure their children before placing them, and without it the
+    /// cost doubled per nesting level.
     pub fn measure_height(
         &mut self,
         node: NodeId,
@@ -913,11 +893,55 @@ impl Ctx<'_> {
         available_width: f32,
         definite_height: Option<f32>,
     ) -> f32 {
+        let key = (
+            node,
+            available_width.to_bits(),
+            definite_height.map(f32::to_bits),
+        );
+        if let Some(&height) = self.measured.get(&key) {
+            return height;
+        }
         let base = self.tree.boxes.len();
         let height = self.layout_element(node, x, y, available_width, definite_height);
         self.tree.boxes.truncate(base);
         self.tree.index.retain(|_, &mut index| index < base);
+        if self.establishes_bfc(node, self.style(node)) {
+            self.measured.insert(key, height);
+        }
         height
+    }
+
+    /// Whether `node` starts a block formatting context. Floats inside one
+    /// stay inside, and floats outside don't reach in: clipping boxes,
+    /// floats, out-of-flow boxes, flex/grid containers and their items,
+    /// inline-blocks and table cells. Its height is then independent of
+    /// where it's placed, which [`Ctx::measure_height`]'s cache relies on.
+    fn establishes_bfc(&self, node: NodeId, style: &ComputedStyle) -> bool {
+        let in_flex_or_grid = self
+            .document
+            .tree()
+            .parent(node)
+            .and_then(|parent| self.styles.get(parent))
+            .is_some_and(|parent| {
+                matches!(
+                    parent.display,
+                    Display::Flex | Display::InlineFlex | Display::Grid | Display::InlineGrid
+                )
+            });
+        resolve::clips(style)
+            || in_flex_or_grid
+            || style.float != noonoo_style::Float::None
+            || matches!(style.position, Position::Absolute | Position::Fixed)
+            || matches!(
+                style.display,
+                Display::Flex
+                    | Display::InlineFlex
+                    | Display::Grid
+                    | Display::InlineGrid
+                    | Display::InlineBlock
+                    | Display::Table
+                    | Display::TableCell
+            )
     }
 
     /// Drop out-of-flow nodes enqueued more than once (measurement lays items
