@@ -34,12 +34,14 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod changes;
 pub mod document;
 pub mod mutate;
 pub mod node;
 pub mod query;
 pub mod tree;
 
+pub use changes::{Change, Changes};
 pub use document::Document;
 pub use mutate::{DocumentMutator, MutError};
 pub use node::{Attribute, ElementData, NodeData};

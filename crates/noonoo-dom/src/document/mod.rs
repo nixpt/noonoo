@@ -4,6 +4,7 @@
 //! "page tree". It owns the arena and the root id; everything structural goes
 //! through [`Document::mutate`], everything read-only through the query methods.
 
+use crate::changes::Changes;
 use crate::mutate::{DocumentMutator, MutError};
 use crate::node::{ElementData, NodeData};
 use crate::query::{Selector, SelectorError};
@@ -14,6 +15,7 @@ use crate::tree::{NodeId, Tree};
 pub struct Document {
     tree: Tree<NodeData>,
     root: NodeId,
+    changes: Changes,
 }
 
 impl Default for Document {
@@ -28,7 +30,20 @@ impl Document {
     pub fn new() -> Self {
         let mut tree = Tree::new();
         let root = tree.insert_raw(NodeData::Document);
-        Self { tree, root }
+        Self {
+            tree,
+            root,
+            changes: Changes::default(),
+        }
+    }
+
+    /// How many edits the change log holds before it gives up and reports
+    /// that anything may have changed.
+    pub const MAX_CHANGES: usize = 1024;
+
+    /// The edits made since the last call, emptying the log.
+    pub fn take_changes(&mut self) -> Changes {
+        std::mem::take(&mut self.changes)
     }
 
     /// The root node.
@@ -48,13 +63,17 @@ impl Document {
     }
 
     /// Mutably borrow the tree.
+    ///
+    /// Raw writes bypass the change log, so this marks it overflowed:
+    /// prefer [`Document::mutate`].
     pub fn tree_mut(&mut self) -> &mut Tree<NodeData> {
+        self.changes.overflow();
         &mut self.tree
     }
 
     /// Open a checked mutation session.
     pub fn mutate(&mut self) -> DocumentMutator<'_> {
-        DocumentMutator::new(&mut self.tree)
+        DocumentMutator::new(&mut self.tree, &mut self.changes)
     }
 
     /// This node's payload, if `id` is present.

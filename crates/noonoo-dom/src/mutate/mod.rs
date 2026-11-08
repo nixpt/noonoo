@@ -8,6 +8,8 @@
 //! primitive a correct `innerHTML` is built on — the old engine's
 //! `DomController::set_inner_html` appended instead).
 
+use crate::Document;
+use crate::changes::{Change, Changes};
 use crate::node::NodeData;
 use crate::tree::{NodeId, Tree};
 
@@ -27,13 +29,29 @@ pub enum MutError {
 }
 
 /// A checked writer over a document tree.
+///
+/// Each edit it makes is recorded in the document's change log
+/// ([`Document::take_changes`]); a rejected one records nothing.
 pub struct DocumentMutator<'a> {
     tree: &'a mut Tree<NodeData>,
+    changes: &'a mut Changes,
 }
 
 impl<'a> DocumentMutator<'a> {
-    pub(crate) fn new(tree: &'a mut Tree<NodeData>) -> Self {
-        Self { tree }
+    pub(crate) fn new(tree: &'a mut Tree<NodeData>, changes: &'a mut Changes) -> Self {
+        Self { tree, changes }
+    }
+
+    fn record(&mut self, change: Change) {
+        self.changes.record(change, Document::MAX_CHANGES);
+    }
+
+    /// Detach `child`, recording that its parent (if any) lost it.
+    fn detach(&mut self, child: NodeId) {
+        if let Some(parent) = self.tree.parent(child) {
+            self.record(Change::Children(parent));
+        }
+        self.tree.detach(child);
     }
 
     /// Borrow the underlying tree, read-only.
@@ -49,8 +67,9 @@ impl<'a> DocumentMutator<'a> {
         if self.tree.is_ancestor_of(child, parent) {
             return Err(MutError::Cycle(child));
         }
-        self.tree.detach(child);
+        self.detach(child);
         self.tree.push_child(parent, child);
+        self.record(Change::Children(parent));
         Ok(())
     }
 
@@ -69,9 +88,10 @@ impl<'a> DocumentMutator<'a> {
             return Ok(());
         }
         // Detach first: moving an earlier sibling shifts `sibling` left.
-        self.tree.detach(child);
+        self.detach(child);
         let index = self.position(parent, sibling);
         self.tree.insert_child(parent, index, child);
+        self.record(Change::Children(parent));
         Ok(())
     }
 
@@ -90,9 +110,10 @@ impl<'a> DocumentMutator<'a> {
         if child == sibling {
             return Ok(());
         }
-        self.tree.detach(child);
+        self.detach(child);
         let index = self.position(parent, sibling) + 1;
         self.tree.insert_child(parent, index, child);
+        self.record(Change::Children(parent));
         Ok(())
     }
 
@@ -109,10 +130,11 @@ impl<'a> DocumentMutator<'a> {
         if old == new {
             return Ok(());
         }
-        self.tree.detach(new);
+        self.detach(new);
         let index = self.position(parent, old);
         self.tree.detach(old);
         self.tree.insert_child(parent, index, new);
+        self.record(Change::Children(parent));
         Ok(())
     }
 
@@ -136,7 +158,7 @@ impl<'a> DocumentMutator<'a> {
         if self.tree.parent(child).is_none() {
             return Err(MutError::NoParent(child));
         }
-        self.tree.detach(child);
+        self.detach(child);
         Ok(())
     }
 
@@ -160,9 +182,10 @@ impl<'a> DocumentMutator<'a> {
 
         self.tree.take_children(parent);
         for &child in new_children {
-            self.tree.detach(child);
+            self.detach(child);
             self.tree.push_child(parent, child);
         }
+        self.record(Change::Children(parent));
         Ok(())
     }
 
@@ -182,6 +205,7 @@ impl<'a> DocumentMutator<'a> {
             .as_element_mut()
             .ok_or(MutError::NotAnElement(element))?;
         data.set_attr(&name.to_ascii_lowercase(), value);
+        self.record(Change::Attributes(element));
         Ok(())
     }
 
@@ -196,6 +220,7 @@ impl<'a> DocumentMutator<'a> {
             .as_element_mut()
             .ok_or(MutError::NotAnElement(element))?;
         data.remove_attr(&name.to_ascii_lowercase());
+        self.record(Change::Attributes(element));
         Ok(())
     }
 
@@ -216,6 +241,7 @@ impl<'a> DocumentMutator<'a> {
                 NodeData::Text(s) | NodeData::Comment(s) => *s = text,
                 _ => unreachable!("checked above"),
             }
+            self.record(Change::Text(node));
             Ok(())
         } else if self
             .tree
