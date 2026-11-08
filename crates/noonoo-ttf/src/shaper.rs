@@ -30,6 +30,26 @@ pub(crate) fn advance_units(font: &Font, text: &str) -> i32 {
     units
 }
 
+/// The advance of `text` in pixels, each character measured with the face
+/// [`FontSet::face_for`] picks. Pairs kern only within one face.
+pub(crate) fn fallback_advance(set: &FontSet, selected: &Font, text: &str, font_size: f32) -> f32 {
+    let mut pixels = 0.0;
+    let mut previous: Option<(*const Font, u16)> = None;
+    for character in text.chars() {
+        let font = set.face_for(selected, character);
+        let glyph = font.glyph_for_char_or_notdef(character);
+        let mut units = i32::from(font.advance(glyph));
+        if let Some((face, left)) = previous
+            && std::ptr::eq(face, font)
+        {
+            units += i32::from(font.kern(left, glyph));
+        }
+        pixels += units as f32 * scale(font, font_size);
+        previous = Some((font, glyph));
+    }
+    pixels
+}
+
 /// The natural line height of a font, in font units.
 pub(crate) fn line_height_units(font: &Font) -> i32 {
     (font.ascender() as i32 - font.descender() as i32 + font.line_gap() as i32).max(0)
@@ -84,7 +104,7 @@ impl Shaper for FontSetShaper<'_> {
             .set
             .select_best(request.families, request.weight, request.italic)
         {
-            Some(font) => advance_units(font, text) as f32 * scale(font, font_size),
+            Some(font) => fallback_advance(self.set, font, text, font_size),
             // A deterministic fallback, as `MetricShaper` uses.
             None => text.chars().count() as f32 * 0.5 * font_size,
         }

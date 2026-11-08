@@ -24,6 +24,9 @@ pub struct FacePlan {
     pub italic: bool,
     /// The font file.
     pub path: PathBuf,
+    /// A fallback face: tried for characters the selected face lacks, and
+    /// never selected by family (`family` is then empty).
+    pub fallback: bool,
 }
 
 /// Each generic family's candidates, best first: (family name, file stem).
@@ -54,6 +57,14 @@ const GENERICS: &[(&str, &[(&str, &str)])] = &[
     ),
 ];
 
+/// Faces kept for characters the chosen families lack (arrows, symbols,
+/// math), after the unchosen sans-serif families, best first.
+const SYMBOLS: &[&str] = &[
+    "NotoSansSymbols-Regular.ttf",
+    "NotoSansSymbols2-Regular.ttf",
+    "NotoSansMath-Regular.ttf",
+];
+
 /// Each style's file-name suffixes, in the conventions of those families:
 /// (weight, italic, suffixes after the stem).
 const STYLES: &[(u16, bool, &[&str])] = &[
@@ -71,6 +82,7 @@ pub fn plan(files: &[PathBuf]) -> Vec<FacePlan> {
             .find(|path| path.file_name().is_some_and(|file| file == name))
     };
     let mut faces = Vec::new();
+    let mut sans = None;
     for &(generic, candidates) in GENERICS {
         // The first candidate with a regular face.
         let chosen = candidates.iter().find_map(|&(family, stem)| {
@@ -91,6 +103,9 @@ pub fn plan(files: &[PathBuf]) -> Vec<FacePlan> {
         let Some((family, styles)) = chosen else {
             continue;
         };
+        if generic == "sans-serif" {
+            sans = Some(family);
+        }
         let mut names = vec![generic, family];
         if generic == "sans-serif" {
             names.push("");
@@ -102,9 +117,32 @@ pub fn plan(files: &[PathBuf]) -> Vec<FacePlan> {
                     weight,
                     italic,
                     path: path.clone(),
+                    fallback: false,
                 });
             }
         }
+    }
+
+    // The other sans-serif families' regular faces, then the symbol faces.
+    let (_, sans_candidates) = GENERICS[0];
+    let regular = |stem: &str| {
+        let (_, _, suffixes) = STYLES[0];
+        suffixes
+            .iter()
+            .find_map(|suffix| find(&format!("{stem}{suffix}")))
+    };
+    let others = sans_candidates
+        .iter()
+        .filter(|&&(family, _)| Some(family) != sans)
+        .filter_map(|&(_, stem)| regular(stem));
+    for path in others.chain(SYMBOLS.iter().filter_map(|name| find(name))) {
+        faces.push(FacePlan {
+            family: String::new(),
+            weight: 400,
+            italic: false,
+            path: path.clone(),
+            fallback: true,
+        });
     }
     faces
 }
@@ -167,7 +205,11 @@ pub fn load(plan: &[FacePlan]) -> Option<&'static FontSet<'static>> {
     let mut set = FontSet::new();
     for face in plan {
         if let Some((_, font)) = fonts.iter().find(|(path, _)| *path == face.path) {
-            set.add(face.family.clone(), face.weight, face.italic, font);
+            if face.fallback {
+                set.add_fallback(font);
+            } else {
+                set.add(face.family.clone(), face.weight, face.italic, font);
+            }
         }
     }
     Some(Box::leak(Box::new(set)))
@@ -244,7 +286,12 @@ mod tests {
                 "{family}"
             );
         }
-        assert!(!plan.iter().any(|f| f.path.ends_with("DejaVuSans.ttf")));
+        // DejaVu Sans isn't selectable by family; it's only a fallback.
+        assert!(
+            !plan
+                .iter()
+                .any(|f| !f.fallback && f.path.ends_with("DejaVuSans.ttf"))
+        );
         // Monospace falls to DejaVu, whose regular has no suffix and whose
         // italic is "Oblique".
         assert!(has(&plan, "monospace", 400, false, "DejaVuSansMono.ttf"));
@@ -264,6 +311,48 @@ mod tests {
         ));
         // No serif installed, no serif faces.
         assert!(!plan.iter().any(|f| f.family == "serif"));
+    }
+
+    fn fallbacks(plan: &[FacePlan]) -> Vec<String> {
+        plan.iter()
+            .filter(|face| face.fallback)
+            .map(|face| {
+                face.path
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn other_installed_faces_become_fallbacks_for_missing_characters() {
+        let plan = plan(&files(&[
+            "NotoSansSymbols2-Regular.ttf",
+            "NotoSans-Regular.ttf",
+            "NotoSansSymbols-Bold.ttf",
+            "DejaVuSans.ttf",
+            "NotoSansMath-Regular.ttf",
+            "NotoSansSymbols-Regular.ttf",
+        ]));
+        // The chosen sans family is selected by name, never as a fallback;
+        // the other sans families come first, then the symbol faces.
+        assert_eq!(
+            fallbacks(&plan),
+            vec![
+                "DejaVuSans.ttf",
+                "NotoSansSymbols-Regular.ttf",
+                "NotoSansSymbols2-Regular.ttf",
+                "NotoSansMath-Regular.ttf",
+            ]
+        );
+        assert!(has(&plan, "", 400, false, "NotoSans-Regular.ttf"));
+    }
+
+    #[test]
+    fn no_fallbacks_when_only_the_chosen_family_is_installed() {
+        assert!(fallbacks(&plan(&files(&["NotoSans-Regular.ttf"]))).is_empty());
     }
 
     #[test]
@@ -331,6 +420,7 @@ mod tests {
             weight: 400,
             italic: false,
             path,
+            fallback: false,
         };
         assert!(load(&[face]).is_none());
     }
@@ -348,9 +438,25 @@ mod tests {
             weight: 400,
             italic: false,
             path,
+            fallback: false,
         };
         let set = load(&[face]).expect("Noto Sans loads");
         let font = set.select_best(&["sans-serif".into()], 400, false).unwrap();
         assert!(font.has_outlines());
+    }
+
+    /// Noto Sans has no arrows; an installed fallback supplies them. Skipped
+    /// where the files aren't present.
+    #[test]
+    fn an_installed_fallback_supplies_missing_arrows() {
+        let noto = PathBuf::from("/usr/share/fonts/noto/NotoSans-Regular.ttf");
+        let dejavu = PathBuf::from("/usr/share/fonts/TTF/DejaVuSans.ttf");
+        if !noto.exists() || !dejavu.exists() {
+            return;
+        }
+        let set = load(&plan(&[noto, dejavu])).expect("fonts load");
+        let selected = set.select_best(&["sans-serif".into()], 400, false).unwrap();
+        assert!(selected.glyph_for_char('←').is_none(), "Noto Sans lacks it");
+        assert!(set.face_for(selected, '←').glyph_for_char('←').is_some());
     }
 }

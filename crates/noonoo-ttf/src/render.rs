@@ -13,7 +13,7 @@ use noonoo_geometry::Point;
 use noonoo_paint::{Color, Command, CommandList, Glyphs};
 use noonoo_text::FontRequest;
 
-use crate::FontSet;
+use crate::{Font, FontSet};
 
 /// Draws text as filled outlines, selecting faces from a [`FontSet`].
 pub struct OutlineGlyphs<'a> {
@@ -58,18 +58,22 @@ impl Glyphs for OutlineGlyphs<'_> {
         request: FontRequest,
         out: &mut CommandList,
     ) {
-        let Some(font) = self
+        let Some(selected) = self
             .set
             .select_best(request.families, request.weight, request.italic)
         else {
             return;
         };
-        let scale = font_size / font.units_per_em().max(1) as f32;
         let mut pen = x;
-        let mut previous = None;
+        let mut previous: Option<(*const Font, u16)> = None;
         for character in text.chars() {
+            // A character the face lacks comes from a fallback face.
+            let font = self.set.face_for(selected, character);
+            let scale = font_size / font.units_per_em().max(1) as f32;
             let glyph = font.glyph_for_char_or_notdef(character);
-            if let Some(left) = previous {
+            if let Some((face, left)) = previous
+                && std::ptr::eq(face, font)
+            {
                 pen += font.kern(left, glyph) as f32 * scale;
             }
             if let Some(outline) = font.outline(glyph) {
@@ -94,7 +98,7 @@ impl Glyphs for OutlineGlyphs<'_> {
                 }
             }
             pen += font.advance(glyph) as f32 * scale + letter_spacing;
-            previous = Some(glyph);
+            previous = Some((font, glyph));
         }
     }
 }

@@ -18,6 +18,8 @@ struct Face<'a> {
 /// A collection of font faces selectable by family, weight, and style.
 pub struct FontSet<'a> {
     faces: Vec<Face<'a>>,
+    /// Faces tried, in order, for characters the selected face lacks.
+    fallbacks: Vec<&'a Font>,
 }
 
 impl Default for FontSet<'_> {
@@ -29,7 +31,10 @@ impl Default for FontSet<'_> {
 impl<'a> FontSet<'a> {
     /// An empty set.
     pub fn new() -> Self {
-        Self { faces: Vec::new() }
+        Self {
+            faces: Vec::new(),
+            fallbacks: Vec::new(),
+        }
     }
 
     /// Register `font` as a face of `family` at `weight` (100–900) and style.
@@ -77,6 +82,28 @@ impl<'a> FontSet<'a> {
         families
             .iter()
             .find_map(|family| self.select(family, weight, italic))
+    }
+
+    /// Register `font` as a fallback: tried, after any fallback registered
+    /// before it, for characters the selected face has no glyph for (symbols,
+    /// arrows, other scripts).
+    pub fn add_fallback(&mut self, font: &'a Font) -> &mut Self {
+        self.fallbacks.push(font);
+        self
+    }
+
+    /// The face to draw `character` with when `selected` was chosen for the
+    /// text: `selected` itself when it has the glyph, else the first fallback
+    /// that does, else `selected` (which draws its `.notdef`).
+    pub fn face_for(&self, selected: &'a Font, character: char) -> &'a Font {
+        if selected.glyph_for_char(character).is_some() {
+            return selected;
+        }
+        self.fallbacks
+            .iter()
+            .copied()
+            .find(|font| font.glyph_for_char(character).is_some())
+            .unwrap_or(selected)
     }
 
     /// The number of registered faces.

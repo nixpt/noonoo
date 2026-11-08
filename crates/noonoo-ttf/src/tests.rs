@@ -77,6 +77,12 @@ fn hmtx() -> Vec<u8> {
 }
 
 fn cmap() -> Vec<u8> {
+    cmap_from('A')
+}
+
+/// A `cmap` mapping `first` and the character after it to glyphs 1 and 2.
+fn cmap_from(first: char) -> Vec<u8> {
+    let first = first as u16;
     let mut sub = Vec::new();
     push_u16(&mut sub, 4); // format
     push_u16(&mut sub, 32); // length
@@ -85,12 +91,12 @@ fn cmap() -> Vec<u8> {
     push_u16(&mut sub, 4); // searchRange
     push_u16(&mut sub, 1); // entrySelector
     push_u16(&mut sub, 0); // rangeShift
-    push_u16(&mut sub, 0x42); // endCode 'B'
+    push_u16(&mut sub, first + 1); // endCode
     push_u16(&mut sub, 0xFFFF); // endCode sentinel
     push_u16(&mut sub, 0); // reservedPad
-    push_u16(&mut sub, 0x41); // startCode 'A'
+    push_u16(&mut sub, first); // startCode
     push_u16(&mut sub, 0xFFFF); // startCode sentinel
-    push_i16(&mut sub, -0x40); // idDelta: 'A' -> 1, 'B' -> 2
+    push_i16(&mut sub, 1 - first as i16); // idDelta: first -> 1
     push_i16(&mut sub, 1); // idDelta sentinel
     push_u16(&mut sub, 0); // idRangeOffset
     push_u16(&mut sub, 0); // idRangeOffset
@@ -210,12 +216,17 @@ fn minimal_font() -> Vec<u8> {
 
 /// The same fixture, at a chosen `unitsPerEm`, so two faces are distinguishable.
 fn minimal_font_with_em(units_per_em: u16) -> Vec<u8> {
+    font_mapping(units_per_em, 'A')
+}
+
+/// A face that maps `first` and the next character instead of `A`/`B`.
+fn font_mapping(units_per_em: u16, first: char) -> Vec<u8> {
     build(&[
         (*b"head", head(units_per_em)),
         (*b"maxp", maxp()),
         (*b"hhea", hhea()),
         (*b"hmtx", hmtx()),
-        (*b"cmap", cmap()),
+        (*b"cmap", cmap_from(first)),
         (*b"glyf", glyf()),
         (*b"loca", loca()),
         (*b"kern", kern()),
@@ -558,4 +569,84 @@ fn outline_glyphs_add_letter_spacing_after_each_glyph() {
     for (i, (p, s)) in plain.iter().zip(&spaced).enumerate() {
         assert_eq!(s - p, 50.0 * i as f32);
     }
+}
+
+fn demo_request(families: &[String]) -> FontRequest<'_> {
+    FontRequest {
+        families,
+        weight: 400,
+        italic: false,
+    }
+}
+
+#[test]
+fn a_character_the_face_lacks_is_measured_with_a_fallback() {
+    let primary = Font::parse(&minimal_font()).unwrap();
+    let symbols = Font::parse(&font_mapping(2000, 'C')).unwrap();
+    let demo = vec!["Demo".to_owned()];
+
+    let mut set = FontSet::new();
+    set.add("Demo", 400, false, &primary);
+    // 'A' is 600 units over 1000 at 20px; 'C' is `.notdef` (500 units).
+    assert_eq!(
+        FontSetShaper::new(&set).advance("AC", demo_request(&demo), 20.0),
+        22.0
+    );
+
+    set.add_fallback(&symbols);
+    // 'C' now comes from the fallback: 600 units over 2000 at 20px.
+    assert_eq!(
+        FontSetShaper::new(&set).advance("AC", demo_request(&demo), 20.0),
+        18.0
+    );
+    // Characters the face has never use the fallback, and still kern:
+    // 600 + 700 - 100 units over 1000 at 20px.
+    assert_eq!(
+        FontSetShaper::new(&set).advance("AB", demo_request(&demo), 20.0),
+        24.0
+    );
+}
+
+#[test]
+fn a_character_the_face_lacks_is_drawn_from_a_fallback() {
+    use noonoo_paint::{Color, Command, CommandList, Glyphs};
+    let primary = Font::parse(&minimal_font()).unwrap();
+    let symbols = Font::parse(&font_mapping(2000, 'C')).unwrap();
+    let demo = vec!["Demo".to_owned()];
+    let draw = |set: &FontSet| {
+        let mut out = CommandList::default();
+        OutlineGlyphs::new(set).draw(
+            "C",
+            (0.0, 20.0),
+            20.0,
+            Color::BLACK,
+            demo_request(&demo),
+            &mut out,
+        );
+        out.0
+            .iter()
+            .filter(|command| matches!(command, Command::FillContours { .. }))
+            .count()
+    };
+
+    let mut set = FontSet::new();
+    set.add("Demo", 400, false, &primary);
+    assert_eq!(draw(&set), 0, "`.notdef` has no outline in the fixture");
+    set.add_fallback(&symbols);
+    assert_eq!(draw(&set), 1, "the fallback's triangle");
+}
+
+#[test]
+fn fallback_order_decides_between_faces_with_the_character() {
+    let primary = Font::parse(&minimal_font()).unwrap();
+    let first = Font::parse(&font_mapping(2000, 'C')).unwrap();
+    let second = Font::parse(&font_mapping(4000, 'C')).unwrap();
+    let mut set = FontSet::new();
+    set.add("Demo", 400, false, &primary);
+    set.add_fallback(&first);
+    set.add_fallback(&second);
+    assert_eq!(set.face_for(&primary, 'C').units_per_em(), 2000);
+    assert_eq!(set.face_for(&primary, 'A').units_per_em(), 1000);
+    // Nothing has it: the selected face (and its `.notdef`).
+    assert_eq!(set.face_for(&primary, 'z').units_per_em(), 1000);
 }
