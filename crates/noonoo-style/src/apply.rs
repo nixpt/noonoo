@@ -502,6 +502,13 @@ pub(crate) fn apply(
                 style.transform = list;
             }
         }
+        Property::BoxShadow => {
+            if keyword(values) == Some("none") {
+                style.box_shadow.clear();
+            } else if let Some(list) = box_shadows(values, font_size, root, viewport) {
+                style.box_shadow = list;
+            }
+        }
         Property::TextTransform => {
             if let Some(k) = keyword(values) {
                 style.text_transform = match k {
@@ -672,6 +679,52 @@ fn set_text_align(slot: &mut TextAlign, values: &[Value]) {
         "justify" => TextAlign::Justify,
         _ => return,
     };
+}
+
+/// A `box-shadow` list, or `None` if any shadow is invalid. Each is
+/// `inset? <x> <y> <blur>? <spread>? <color>?` in any order of the
+/// keyword, lengths and colour.
+fn box_shadows(
+    values: &[Value],
+    font_size: f32,
+    root: f32,
+    viewport: Viewport,
+) -> Option<Vec<BoxShadow>> {
+    let mut list = Vec::new();
+    for group in values.split(|value| matches!(value, Value::Comma)) {
+        let mut lengths = Vec::new();
+        let mut shadow_color = None;
+        let mut inset = false;
+        for value in group {
+            match value {
+                Value::Keyword(k) if k.eq_ignore_ascii_case("inset") && !inset => inset = true,
+                Value::Length(l) => lengths.push(to_px(l, font_size, root, viewport)),
+                Value::Number(n) if *n == 0.0 => lengths.push(0.0),
+                other if shadow_color.is_none() => {
+                    shadow_color = Some(color(std::slice::from_ref(other))?)
+                }
+                _ => return None,
+            }
+        }
+        let (x, y, blur, spread) = match lengths.as_slice() {
+            [x, y] => (*x, *y, 0.0, 0.0),
+            [x, y, blur] => (*x, *y, *blur, 0.0),
+            [x, y, blur, spread] => (*x, *y, *blur, *spread),
+            _ => return None,
+        };
+        if blur < 0.0 {
+            return None;
+        }
+        list.push(BoxShadow {
+            x,
+            y,
+            blur,
+            spread,
+            color: shadow_color,
+            inset,
+        });
+    }
+    Some(list)
 }
 
 /// A `transform` function list, or `None` if any function is invalid
@@ -862,6 +915,7 @@ fn copy_property(dst: &mut ComputedStyle, src: &ComputedStyle, property: &Proper
         Property::LetterSpacing => dst.letter_spacing = src.letter_spacing,
         Property::TextTransform => dst.text_transform = src.text_transform,
         Property::Transform => dst.transform = src.transform.clone(),
+        Property::BoxShadow => dst.box_shadow = src.box_shadow.clone(),
         Property::Opacity => dst.opacity = src.opacity,
         Property::OverflowX => dst.overflow_x = src.overflow_x,
         Property::OverflowY => dst.overflow_y = src.overflow_y,

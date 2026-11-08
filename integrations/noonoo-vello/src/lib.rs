@@ -119,15 +119,7 @@ pub fn draw(scene: &mut Scene, commands: &CommandList) {
                 // per layer), so the group covers the whole frame.
                 let shape = match clip {
                     Some(rect) => kurbo::Shape::into_path(kurbo_rect(*rect), 0.1),
-                    None => {
-                        let mut shape = BezPath::new();
-                        shape.move_to((-1.0e6, -1.0e6));
-                        shape.line_to((2.0e6, -1.0e6));
-                        shape.line_to((2.0e6, 2.0e6));
-                        shape.line_to((-1.0e6, 2.0e6));
-                        shape.close_path();
-                        shape
-                    }
+                    None => frame(),
                 };
                 scene.push_layer(
                     Fill::NonZero,
@@ -138,6 +130,41 @@ pub fn draw(scene: &mut Scene, commands: &CommandList) {
                 );
             }
             Command::PopLayer => scene.pop_layer(),
+            Command::BoxShadow {
+                rect,
+                radius,
+                blur,
+                color,
+                element,
+                element_radius,
+            } => {
+                // CSS never draws an outer shadow under its own box: clip to
+                // everything but the element (even-odd: frame minus box).
+                let mut outside = frame();
+                outside.extend(rounded_rect(*element, *element_radius));
+                scene.push_clip_layer(Fill::EvenOdd, transform, &outside);
+                if *blur > 0.0 {
+                    let corner = radius.0.max(radius.1).max(radius.2).max(radius.3);
+                    scene.draw_blurred_rounded_rect(
+                        transform,
+                        kurbo_rect(*rect),
+                        brush(*color),
+                        corner as f64,
+                        // The CSS blur radius is twice the Gaussian's
+                        // standard deviation.
+                        (*blur / 2.0) as f64,
+                    );
+                } else {
+                    scene.fill(
+                        Fill::NonZero,
+                        transform,
+                        brush(*color),
+                        None,
+                        &rounded_rect(*rect, *radius),
+                    );
+                }
+                scene.pop_layer();
+            }
             Command::PushTransform { matrix } => {
                 let [a, b, c, d, e, f] = matrix.map(f64::from);
                 transforms.push(transform * Affine::new([a, b, c, d, e, f]));
@@ -190,6 +217,17 @@ fn gradient(
 /// A rectangle with per-corner radii (`top-left`, `top-right`, `bottom-right`,
 /// `bottom-left`) as a Bézier path; sharp corners are straight lines and each
 /// rounded corner is a cubic approximation of a quarter arc.
+/// An effectively infinite shape: the whole frame.
+fn frame() -> BezPath {
+    let mut shape = BezPath::new();
+    shape.move_to((-1.0e6, -1.0e6));
+    shape.line_to((2.0e6, -1.0e6));
+    shape.line_to((2.0e6, 2.0e6));
+    shape.line_to((-1.0e6, 2.0e6));
+    shape.close_path();
+    shape
+}
+
 fn rounded_rect(rect: noonoo_geometry::Rect, radius: (f32, f32, f32, f32)) -> BezPath {
     // The circular-arc cubic constant.
     const K: f64 = 0.552_284_749_8;
@@ -337,6 +375,41 @@ mod tests {
             Some(&([1.0, 0.0, 0.0, 1.0], [0.0, 0.0])),
             "{transforms:?}"
         );
+    }
+
+    fn shadow(blur: f32) -> Command {
+        Command::BoxShadow {
+            rect: NRect::new(-2.0, -2.0, 14.0, 14.0),
+            radius: (3.0, 3.0, 3.0, 3.0),
+            blur,
+            color: Color::rgb(0, 0, 0),
+            element: NRect::new(0.0, 0.0, 10.0, 10.0),
+            element_radius: (1.0, 1.0, 1.0, 1.0),
+        }
+    }
+
+    /// `DrawTag::BLUR_RECT` and `BEGIN_CLIP` in vello_encoding 0.7.
+    const BLUR_RECT: u32 = 0x2d4;
+    const BEGIN_CLIP: u32 = 0x49;
+
+    /// A shadow is clipped to outside the element, blurred when it has a
+    /// blur radius and a plain fill when it doesn't.
+    #[test]
+    fn box_shadows_clip_out_the_element_and_blur() {
+        let tags = |command| {
+            scene(&CommandList(vec![command]))
+                .encoding()
+                .draw_tags
+                .iter()
+                .map(|tag| tag.0)
+                .collect::<Vec<u32>>()
+        };
+        let blurred = tags(shadow(4.0));
+        assert!(blurred.contains(&BEGIN_CLIP), "{blurred:x?}");
+        assert!(blurred.contains(&BLUR_RECT), "{blurred:x?}");
+        let hard = tags(shadow(0.0));
+        assert!(hard.contains(&BEGIN_CLIP), "{hard:x?}");
+        assert!(!hard.contains(&BLUR_RECT), "{hard:x?}");
     }
 
     #[test]

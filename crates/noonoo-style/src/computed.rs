@@ -422,6 +422,23 @@ pub enum Transform {
     Rotate(f32),
 }
 
+/// One `box-shadow`, in pixels.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct BoxShadow {
+    /// Horizontal offset.
+    pub x: f32,
+    /// Vertical offset.
+    pub y: f32,
+    /// Blur radius (non-negative).
+    pub blur: f32,
+    /// Spread: grows (or, negative, shrinks) the shadow box.
+    pub spread: f32,
+    /// The colour; `None` is `currentColor`, the element's final `color`.
+    pub color: Option<noonoo_css::Color>,
+    /// An `inset` shadow, drawn inside the padding box.
+    pub inset: bool,
+}
+
 /// `text-transform`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum TextTransform {
@@ -717,6 +734,8 @@ pub struct ComputedStyle {
     pub opacity: f32,
     /// `transform`, in the order written (empty for `none`).
     pub transform: Vec<Transform>,
+    /// `box-shadow`, first listed (topmost) first; empty for `none`.
+    pub box_shadow: Vec<BoxShadow>,
     /// `width`.
     pub width: Dimension,
     /// `min-width`.
@@ -805,6 +824,7 @@ impl Default for ComputedStyle {
             visibility: Visibility::Visible,
             opacity: 1.0,
             transform: Vec::new(),
+            box_shadow: Vec::new(),
             width: Dimension::Auto,
             min_width: Dimension::Auto,
             max_width: Dimension::Auto,

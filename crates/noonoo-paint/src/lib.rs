@@ -133,6 +133,24 @@ pub enum Command {
     },
     /// End the most recent [`Command::PushTransform`].
     PopTransform,
+    /// An outer CSS `box-shadow`: the rounded `rect` filled with `color`,
+    /// blurred by `blur` (the CSS blur radius; `0` is a hard edge), and
+    /// never drawn inside the element's own border box (`element`, with
+    /// `element_radius`), as in CSS.
+    BoxShadow {
+        /// The shadow box: the border box offset and grown by the spread.
+        rect: Rect,
+        /// Its corner radii (top-left, top-right, bottom-right, bottom-left).
+        radius: (f32, f32, f32, f32),
+        /// The blur radius.
+        blur: f32,
+        /// The shadow colour.
+        color: Color,
+        /// The border box the shadow is cut out under.
+        element: Rect,
+        /// The border box's corner radii.
+        element_radius: (f32, f32, f32, f32),
+    },
 }
 
 /// An ordered list of [`Command`]s.
@@ -320,6 +338,31 @@ fn paint_box(
     // (it shares its element's style, which was already painted).
     if b.kind != BoxKind::Text {
         if let Some(style) = style {
+            // Outer shadows sit under the background; the first listed is
+            // on top, so it paints last.
+            let element_radius = corner_radii(style, rect);
+            for shadow in style.box_shadow.iter().rev().filter(|s| !s.inset) {
+                let spread = shadow.spread;
+                let grow = |r: f32| if r > 0.0 { (r + spread).max(0.0) } else { 0.0 };
+                out.0.push(Command::BoxShadow {
+                    rect: Rect::new(
+                        rect.x + shadow.x - spread,
+                        rect.y + shadow.y - spread,
+                        (rect.width + 2.0 * spread).max(0.0),
+                        (rect.height + 2.0 * spread).max(0.0),
+                    ),
+                    radius: (
+                        grow(element_radius.0),
+                        grow(element_radius.1),
+                        grow(element_radius.2),
+                        grow(element_radius.3),
+                    ),
+                    blur: shadow.blur,
+                    color: shadow.color.unwrap_or(style.color),
+                    element: rect,
+                    element_radius,
+                });
+            }
             if style.background_color.a > 0 {
                 out.0.push(Command::FillRect {
                     rect,
@@ -611,6 +654,22 @@ fn command_json(command: &Command) -> Json {
             ),
         ]),
         Command::PopTransform => object(vec![("op", Json::String("pop-transform".into()))]),
+        Command::BoxShadow {
+            rect,
+            radius,
+            blur,
+            color,
+            element,
+            element_radius,
+        } => object(vec![
+            ("op", Json::String("box-shadow".into())),
+            ("rect", rect_json(*rect)),
+            ("radius", radius_json(*radius)),
+            ("blur", Json::Number(*blur as f64)),
+            ("color", Json::String(color_hex(*color))),
+            ("element", rect_json(*element)),
+            ("element-radius", radius_json(*element_radius)),
+        ]),
     }
 }
 
@@ -619,6 +678,24 @@ fn object(pairs: Vec<(&str, Json)>) -> Json {
         pairs
             .into_iter()
             .map(|(key, value)| (key.to_owned(), value))
+            .collect(),
+    )
+}
+
+fn rect_json(rect: Rect) -> Json {
+    Json::Object(vec![
+        ("x".to_owned(), Json::Number(rect.x as f64)),
+        ("y".to_owned(), Json::Number(rect.y as f64)),
+        ("width".to_owned(), Json::Number(rect.width as f64)),
+        ("height".to_owned(), Json::Number(rect.height as f64)),
+    ])
+}
+
+fn radius_json(radius: (f32, f32, f32, f32)) -> Json {
+    Json::Array(
+        [radius.0, radius.1, radius.2, radius.3]
+            .into_iter()
+            .map(|r| Json::Number(r as f64))
             .collect(),
     )
 }
@@ -1038,6 +1115,53 @@ mod tests {
             "{json}"
         );
         assert!(json.contains(r#""op":"pop-transform""#), "{json}");
+    }
+
+    #[test]
+    fn outer_box_shadows_paint_under_the_background_last_first() {
+        let list = render(
+            r#"<div id="a"></div>"#,
+            "#a { width: 100px; height: 50px; background: white; border-radius: 4px;
+                  color: red; box-shadow: 2px 3px 4px 1px, 0 0 0 6px blue, inset 0 0 2px green }",
+        );
+        let commands = list.commands();
+        let shadows: Vec<_> = commands
+            .iter()
+            .enumerate()
+            .filter_map(|(i, c)| match c {
+                Command::BoxShadow {
+                    rect,
+                    radius,
+                    blur,
+                    color,
+                    element,
+                    element_radius,
+                } => Some((i, *rect, *radius, *blur, *color, *element, *element_radius)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(shadows.len(), 2, "inset shadows are not painted yet");
+        let element = Rect::new(0.0, 0.0, 100.0, 50.0);
+        // The first shadow listed is on top, so it paints last.
+        assert_eq!(shadows[0].1, Rect::new(-6.0, -6.0, 112.0, 62.0));
+        assert_eq!(shadows[0].2, (10.0, 10.0, 10.0, 10.0));
+        assert_eq!(shadows[0].3, 0.0);
+        assert_eq!(shadows[0].4, Color::rgb(0, 0, 255));
+        assert_eq!(shadows[1].1, Rect::new(1.0, 2.0, 102.0, 52.0));
+        assert_eq!(shadows[1].2, (5.0, 5.0, 5.0, 5.0));
+        assert_eq!(shadows[1].3, 4.0);
+        assert_eq!(shadows[1].4, Color::rgb(255, 0, 0));
+        for shadow in &shadows {
+            assert_eq!(shadow.5, element);
+            assert_eq!(shadow.6, (4.0, 4.0, 4.0, 4.0));
+        }
+        let background = commands
+            .iter()
+            .position(|c| matches!(c, Command::FillRect { color, .. } if *color == Color::WHITE))
+            .unwrap();
+        assert!(shadows[1].0 < background);
+        let json = list.to_json().to_string();
+        assert!(json.contains(r#""op":"box-shadow""#), "{json}");
     }
 
     #[test]

@@ -153,6 +153,8 @@ pub enum Property {
     TextTransform,
     /// `transform`.
     Transform,
+    /// `box-shadow`.
+    BoxShadow,
     /// `opacity`.
     Opacity,
     /// `overflow-x`.
@@ -250,6 +252,7 @@ impl Property {
             "letter-spacing" => Self::LetterSpacing,
             "text-transform" => Self::TextTransform,
             "transform" => Self::Transform,
+            "box-shadow" => Self::BoxShadow,
             "opacity" => Self::Opacity,
             "overflow-x" => Self::OverflowX,
             "overflow-y" => Self::OverflowY,
@@ -342,6 +345,7 @@ impl Property {
             Self::LetterSpacing => "letter-spacing",
             Self::TextTransform => "text-transform",
             Self::Transform => "transform",
+            Self::BoxShadow => "box-shadow",
             Self::Opacity => "opacity",
             Self::OverflowX => "overflow-x",
             Self::OverflowY => "overflow-y",

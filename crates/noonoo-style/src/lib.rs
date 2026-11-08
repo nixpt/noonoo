@@ -62,8 +62,8 @@ use noonoo_css::Stylesheet;
 use noonoo_dom::{Document, NodeId};
 
 pub use computed::{
-    AlignItems, BorderCollapse, BorderStyle, BoxSizing, CalcTerm, Clear, ComputedStyle, Corners,
-    Cursor, Dimension, Display, Edges, Extreme, FlexDirection, FlexWrap, Float, FontStyle,
+    AlignItems, BorderCollapse, BorderStyle, BoxShadow, BoxSizing, CalcTerm, Clear, ComputedStyle,
+    Corners, Cursor, Dimension, Display, Edges, Extreme, FlexDirection, FlexWrap, Float, FontStyle,
     Gradient, GradientKind, GradientStop, GridLine, GridRange, JustifyContent, Length,
     LengthOrAuto, LinearDirection, Overflow, Position, RadialShape, RadialSize, TextAlign,
     TextDecoration, TextTransform, Track, Transform, Visibility, WhiteSpace, ZIndex,
@@ -234,6 +234,43 @@ mod tests {
         );
         // One bad function invalidates the whole declaration.
         assert!(get("d").transform.is_empty());
+    }
+
+    #[test]
+    fn box_shadow_lists_parse() {
+        let (doc, styles) = styled(
+            r#"<div id="a"></div><div id="b"></div><div id="c"></div><div id="d"></div>"#,
+            "#a { --ring: 0 0 0 2px red, 0 0 0 4px blue; box-shadow: var(--ring) }
+             #b { color: lime; box-shadow: inset 1px 2px 3px, rgba(0,0,0,0.5) 0 8px 48px }
+             #c { box-shadow: 1px 2px 3px red; box-shadow: none }
+             #d { box-shadow: 1px red }",
+        );
+        let get = |id: &str| styles.get(doc.get_element_by_id(id).unwrap()).unwrap();
+        let shadow = |x, y, blur, spread, color, inset| BoxShadow {
+            x,
+            y,
+            blur,
+            spread,
+            color,
+            inset,
+        };
+        assert_eq!(
+            get("a").box_shadow,
+            [
+                shadow(0.0, 0.0, 0.0, 2.0, Some(Color::rgb(255, 0, 0)), false),
+                shadow(0.0, 0.0, 0.0, 4.0, Some(Color::rgb(0, 0, 255)), false),
+            ]
+        );
+        assert_eq!(
+            get("b").box_shadow,
+            [
+                shadow(1.0, 2.0, 3.0, 0.0, None, true),
+                shadow(0.0, 8.0, 48.0, 0.0, Some(Color::rgba(0, 0, 0, 128)), false),
+            ]
+        );
+        assert!(get("c").box_shadow.is_empty());
+        // One length is not a shadow: the declaration is dropped.
+        assert!(get("d").box_shadow.is_empty());
     }
 
     #[test]
