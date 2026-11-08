@@ -204,7 +204,20 @@ pub(crate) fn shrink_to_fit(ctx: &Ctx<'_>, node: NodeId, available: f32) -> f32 
 }
 
 /// The border-box width a box would take with unwrapped content (max-content).
+///
+/// It depends only on the subtree and its styles, and walks all of it, so it
+/// is remembered for the rest of the layout: grid and shrink-to-fit sizing
+/// ask for it at every nesting level.
 pub(crate) fn preferred_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
+    if let Some(&width) = ctx.preferred.borrow().get(&node) {
+        return width;
+    }
+    let width = compute_preferred_width(ctx, node);
+    ctx.preferred.borrow_mut().insert(node, width);
+    width
+}
+
+fn compute_preferred_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
     let style = ctx.style(node);
     // Percentages are unmeasurable without a reference; they count as zero.
     let padding = resolve::paddings(&style.padding, 0.0);

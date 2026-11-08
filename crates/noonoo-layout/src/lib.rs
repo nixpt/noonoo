@@ -417,6 +417,7 @@ pub fn layout(
         tree: LayoutTree::default(),
         margins: Default::default(),
         measured: HashMap::new(),
+        preferred: Default::default(),
     };
     // The root's children share one block formatting context.
     ctx.push_bfc();
@@ -469,6 +470,8 @@ pub(crate) struct Ctx<'a> {
     pub margins: crate::margin::Cache,
     /// [`Ctx::measure_height`] results by node, width and definite height.
     pub measured: HashMap<(NodeId, u32, Option<u32>), f32>,
+    /// [`float::preferred_width`] results by node.
+    pub preferred: std::cell::RefCell<HashMap<NodeId, f32>>,
 }
 
 impl Ctx<'_> {
