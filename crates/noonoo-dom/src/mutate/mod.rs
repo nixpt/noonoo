@@ -65,15 +65,65 @@ impl<'a> DocumentMutator<'a> {
         if self.tree.is_ancestor_of(child, parent) {
             return Err(MutError::Cycle(child));
         }
-        let index = self
-            .tree
-            .children(parent)
-            .iter()
-            .position(|&id| id == sibling)
-            .unwrap_or(0);
+        if child == sibling {
+            return Ok(());
+        }
+        // Detach first: moving an earlier sibling shifts `sibling` left.
         self.tree.detach(child);
+        let index = self.position(parent, sibling);
         self.tree.insert_child(parent, index, child);
         Ok(())
+    }
+
+    /// Insert `child` immediately after `sibling`, moving it if necessary
+    /// (`sibling.after(child)`).
+    pub fn insert_after(&mut self, sibling: NodeId, child: NodeId) -> Result<(), MutError> {
+        self.require(sibling)?;
+        self.require(child)?;
+        let parent = self
+            .tree
+            .parent(sibling)
+            .ok_or(MutError::NoParent(sibling))?;
+        if self.tree.is_ancestor_of(child, parent) {
+            return Err(MutError::Cycle(child));
+        }
+        if child == sibling {
+            return Ok(());
+        }
+        self.tree.detach(child);
+        let index = self.position(parent, sibling) + 1;
+        self.tree.insert_child(parent, index, child);
+        Ok(())
+    }
+
+    /// Put `new` where `old` is, detaching `old` (`old.replaceWith(new)`).
+    /// `new` moves if it is already in the tree; replacing a node with
+    /// itself changes nothing.
+    pub fn replace_with(&mut self, old: NodeId, new: NodeId) -> Result<(), MutError> {
+        self.require(old)?;
+        self.require(new)?;
+        let parent = self.tree.parent(old).ok_or(MutError::NoParent(old))?;
+        if self.tree.is_ancestor_of(new, parent) {
+            return Err(MutError::Cycle(new));
+        }
+        if old == new {
+            return Ok(());
+        }
+        self.tree.detach(new);
+        let index = self.position(parent, old);
+        self.tree.detach(old);
+        self.tree.insert_child(parent, index, new);
+        Ok(())
+    }
+
+    /// Where `child` sits among `parent`'s children. The callers have
+    /// checked that it is one of them.
+    fn position(&self, parent: NodeId, child: NodeId) -> usize {
+        self.tree
+            .children(parent)
+            .iter()
+            .position(|&id| id == child)
+            .unwrap_or(0)
     }
 
     /// Detach `child` from its parent. The node itself is kept, and can be

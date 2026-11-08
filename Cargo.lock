@@ -79,6 +79,9 @@ version = "0.20.0"
 [[package]]
 name = "noonoo-dom"
 version = "0.20.0"
+dependencies = [
+ "noonoo-html",
+]
 
 [[package]]
 name = "noonoo-engine"

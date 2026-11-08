@@ -4,7 +4,7 @@
 //! "page tree". It owns the arena and the root id; everything structural goes
 //! through [`Document::mutate`], everything read-only through the query methods.
 
-use crate::mutate::DocumentMutator;
+use crate::mutate::{DocumentMutator, MutError};
 use crate::node::{ElementData, NodeData};
 use crate::query::{Selector, SelectorError};
 use crate::tree::{NodeId, Tree};
@@ -70,6 +70,57 @@ impl Document {
     pub fn create_element(&mut self, name: impl Into<String>) -> NodeId {
         self.tree
             .insert_raw(NodeData::Element(ElementData::new(name)))
+    }
+
+    /// Create a detached element with the given tag name and attributes, in
+    /// order. Names are lowercased; a repeated name keeps its first position
+    /// and its last value.
+    pub fn create_element_with<N, V>(
+        &mut self,
+        name: impl Into<String>,
+        attributes: impl IntoIterator<Item = (N, V)>,
+    ) -> NodeId
+    where
+        N: AsRef<str>,
+        V: Into<String>,
+    {
+        let mut data = ElementData::new(name);
+        for (name, value) in attributes {
+            data.set_attr(&name.as_ref().to_ascii_lowercase(), value);
+        }
+        self.tree.insert_raw(NodeData::Element(data))
+    }
+
+    /// A detached copy of `id` (`cloneNode`): just the node, or with `deep`
+    /// its whole subtree. The copy shares nothing with the original.
+    pub fn clone_node(&mut self, id: NodeId, deep: bool) -> Result<NodeId, MutError> {
+        let data = self.node(id).ok_or(MutError::NoSuchNode(id))?.clone();
+        let copy = self.tree.insert_raw(data);
+        if !deep {
+            return Ok(copy);
+        }
+        // Iterative, so a deep subtree can't overflow the stack.
+        let mut pending: Vec<(NodeId, NodeId)> = self
+            .tree
+            .children(id)
+            .iter()
+            .rev()
+            .map(|&child| (child, copy))
+            .collect();
+        while let Some((original, parent)) = pending.pop() {
+            let data = self.tree.get(original).map(|node| node.data.clone());
+            let Some(data) = data else { continue };
+            let child = self.tree.insert_raw(data);
+            self.tree.push_child(parent, child);
+            pending.extend(
+                self.tree
+                    .children(original)
+                    .iter()
+                    .rev()
+                    .map(|&grandchild| (grandchild, child)),
+            );
+        }
+        Ok(copy)
     }
 
     /// Create a detached text node.

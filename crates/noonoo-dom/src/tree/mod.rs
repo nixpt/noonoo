@@ -144,7 +144,14 @@ impl<T> Tree<T> {
 
     /// Whether `ancestor` is `node` or above it.
     pub fn is_ancestor_of(&self, ancestor: NodeId, node: NodeId) -> bool {
-        ancestor == node || self.ancestors(node).contains(&ancestor)
+        let mut cursor = Some(node);
+        while let Some(id) = cursor {
+            if id == ancestor {
+                return true;
+            }
+            cursor = self.parent(id);
+        }
+        false
     }
 
     /// The number of live nodes.

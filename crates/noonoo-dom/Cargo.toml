@@ -14,3 +14,6 @@ default = ["std"]
 std = []
 
 [dependencies]
+
+[dev-dependencies]
+noonoo-html.workspace = true
