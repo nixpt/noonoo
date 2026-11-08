@@ -23,7 +23,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-use noonoo_dom::Document;
+use noonoo_dom::{Document, MutError, NodeId};
 
 /// A single HTML token.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -80,7 +80,8 @@ fn is_void(name: &str) -> bool {
 /// structured correctly by the tree builder without the full insertion-mode
 /// state machine. End tags already pop to their matching element.
 fn implied_table_close(stack: &mut Vec<noonoo_dom::NodeId>, doc: &Document, name: &str) {
-    loop {
+    // `stack[0]` is the node being built into: never closed.
+    while stack.len() > 1 {
         let Some(&top) = stack.last() else { return };
         let Some(element) = doc.element(top) else {
             return;
@@ -299,9 +300,37 @@ fn read_raw_text(source: &str, pos: usize, name: &str) -> (String, usize) {
 
 /// Parse HTML into a [`Document`] using a simple stack-based tree builder.
 pub fn parse(source: &str) -> Document {
-    let tokens = tokenize(source);
     let mut doc = Document::new();
-    let mut stack = vec![doc.root()];
+    let root = doc.root();
+    build(&mut doc, root, tokenize(source));
+    doc
+}
+
+/// Parse `html` into `node`, replacing its children: `innerHTML`.
+///
+/// The fragment is built under `node` with the same tree builder as
+/// [`parse`], and can't reach outside it. An end tag for `node` or anything
+/// above it closes nothing, and tags left open close at the end of the
+/// fragment. On a raw-text element (`script`, `style`, `textarea`, `title`)
+/// the markup is the element's text, as the HTML fragment parser does.
+///
+/// A node that can't hold children is [`MutError::CannotHaveChildren`], and
+/// an id not in the document is [`MutError::NoSuchNode`]. Either way the
+/// document is unchanged.
+pub fn set_inner_html(document: &mut Document, node: NodeId, html: &str) -> Result<(), MutError> {
+    if document.element(node).is_some_and(|e| is_raw_text(&e.name)) {
+        return document.mutate().set_text(node, html);
+    }
+    // Checks the target, then empties it: replacing, never appending.
+    document.mutate().replace_children(node, &[])?;
+    build(document, node, tokenize(html));
+    Ok(())
+}
+
+/// Build `tokens` as children of `base`, the bottom of the open-element
+/// stack, which an end tag or an implied close never pops.
+fn build(doc: &mut Document, base: NodeId, tokens: Vec<Token>) {
+    let mut stack = vec![base];
 
     for token in tokens {
         match token {
@@ -333,7 +362,7 @@ pub fn parse(source: &str) -> Document {
                 // `<tbody>`/`<td>` closing). The stack builder normally relies on
                 // explicit end tags; these rules keep a subset of HTML5's
                 // table handling without the full insertion-mode state machine.
-                implied_table_close(&mut stack, &doc, &name);
+                implied_table_close(&mut stack, doc, &name);
 
                 let parent = *stack.last().unwrap();
                 let node = doc.create_element(name.clone());
@@ -352,21 +381,16 @@ pub fn parse(source: &str) -> Document {
                 }
             }
             Token::EndTag { name } => {
-                // Pop to the matching open element, if there is one.
-                if let Some(index) = stack
+                // Pop to the matching open element above `base`, if any.
+                if let Some(index) = stack[1..]
                     .iter()
                     .rposition(|&id| doc.element(id).is_some_and(|e| e.name == name))
                 {
-                    stack.truncate(index);
-                }
-                if stack.is_empty() {
-                    stack.push(doc.root());
+                    stack.truncate(index + 1);
                 }
             }
         }
     }
-
-    doc
 }
 
 /// Convert plain text to HTML: one `<pre>` block with escaped content.
