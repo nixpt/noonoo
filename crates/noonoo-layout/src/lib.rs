@@ -415,6 +415,7 @@ pub fn layout(
         pending: Vec::new(),
         floats: Vec::new(),
         tree: LayoutTree::default(),
+        margins: Default::default(),
     };
     // The root's children share one block formatting context.
     ctx.push_bfc();
@@ -462,6 +463,9 @@ pub(crate) struct Ctx<'a> {
     /// the box being laid out.
     pub floats: Vec<crate::float::Floats>,
     pub tree: LayoutTree,
+    /// Collapsed vertical margins, which depend only on the document, the
+    /// styles and the containing width, so they are computed once per layout.
+    pub margins: crate::margin::Cache,
 }
 
 impl Ctx<'_> {

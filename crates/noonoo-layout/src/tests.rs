@@ -1309,3 +1309,36 @@ fn an_auto_width_float_counts_its_padding_and_border_once() {
     let f = tree.get(id(&doc, "f")).unwrap().rect;
     assert_eq!(f.width, 4.0 * 8.0 + 32.0 + 4.0, "{f:?}");
 }
+
+/// Margin collapsing walks each block's first and last child. It used to do
+/// that once for each edge and again from the parent, so the cost doubled at
+/// every nesting level: 25 nested divs took about 30 s. Runs on a thread with
+/// a deadline so a regression fails instead of hanging.
+#[test]
+fn deeply_nested_blocks_lay_out_in_linear_time() {
+    let (done, wait) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let depth = 400;
+        let html = format!("{}x{}", "<div>".repeat(depth), "</div>".repeat(depth));
+        let (_, tree) = page(&html, "div { margin: 1px 0 }", 800.0);
+        let _ = done.send(tree.boxes.len());
+    });
+    let boxes = wait
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("layout of 400 nested divs did not finish in 5 s");
+    assert!(boxes >= 400);
+}
+
+/// Memoising margins must not change them: nested collapse-through boxes and
+/// a first child's margin still collapse into their parent's.
+#[test]
+fn nested_margins_still_collapse_through_their_parents() {
+    let (doc, tree) = page(
+        r#"<div id="a"><div><div id="b">x</div></div></div><div id="c">y</div>"#,
+        "body { margin: 0 } div { margin: 10px 0 } #b { margin-top: 30px }",
+        800.0,
+    );
+    // #a's top margin collapses with its descendants' down to #b's 30px.
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.y, 30.0);
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.y, 30.0);
+}

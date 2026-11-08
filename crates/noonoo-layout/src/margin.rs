@@ -19,6 +19,9 @@
 //!
 //! Not modelled: `min-height` interactions, and clearance from floats.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
+
 use noonoo_dom::NodeId;
 use noonoo_style::{Dimension, Display};
 
@@ -31,7 +34,18 @@ pub(crate) fn collapse(first: f32, second: f32) -> f32 {
     first.max(0.0).max(second.max(0.0)) + first.min(0.0).min(second.min(0.0))
 }
 
+/// Memoised [`effective_margins`] and [`is_collapse_through`], keyed by node
+/// and containing width (as bits). Each block's first and last child is asked
+/// for its margins by both edges and again by the parent's layout, so without
+/// this the cost doubles at every nesting level.
+#[derive(Default)]
+pub(crate) struct Cache {
+    margins: RefCell<HashMap<(NodeId, u32), VerticalMargins>>,
+    through: RefCell<HashMap<(NodeId, u32), bool>>,
+}
+
 /// The margins a block box presents to its parent.
+#[derive(Clone, Copy)]
 pub(crate) struct VerticalMargins {
     /// The effective top margin (already collapsed through the leading chain).
     pub top: f32,
@@ -46,6 +60,16 @@ pub(crate) struct VerticalMargins {
 
 /// The margins a block box presents to its parent.
 pub(crate) fn effective_margins(ctx: &Ctx<'_>, node: NodeId, width: f32) -> VerticalMargins {
+    let key = (node, width.to_bits());
+    if let Some(&cached) = ctx.margins.margins.borrow().get(&key) {
+        return cached;
+    }
+    let margins = compute_effective_margins(ctx, node, width);
+    ctx.margins.margins.borrow_mut().insert(key, margins);
+    margins
+}
+
+fn compute_effective_margins(ctx: &Ctx<'_>, node: NodeId, width: f32) -> VerticalMargins {
     let style = ctx.style(node);
     let margin = resolve::margins(&style.margin, width);
     let padding = resolve::paddings(&style.padding, width);
@@ -147,6 +171,16 @@ fn trailing_margin(ctx: &Ctx<'_>, node: NodeId, own: f32, content_width: f32) ->
 /// Whether a box's top and bottom margins are adjoining: no border, padding,
 /// height, or in-flow content other than further collapsed-through blocks.
 fn is_collapse_through(ctx: &Ctx<'_>, node: NodeId, width: f32) -> bool {
+    let key = (node, width.to_bits());
+    if let Some(&cached) = ctx.margins.through.borrow().get(&key) {
+        return cached;
+    }
+    let through = compute_is_collapse_through(ctx, node, width);
+    ctx.margins.through.borrow_mut().insert(key, through);
+    through
+}
+
+fn compute_is_collapse_through(ctx: &Ctx<'_>, node: NodeId, width: f32) -> bool {
     let style = ctx.style(node);
     let padding = resolve::paddings(&style.padding, width);
     let border = resolve::borders(style);
