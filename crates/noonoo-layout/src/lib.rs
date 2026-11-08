@@ -963,39 +963,6 @@ impl Ctx<'_> {
             .is_some_and(|style| style.display == Display::None)
     }
 
-    /// The text an inline element shows in flow: its descendants' text in
-    /// order, leaving out `display: none` subtrees and positioned
-    /// (out-of-flow) ones. Those are pushed to `out_of_flow`, to be laid
-    /// out as boxes of their own.
-    pub(crate) fn flow_text(&self, node: NodeId, out_of_flow: &mut Vec<NodeId>) -> String {
-        let mut text = String::new();
-        let mut stack: Vec<NodeId> = self
-            .document
-            .tree()
-            .children(node)
-            .iter()
-            .rev()
-            .copied()
-            .collect();
-        while let Some(current) = stack.pop() {
-            match self.document.node(current) {
-                Some(NodeData::Text(chunk)) => text.push_str(chunk),
-                Some(NodeData::Element(_)) => {
-                    if self.is_hidden(current) {
-                        continue;
-                    }
-                    if self.is_out_of_flow(current) {
-                        out_of_flow.push(current);
-                        continue;
-                    }
-                    stack.extend(self.document.tree().children(current).iter().rev().copied());
-                }
-                _ => {}
-            }
-        }
-        text
-    }
-
     /// Whether `node` is taken out of normal flow (`position: absolute`/`fixed`).
     pub fn is_out_of_flow(&self, node: NodeId) -> bool {
         !self.is_text(node)

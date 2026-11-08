@@ -212,6 +212,52 @@ struct Item {
     height: f32,
     /// Set for an atomic inline: laid out as a box of its own at placement.
     atomic: Option<Atomic>,
+    /// Whether a space goes before it on a line (white space preceded it).
+    spaced: bool,
+    /// Whether it sticks to the item before: no line break between them.
+    glued: bool,
+}
+
+/// How many of `items` fit on the first line of `width`: greedy breaking at
+/// the break opportunities, where an item isn't glued to the one before.
+/// A run of glued items is placed whole; the first always fits.
+fn first_line_len(items: &[Item], space: f32, width: f32) -> usize {
+    // Clusters: (item count, width), split where a break may go.
+    let mut clusters: Vec<(usize, f32)> = Vec::new();
+    for (index, item) in items.iter().enumerate() {
+        let gap = if item.spaced { space } else { 0.0 };
+        match clusters.last_mut() {
+            Some((count, used)) if index > 0 && item.glued => {
+                *count += 1;
+                *used += gap + item.width;
+            }
+            _ => clusters.push((1, item.width)),
+        }
+    }
+    // Clusters after the first are separated by the space a break replaces
+    // (every unglued item but one with no white space before is spaced).
+    let gaps: Vec<f32> = {
+        let mut start = 0;
+        clusters
+            .iter()
+            .map(|&(count, _)| {
+                let gap = if items[start].spaced { space } else { 0.0 };
+                start += count;
+                gap
+            })
+            .collect()
+    };
+    let mut used = 0.0;
+    let mut taken = 0;
+    for (index, &(count, cluster)) in clusters.iter().enumerate() {
+        let gap = if index == 0 { 0.0 } else { gaps[index] };
+        if index > 0 && used + gap + cluster > width + 0.01 {
+            break;
+        }
+        used += gap + cluster;
+        taken += count;
+    }
+    taken
 }
 
 /// How to lay out an atomic inline once the line places it.
@@ -257,7 +303,18 @@ pub(crate) fn layout_inline_run(
     // fresh line, and an empty group is the blank line between two breaks.
     let mut groups: Vec<Vec<Item>> = vec![Vec::new()];
     let mut had_break = false;
-    for &node in nodes {
+    // Whether white space came since the last item: a space goes before
+    // the next one, and the line may break there.
+    let mut spaced = false;
+    // CSS Text: a line may break on either side of an atomic inline, white
+    // space or not. Set after one, for the item that follows.
+    let mut after_atomic = false;
+    // The inline content in document order, each node with the inline
+    // element it sits in (`None` at the top). A worklist, not recursion:
+    // deep inline nesting mustn't cost stack per level.
+    let mut stack: Vec<(NodeId, Option<NodeId>)> =
+        nodes.iter().rev().map(|&node| (node, None)).collect();
+    while let Some((node, owner)) = stack.pop() {
         if is_display_none(ctx, node) {
             continue;
         }
@@ -265,30 +322,64 @@ pub(crate) fn layout_inline_run(
             float::place(ctx, node, x, width, y);
             continue;
         }
+        if owner.is_some() && ctx.is_out_of_flow(node) {
+            ctx.pending.push(node);
+            continue;
+        }
         match ctx.document.node(node) {
             Some(NodeData::Text(text)) => {
+                // Text in an inline element is that element's: its style,
+                // its box. Loose text is the container's.
+                let (style, item_node, kind) = match owner {
+                    None => (parent_style, node, BoxKind::Text),
+                    Some(element) => (ctx.style(element), element, BoxKind::Inline),
+                };
+                let style_node = owner.unwrap_or(parent_node);
+                let height = match owner {
+                    None => line_height,
+                    Some(_) => ctx.line_height_of(style),
+                };
+                // Inside a `nowrap`/`pre` element the words don't break.
+                let unbreakable = owner.is_some()
+                    && matches!(style.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre);
                 // A preserved newline breaks the line like a `<br>`.
-                for (piece, line) in crate::forced_lines(text, parent_style.white_space)
+                for (piece, line) in crate::forced_lines(text, style.white_space)
                     .into_iter()
                     .enumerate()
                 {
                     if piece > 0 {
                         had_break = true;
                         groups.push(Vec::new());
+                        spaced = false;
                     }
-                    for word in line.split_whitespace() {
+                    if line.starts_with(char::is_whitespace) {
+                        spaced = true;
+                    }
+                    for (index, word) in line.split_whitespace().enumerate() {
+                        let first = index == 0;
                         groups
                             .last_mut()
                             .expect("the first group always exists")
                             .push(Item {
-                                node,
-                                style_node: parent_node,
-                                kind: BoxKind::Text,
+                                node: item_node,
+                                style_node,
+                                kind,
                                 text: word.to_owned(),
-                                width: ctx.advance(word, parent_style),
-                                height: line_height,
+                                width: ctx.advance(word, style),
+                                height,
                                 atomic: None,
+                                spaced: !first || spaced,
+                                glued: if first {
+                                    !spaced && !after_atomic
+                                } else {
+                                    unbreakable
+                                },
                             });
+                        spaced = false;
+                        after_atomic = false;
+                    }
+                    if line.ends_with(char::is_whitespace) {
+                        spaced = true;
                     }
                 }
             }
@@ -296,6 +387,7 @@ pub(crate) fn layout_inline_run(
                 if element.name == "br" {
                     had_break = true;
                     groups.push(Vec::new());
+                    spaced = false;
                     continue;
                 }
                 let style = ctx.style(node).clone();
@@ -322,43 +414,20 @@ pub(crate) fn layout_inline_run(
                                 margin_left: margin.left,
                                 margin_top: margin.top,
                             }),
+                            spaced,
+                            glued: false,
                         });
+                    spaced = false;
+                    after_atomic = true;
                     continue;
                 }
-                // Replaced content (`<img alt>`, `<input value>`) shows its
-                // placeholder text, like a browser while the source is
-                // missing; otherwise an element is just its own text.
-                let mut positioned = Vec::new();
-                let content = ctx.flow_text(node, &mut positioned);
-                ctx.pending.extend(positioned);
-                let content = if content.is_empty() {
-                    element.placeholder_text().to_owned()
-                } else {
-                    content
-                };
-                let height = ctx.line_height_of(&style);
-                // A newline the element's white space preserves breaks the
-                // line like a `<br>`: one run per line, the element's own.
-                for (piece, line) in crate::forced_lines(&content, style.white_space)
-                    .into_iter()
-                    .enumerate()
-                {
-                    if piece > 0 {
-                        had_break = true;
-                        groups.push(Vec::new());
-                    }
-                    // Wrappable text breaks between its words; on a line,
-                    // the element's words merge back into one box.
-                    let words: Vec<&str> =
-                        if matches!(style.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre) {
-                            Some(line)
-                                .filter(|line| !line.is_empty())
-                                .into_iter()
-                                .collect()
-                        } else {
-                            line.split_whitespace().collect()
-                        };
-                    for word in words {
+                let children = ctx.document.tree().children(node);
+                if children.is_empty() {
+                    // Replaced content (`<img alt>`, `<input value>`) shows
+                    // its placeholder text, like a browser while the source
+                    // is missing.
+                    let text = element.placeholder_text();
+                    if !text.is_empty() {
                         groups
                             .last_mut()
                             .expect("the first group always exists")
@@ -366,13 +435,19 @@ pub(crate) fn layout_inline_run(
                                 node,
                                 style_node: node,
                                 kind: BoxKind::Inline,
-                                width: ctx.advance(word, &style),
-                                text: word.to_owned(),
-                                height,
+                                text: text.to_owned(),
+                                width: ctx.advance(text, &style),
+                                height: ctx.line_height_of(&style),
                                 atomic: None,
+                                spaced,
+                                glued: !spaced && !after_atomic,
                             });
+                        spaced = false;
+                        after_atomic = false;
                     }
+                    continue;
                 }
+                stack.extend(children.iter().rev().map(|&child| (child, Some(node))));
             }
             _ => {}
         }
@@ -412,19 +487,18 @@ pub(crate) fn layout_inline_run(
                 ctx.floats()
                     .band(x, width, cursor_y, cursor_y + line_height);
             let band_width = (band_right - band_left).max(0.0);
-            let widths: Vec<f32> = items[start..].iter().map(|item| item.width).collect();
-            let wrapped = match parent_style.white_space {
-                WhiteSpace::NoWrap | WhiteSpace::Pre => {
-                    vec![(0..widths.len()).collect::<Vec<usize>>()]
-                }
-                _ => noonoo_text::wrap(&widths, space, band_width),
+            let rest = &items[start..];
+            let line_len = match parent_style.white_space {
+                WhiteSpace::NoWrap | WhiteSpace::Pre => rest.len(),
+                _ => first_line_len(rest, space, band_width),
             };
-            let line = &wrapped[0];
+            let line: Vec<usize> = (0..line_len).collect();
 
-            let used: f32 = line.iter().map(|&i| items[start + i].width).sum::<f32>()
-                + space * line.len().saturating_sub(1) as f32;
+            let spaces = rest[1..line_len].iter().filter(|item| item.spaced).count();
+            let used: f32 =
+                rest[..line_len].iter().map(|item| item.width).sum::<f32>() + space * spaces as f32;
             let free = (band_width - used).max(0.0);
-            let offset = noonoo_text::align(alignment, free, line.len());
+            let offset = noonoo_text::align(alignment, free, spaces + 1);
 
             let mut cursor_x = band_left + offset.start;
             let mut line_h = line_height;
@@ -432,10 +506,10 @@ pub(crate) fn layout_inline_run(
             // next word extends.
             let mut open_run: Option<(NodeId, usize)> = None;
             for (position, &i) in line.iter().enumerate() {
-                if position > 0 {
+                let item = &items[start + i];
+                if position > 0 && item.spaced {
                     cursor_x += space + offset.gap;
                 }
-                let item = &items[start + i];
                 line_h = line_h.max(item.height);
                 if let Some(atomic) = item.atomic {
                     ctx.layout_element(
@@ -460,7 +534,9 @@ pub(crate) fn layout_inline_run(
                     run.rect.width = cursor_x + item.width - run.rect.x;
                     run.rect.height = run.rect.height.max(item.height);
                     if let Some(text) = run.text.as_mut() {
-                        text.push(' ');
+                        if item.spaced {
+                            text.push(' ');
+                        }
                         text.push_str(&item.text);
                     }
                     cursor_x += item.width;

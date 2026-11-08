@@ -2493,3 +2493,105 @@ fn a_shrink_to_fit_box_can_narrow_to_an_inline_elements_longest_word() {
     // container, no narrower than "aaaa".
     assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 40.0);
 }
+
+/// The x of each drawn text run, in reading order.
+fn drawn_x(tree: &LayoutTree) -> Vec<(String, f32)> {
+    tree.boxes()
+        .iter()
+        .filter_map(|b| {
+            b.text
+                .clone()
+                .filter(|t| !t.is_empty())
+                .map(|t| (t, b.rect.x))
+        })
+        .collect()
+}
+
+/// An element nested in an inline element was folded into the outer one's
+/// text, so `<b>` inside `<a>` laid out (and painted) in the link's style.
+#[test]
+fn a_nested_inline_element_keeps_its_own_style_and_box() {
+    let (doc, tree) = page(
+        r#"<p><a id="a">x <b id="b">yy</b> z</a></p>"#,
+        "p { margin: 0 }",
+        400.0,
+    );
+    // MetricShaper: 8px a character, 8.8px in bold.
+    assert_eq!(
+        drawn_x(&tree),
+        vec![
+            ("x".to_owned(), 0.0),
+            ("yy".to_owned(), 16.0),
+            ("z".to_owned(), 41.6)
+        ]
+    );
+    let b = tree.get(id(&doc, "b")).unwrap();
+    assert_eq!(b.style_node, id(&doc, "b"));
+    assert!((b.rect.width - 17.6).abs() < 0.01, "{:?}", b.rect);
+}
+
+/// Text that touches an element in the source touches it on the line: no
+/// space is drawn between them, and the line can't break there.
+#[test]
+fn an_element_boundary_without_white_space_adds_no_space() {
+    let (_doc, tree) = page(
+        r#"<p><b>Bold</b>ness, <a>x<b>y</b></a></p>"#,
+        "p { margin: 0 }",
+        400.0,
+    );
+    let at = drawn_x(&tree);
+    // "Bold" is 35.2px in bold; "ness," follows it directly.
+    assert_eq!(at[1], ("ness,".to_owned(), 35.2), "{at:?}");
+    // " x" after the space, then "y" against it.
+    let x = at[2].1;
+    assert_eq!(at[3], ("y".to_owned(), x + 8.0), "{at:?}");
+}
+
+#[test]
+fn a_word_split_across_elements_stays_on_one_line() {
+    let (_doc, tree) = page(
+        r#"<div><b>Bold</b>ness</div>"#,
+        "div { width: 40px; line-height: 20px }",
+        400.0,
+    );
+    // 35.2 + 32px overflows 40px, but there's no break opportunity.
+    assert!(drawn_text(&tree).iter().all(|(_, y)| *y == 0.0));
+}
+
+#[test]
+fn hidden_and_positioned_descendants_leave_the_line() {
+    let (doc, tree) = page(
+        r#"<p><span>a<span hidden>h</span>b<span id="abs" style="position: absolute">c</span></span></p>"#,
+        "p { margin: 0 }",
+        400.0,
+    );
+    assert_eq!(
+        drawn_x(&tree)
+            .into_iter()
+            .filter(|(t, _)| t != "c")
+            .collect::<Vec<_>>(),
+        // Two text nodes of one span, touching: one run.
+        vec![("ab".to_owned(), 0.0)]
+    );
+    // The positioned descendant still gets laid out as its own box.
+    assert!(tree.get(id(&doc, "abs")).is_some());
+}
+
+#[test]
+fn an_atomic_inline_against_text_gets_no_space_but_may_wrap() {
+    let (doc, tree) = page(
+        r#"<div>ab<i id="i"></i>cd</div>"#,
+        "div { width: 100px } i { display: inline-block; width: 20px; height: 10px }",
+        400.0,
+    );
+    let i = tree.get(id(&doc, "i")).unwrap().rect;
+    assert_eq!(i.x, 16.0, "touching ab");
+    assert_eq!(drawn_x(&tree)[1], ("cd".to_owned(), 36.0));
+    // Too narrow for all three: the line breaks beside the box.
+    let (doc, tree) = page(
+        r#"<div>ab<i id="i"></i>cd</div>"#,
+        "div { width: 30px } i { display: inline-block; width: 20px; height: 10px }",
+        400.0,
+    );
+    assert!(tree.get(id(&doc, "i")).unwrap().rect.y > 0.0);
+}
