@@ -70,6 +70,20 @@ impl Gate {
             .find_map(|ancestor| self.guards.get(&ancestor))
     }
 
+    /// The guards strictly below `node`, in its subtree.
+    fn guards_within<'g>(
+        &'g self,
+        document: &'g Document,
+        node: NodeId,
+    ) -> impl Iterator<Item = &'g Scope> + 'g {
+        self.guards
+            .iter()
+            .filter(move |&(&guarded, _)| {
+                guarded != node && document.tree().is_ancestor_of(node, guarded)
+            })
+            .map(|(_, scope)| scope)
+    }
+
     /// Whether any node is guarded.
     pub fn is_empty(&self) -> bool {
         self.guards.is_empty()
@@ -236,9 +250,10 @@ impl<'a> GatedDocument<'a> {
 /// The permission check runs against every node a write changes: the parent
 /// for an insertion, the node itself for a removal or attribute change. A
 /// moved node is also removed from where it was, so it needs write too, and
-/// replacing a node's children removes each of them. A guarded subtree
-/// cannot be edited, emptied, or moved out of by a subject who cannot write
-/// its guard.
+/// replacing a node's children removes each of them. Removing a subtree takes
+/// every guarded node inside it along, so it needs write on each of those
+/// guards as well. A guarded subtree cannot be edited, emptied, moved out of,
+/// or removed with an open ancestor by a subject who cannot write its guard.
 pub struct GatedMutator<'a> {
     document: &'a mut Document,
     gate: &'a Gate,
@@ -270,20 +285,35 @@ impl<'a> GatedMutator<'a> {
     fn require(&self, node: NodeId) -> Result<(), CapsError> {
         let document: &Document = self.document;
         match self.gate.required(document, node) {
-            Some(scope)
-                if self
-                    .authorizer
-                    .authorize(self.subject, Action::Write, scope)
-                    .is_denied() =>
-            {
-                Err(CapsError::Denied(Denied {
-                    subject: self.subject.clone(),
-                    action: Action::Write,
-                    scope: scope.clone(),
-                }))
-            }
-            _ => Ok(()),
+            Some(scope) => self.require_scope(scope),
+            None => Ok(()),
         }
+    }
+
+    fn require_scope(&self, scope: &Scope) -> Result<(), CapsError> {
+        if self
+            .authorizer
+            .authorize(self.subject, Action::Write, scope)
+            .is_denied()
+        {
+            return Err(CapsError::Denied(Denied {
+                subject: self.subject.clone(),
+                action: Action::Write,
+                scope: scope.clone(),
+            }));
+        }
+        Ok(())
+    }
+
+    /// Write access to `node` and to every guard inside it: what removing
+    /// the subtree takes out of the document.
+    fn require_subtree(&self, node: NodeId) -> Result<(), CapsError> {
+        self.require(node)?;
+        let document: &Document = self.document;
+        for scope in self.gate.guards_within(document, node) {
+            self.require_scope(scope)?;
+        }
+        Ok(())
     }
 
     /// Set an attribute, if the subject may write `element`.
@@ -309,11 +339,11 @@ impl<'a> GatedMutator<'a> {
             .map_err(CapsError::Mutation)
     }
 
-    /// Write access to each of `parent`'s current children: the ones a
-    /// replacement removes.
+    /// Write access to each of `parent`'s current children and the guards
+    /// inside them: what a replacement removes.
     fn require_children(&self, parent: NodeId) -> Result<(), CapsError> {
         for &child in self.document.tree().children(parent) {
-            self.require(child)?;
+            self.require_subtree(child)?;
         }
         Ok(())
     }
@@ -340,9 +370,10 @@ impl<'a> GatedMutator<'a> {
             .map_err(CapsError::Mutation)
     }
 
-    /// Remove `child`, if the subject may write it.
+    /// Remove `child`, if the subject may write it and every guarded node
+    /// inside it.
     pub fn remove(&mut self, child: NodeId) -> Result<(), CapsError> {
-        self.require(child)?;
+        self.require_subtree(child)?;
         self.document
             .mutate()
             .remove(child)

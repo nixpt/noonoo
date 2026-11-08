@@ -253,3 +253,45 @@ fn replacing_children_cannot_drop_a_guarded_child() {
     ));
     assert_eq!(document.tree().children(public), &[public_p]);
 }
+
+#[test]
+fn removing_a_subtree_needs_write_on_every_guard_inside_it() {
+    // `<body>` is open, but `#secret` inside it is guarded: removing the
+    // open ancestor takes the guarded content with it, so it is refused.
+    let document = noonoo_html::parse(
+        r#"<main id="open"><div id="secret"><p>classified</p></div><p>x</p></main><aside id="plain"><p>y</p></aside>"#,
+    );
+    let mut document = document;
+    let open = document.get_element_by_id("open").unwrap();
+    let secret = document.get_element_by_id("secret").unwrap();
+    let plain = document.get_element_by_id("plain").unwrap();
+    let mut gate = Gate::new();
+    gate.guard(secret, secret_scope());
+
+    let root = document.root();
+    let fresh = document.create_element("span");
+    {
+        let subject = Subject::anonymous();
+        let policy = Policy::new();
+        let mut writer = GatedMutator::new(&mut document, &gate, &policy, &subject);
+        assert!(matches!(writer.remove(open), Err(CapsError::Denied(_))));
+        // The same rule for the writes that drop children.
+        assert!(matches!(
+            writer.replace_children(root, &[fresh]),
+            Err(CapsError::Denied(_))
+        ));
+        assert!(matches!(
+            writer.set_text(root, "wiped"),
+            Err(CapsError::Denied(_))
+        ));
+        // A subtree with no guard inside is still removable.
+        writer.remove(plain).unwrap();
+    }
+    assert!(document.is_connected(secret));
+
+    // With write on the inner guard, the open ancestor can go.
+    let editor = Subject::new("did:exo:editor");
+    let policy = Policy::new().grant(Grant::new(editor.clone(), secret_scope(), Actions::ALL));
+    let mut writer = GatedMutator::new(&mut document, &gate, &policy, &editor);
+    writer.remove(open).unwrap();
+}
