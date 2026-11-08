@@ -21,3 +21,4 @@ noonoo-style.workspace = true
 noonoo-layout.workspace = true
 noonoo-geometry.workspace = true
 noonoo-paint.workspace = true
+noonoo-net.workspace = true

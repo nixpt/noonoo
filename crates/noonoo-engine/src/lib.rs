@@ -24,6 +24,8 @@ use noonoo_css::Stylesheet;
 use noonoo_dom::{Change, Changes, Document, NodeData, NodeId};
 use noonoo_style::{Cascade, Interaction, Styles, Viewport};
 
+mod resources;
+
 /// A page: a DOM document, its stylesheets, and (later) its resolved layout.
 pub struct Engine {
     dom: Document,
@@ -32,6 +34,8 @@ pub struct Engine {
     style_elements: Vec<NodeId>,
     /// The stylesheets prepared for [`Engine::restyle`], once it has run.
     cascade: Option<Cascade>,
+    /// Subresources: the loader, what was asked of it, and what arrived.
+    resources: resources::Resources,
 }
 
 impl Default for Engine {
@@ -48,6 +52,7 @@ impl Engine {
             stylesheets: Vec::new(),
             style_elements: Vec::new(),
             cascade: None,
+            resources: resources::Resources::default(),
         }
     }
 
@@ -198,7 +203,7 @@ impl Engine {
         shaper: &dyn noonoo_layout::Shaper,
     ) -> noonoo_layout::LayoutTree {
         let styles = self.compute_styles_for(viewport);
-        noonoo_layout::layout(&self.dom, &styles, viewport, shaper)
+        noonoo_layout::layout_with_images(&self.dom, &styles, viewport, shaper, self.images())
     }
 
     /// Lay out and paint the document, returning the render command stream.
@@ -221,7 +226,8 @@ impl Engine {
         glyphs: &dyn noonoo_paint::Glyphs,
     ) -> noonoo_paint::CommandList {
         let styles = self.compute_styles_for(viewport);
-        let layout = noonoo_layout::layout(&self.dom, &styles, viewport, shaper);
+        let layout =
+            noonoo_layout::layout_with_images(&self.dom, &styles, viewport, shaper, self.images());
         noonoo_paint::paint_with(&styles, &layout, glyphs)
     }
 

@@ -92,6 +92,7 @@ dependencies = [
  "noonoo-geometry",
  "noonoo-html",
  "noonoo-layout",
+ "noonoo-net",
  "noonoo-paint",
  "noonoo-style",
 ]
