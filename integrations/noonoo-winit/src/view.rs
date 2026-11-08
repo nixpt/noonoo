@@ -236,7 +236,9 @@ impl View {
             }
             Event::PointerUp(pointer) => {
                 self.host.release();
-                let hit = self.host.hit(point);
+                // Compare like with like: the press recorded the element
+                // under the pointer, so a release on its text still counts.
+                let hit = self.host.element_hit(point);
                 self.host.dispatch_pointer(point, event, listener!(self));
                 // A press and a release on one target is a click.
                 if self.press.is_some() && self.press == hit {

@@ -36,10 +36,14 @@ fn view() -> (View, Log) {
 }
 
 fn button(state: ElementState) -> WindowEvent {
+    button_at(state, 20.0, 20.0)
+}
+
+fn button_at(state: ElementState, x: f64, y: f64) -> WindowEvent {
     WindowEvent::PointerButton {
         device_id: None,
         state,
-        position: PhysicalPosition::new(20.0, 20.0),
+        position: PhysicalPosition::new(x, y),
         primary: true,
         button: ButtonSource::Mouse(MouseButton::Left),
     }
@@ -130,4 +134,47 @@ fn a_surface_resize_resizes_the_host_and_runs_the_resize_hook() {
     assert_eq!(view.host().viewport, Size::new(400.0, 300.0));
     assert_eq!(seen.get(), Some(Size::new(400.0, 300.0)));
     assert!(view.update(), "the new size is laid out");
+}
+
+#[test]
+fn a_click_on_text_inside_a_flex_link_is_a_click() {
+    // The super-surfer sidebar: the label is a flex item, and the hit lands
+    // on its text node while the press is recorded on the element.
+    let mut host = Host::new(Size::new(200.0, 100.0));
+    host.add_chrome(
+        Engine::from_html(
+            r#"<a id="go" href="shell://reload" style="display: flex"><span>Reload</span></a>"#,
+        ),
+        Rect::new(0.0, 0.0, 200.0, 100.0),
+    );
+    let log: Log = Rc::default();
+    let record = log.clone();
+    let mut view = View::new("test", host, move |node, event, _phase| {
+        if let Event::Click(_) = event {
+            record.borrow_mut().push((node, "click"));
+        }
+        Propagation::Continue
+    });
+    view.update();
+    let text = {
+        let layer = &view.host().layers()[0];
+        let dom = layer.engine().dom();
+        let point = noonoo_geometry::Point::new(5.0, 8.0);
+        view.host()
+            .hit(point)
+            .map(|(_, node)| dom.element(node).is_none())
+    };
+    assert_eq!(text, Some(true), "the hit lands on text");
+    view.window_event(button_at(ElementState::Pressed, 5.0, 8.0));
+    view.window_event(button_at(ElementState::Released, 5.0, 8.0));
+    let go = view.host().layers()[0]
+        .engine()
+        .dom()
+        .get_element_by_id("go")
+        .unwrap();
+    assert!(
+        log.borrow().iter().any(|&(node, _)| node == go),
+        "{:?}",
+        log.borrow()
+    );
 }
