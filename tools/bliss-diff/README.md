@@ -44,3 +44,4 @@ Options: `--width`/`--height` (viewport, 1024 × 768), `--tolerance` (px, 1),
 | | positions | sizes |
 |---|---|---|
 | our pages + 8 public pages | 3% | 17% |
+| after `ec84ff1` (margins, centring, invalid `display`, percentage cells) | 3% | 24% |
