@@ -987,6 +987,29 @@ impl Ctx<'_> {
             .is_some_and(|style| style.display == Display::None)
     }
 
+    /// Whether `node` is text of collapsible white space only (spaces, tabs,
+    /// newlines; not a no-break space) under a `white-space` that collapses
+    /// it: between blocks it makes no box at all (CSS 2 §9.2.2.1).
+    pub(crate) fn is_collapsible_blank(&self, node: NodeId) -> bool {
+        if !self.is_text(node) {
+            return false;
+        }
+        let collapses = self
+            .document
+            .tree()
+            .parent(node)
+            .and_then(|parent| self.styles.get(parent))
+            .is_none_or(|style| {
+                matches!(style.white_space, WhiteSpace::Normal | WhiteSpace::NoWrap)
+            });
+        collapses
+            && self
+                .document
+                .text_content(node)
+                .chars()
+                .all(|c| matches!(c, ' ' | '\t' | '\n' | '\r' | '\u{c}'))
+    }
+
     /// Whether `node` is taken out of normal flow (`position: absolute`/`fixed`).
     pub fn is_out_of_flow(&self, node: NodeId) -> bool {
         !self.is_text(node)

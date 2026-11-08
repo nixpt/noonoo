@@ -92,7 +92,8 @@ fn compute_effective_margins(ctx: &Ctx<'_>, node: NodeId, width: f32) -> Vertica
         // collapses into one.
         let mut through = collapse(margin.top, margin.bottom);
         for child in child_nodes(ctx.document, node) {
-            if ctx.is_hidden(child) || ctx.is_out_of_flow(child) {
+            if ctx.is_hidden(child) || ctx.is_out_of_flow(child) || ctx.is_collapsible_blank(child)
+            {
                 continue;
             }
             let child_margin = effective_margins(ctx, child, content_width);
@@ -134,7 +135,7 @@ fn compute_effective_margins(ctx: &Ctx<'_>, node: NodeId, width: f32) -> Vertica
 fn leading_margin(ctx: &Ctx<'_>, node: NodeId, own: f32, content_width: f32) -> f32 {
     let mut margin = own;
     for child in child_nodes(ctx.document, node) {
-        if ctx.is_hidden(child) || ctx.is_out_of_flow(child) {
+        if ctx.is_hidden(child) || ctx.is_out_of_flow(child) || ctx.is_collapsible_blank(child) {
             continue;
         }
         if ctx.is_text(child) || ctx.is_inline_level(child) {
@@ -157,7 +158,7 @@ fn leading_margin(ctx: &Ctx<'_>, node: NodeId, own: f32, content_width: f32) -> 
 fn trailing_margin(ctx: &Ctx<'_>, node: NodeId, own: f32, content_width: f32) -> f32 {
     let mut margin = own;
     for child in child_nodes(ctx.document, node).into_iter().rev() {
-        if ctx.is_hidden(child) || ctx.is_out_of_flow(child) {
+        if ctx.is_hidden(child) || ctx.is_out_of_flow(child) || ctx.is_collapsible_blank(child) {
             continue;
         }
         if ctx.is_text(child) || ctx.is_inline_level(child) {
@@ -222,7 +223,7 @@ fn inline_edge(ctx: &Ctx<'_>, node: NodeId, from_start: bool) -> Edge {
             continue;
         }
         if ctx.is_text(child) {
-            if ctx.document.text_content(child).trim().is_empty() {
+            if ctx.is_collapsible_blank(child) {
                 continue;
             }
             return Edge::Content;
@@ -271,6 +272,11 @@ fn compute_is_collapse_through(ctx: &Ctx<'_>, node: NodeId, width: f32) -> bool 
 
     for child in child_nodes(ctx.document, node) {
         if ctx.is_hidden(child) || ctx.is_out_of_flow(child) {
+            continue;
+        }
+        // White space between blocks is nothing; in a flex container it
+        // makes no item either.
+        if ctx.is_collapsible_blank(child) {
             continue;
         }
         // A flex item is content, whatever its own size.

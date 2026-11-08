@@ -122,12 +122,26 @@ pub(crate) fn layout_block_children(
             // collapsing, so the run applies any pending margin in full
             // before its first line. A block inside an inline element at
             // the run's start or end still adjoins the flow's margins.
+            // A run of white space alone makes no box: the margins on
+            // either side of it still collapse.
+            if run.iter().all(|&node| ctx.is_collapsible_blank(node)) {
+                continue;
+            }
+            // Its edge blocks, past the white space around them.
+            let first = run
+                .iter()
+                .copied()
+                .find(|&node| !ctx.is_collapsible_blank(node));
+            let last = run
+                .iter()
+                .copied()
+                .rfind(|&node| !ctx.is_collapsible_blank(node));
             if !run.is_empty() {
                 let at_top = !has_content && collapse_top;
                 let margins = RunMargins {
                     incoming: pending.take(),
                     collapsed_top: at_top
-                        .then(|| margin::edge_block(ctx, run[0], true))
+                        .then(|| first.and_then(|first| margin::edge_block(ctx, first, true)))
                         .flatten(),
                 };
                 let (mut placed, height, trailing) = layout_inline_run(
@@ -145,8 +159,7 @@ pub(crate) fn layout_block_children(
                 // The trailing block's margin stays open only if the margin
                 // walk sees it at the run's end too.
                 if let Some((margin, block)) = trailing {
-                    let last = run[run.len() - 1];
-                    if margin::edge_block(ctx, last, false) == Some(block) {
+                    if last.and_then(|last| margin::edge_block(ctx, last, false)) == Some(block) {
                         pending = Some(margin);
                     } else {
                         cursor += margin;

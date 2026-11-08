@@ -3010,3 +3010,39 @@ fn margins_never_collapse_through_a_formatting_context_root() {
         assert!((height - 29.2).abs() < 0.01, "{name}: {height}");
     }
 }
+
+/// White space between blocks makes no box (CSS 2 §9.2.2.1): the blocks'
+/// margins still collapse across it, and with their container's.
+#[test]
+fn white_space_between_blocks_does_not_stop_margins_collapsing() {
+    let (doc, tree) = page(
+        "<div id=\"c\">\n  <p id=\"a\">a</p>\n  <p id=\"b\">b</p>\n</div>",
+        "p { margin: 10px 0 }",
+        400.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert_eq!(rect("c").y, 10.0);
+    assert!((rect("b").y - 39.2).abs() < 0.01, "{}", rect("b").y);
+    assert!(
+        (rect("c").height - 48.4).abs() < 0.01,
+        "{}",
+        rect("c").height
+    );
+}
+
+/// Preserved white space (`pre`) between blocks is content: its newline
+/// makes a blank line, which separates the blocks' margins.
+#[test]
+fn preserved_white_space_between_blocks_is_a_line() {
+    let (doc, tree) = page(
+        "<div style=\"white-space: pre\"><p>a</p>\n<p id=\"d\">d</p></div>",
+        "p { margin: 10px 0 } div { border: 1px solid }",
+        400.0,
+    );
+    let y = tree.get(id(&doc, "d")).unwrap().rect.y;
+    // 1 border + 10 + a + 10 + the blank line + d's 10.
+    assert!(
+        (y - (1.0 + 10.0 + 19.2 + 10.0 + 19.2 + 10.0)).abs() < 0.01,
+        "{y}"
+    );
+}
