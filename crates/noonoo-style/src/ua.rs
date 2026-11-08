@@ -49,6 +49,9 @@ em, i, cite, var, dfn, address { font-style: italic }
 pre, code, kbd, samp, listing, plaintext, xmp { font-family: monospace }
 a { color: #0000ee; text-decoration: underline }
 [hidden] { display: none }
+input:not([type]), input[type="text"], input[type="search"], input[type="email"],
+input[type="url"], input[type="tel"], input[type="password"], input[type="number"],
+textarea { padding: 1px 2px; border: 2px inset #767676 }
 "#;
 
 /// The user-agent rules for quirks-mode documents only, after HTML's

@@ -158,3 +158,23 @@ fn the_webkit_centre_keywords_parse() {
         );
     }
 }
+
+#[test]
+fn text_fields_have_an_inset_border_and_padding() {
+    let (doc, styles) = styled(
+        r#"<input id="a"><input id="b" type="search"><textarea id="t"></textarea><input id="c" type="checkbox">"#,
+    );
+    let by_id = |id: &str| styles.get(doc.get_element_by_id(id).unwrap()).unwrap();
+    for id in ["a", "b", "t"] {
+        let style = by_id(id);
+        assert_eq!(style.padding.top, noonoo_style::Length::Px(1.0), "{id}");
+        assert_eq!(style.padding.left, noonoo_style::Length::Px(2.0), "{id}");
+        assert_eq!(style.border_width.top, 2.0, "{id}");
+        assert_eq!(
+            style.border_style.top,
+            noonoo_style::BorderStyle::Inset,
+            "{id}"
+        );
+    }
+    assert_eq!(by_id("c").border_width.top, 0.0);
+}

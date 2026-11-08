@@ -721,20 +721,18 @@ pub(crate) fn layout_inline_run(
         }
     }
 
-    if blocks.is_empty() && groups.iter().all(|group| group.is_empty()) {
-        // No content at all — but a lone `<br>` still generates one (empty)
-        // line box; that is the classic trick that gives an otherwise empty
-        // container a line's height.
-        return (Vec::new(), if had_break { line_height } else { 0.0 });
+    if !had_break && blocks.is_empty() && groups.iter().all(|group| group.is_empty()) {
+        return (Vec::new(), 0.0);
     }
 
     let alignment = map_align(parent_style.text_align);
     let mut indices = Vec::new();
     let mut cursor_y = y;
 
-    // An empty group between two breaks is a blank line — but only when
-    // content follows, so the run's trailing break collapses.
-    let last_holding = groups.iter().rposition(|group| !group.is_empty());
+    // An empty group a break ended is a blank line: every group is a line
+    // but the last, which a trailing break leaves empty. (A lone `<br>`
+    // so still gives an otherwise empty container a line's height.)
+    let last_group = groups.len() - 1;
 
     // Consecutive blocks' margins collapse; a line between them stops that.
     let mut block_margin: Option<f32> = None;
@@ -759,7 +757,7 @@ pub(crate) fn layout_inline_run(
             // An empty group a `<br>` ended is a blank line; one a block
             // ended is nothing.
             let ended_by_block = blocks.iter().any(|(before, _)| *before == group_index + 1);
-            if !ended_by_block && last_holding.is_some_and(|last| last > group_index) {
+            if !ended_by_block && group_index < last_group {
                 cursor_y += line_height;
                 block_margin = None;
             }

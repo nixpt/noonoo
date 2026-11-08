@@ -2941,3 +2941,33 @@ fn cells_take_their_padding_in_table_layout() {
     assert_eq!(tree.get(id(&doc, "t")).unwrap().rect.width, 20.0);
     assert_eq!(tree.get(id(&doc, "z")).unwrap().rect.width, 16.0);
 }
+
+/// Each `<br>` ends a line; only the last line of a block, if empty, is
+/// dropped. So `x<br><br>` is two lines, as in browsers.
+#[test]
+fn every_break_but_a_trailing_one_makes_a_line() {
+    let (doc, tree) = page(
+        r#"<div id="a">x<br><br></div><div id="b">x<br></div><div id="c"><br><br></div><div id="e"><br></div><div id="f">x<br><br><br>y</div>"#,
+        "",
+        400.0,
+    );
+    let lines = |name: &str| tree.get(id(&doc, name)).unwrap().rect.height / 19.2;
+    for (name, expected) in [("a", 2.0), ("b", 1.0), ("c", 2.0), ("e", 1.0), ("f", 4.0)] {
+        assert!(
+            (lines(name) - expected).abs() < 0.001,
+            "{name}: {}",
+            lines(name)
+        );
+    }
+}
+
+/// A text field has a browser's default padding and border, and the line
+/// that holds it grows to fit. MetricShaper: `size` 2 is 16px of content.
+#[test]
+fn a_text_field_has_padding_and_a_border() {
+    let (doc, tree) = page(r#"<div id="d"><input id="i" size="2"></div>"#, "", 400.0);
+    let input = tree.get(id(&doc, "i")).unwrap().rect;
+    assert_eq!(input.width, 24.0);
+    assert!((input.height - 25.2).abs() < 0.01, "{}", input.height);
+    assert!((tree.get(id(&doc, "d")).unwrap().rect.height - 25.2).abs() < 0.01);
+}
