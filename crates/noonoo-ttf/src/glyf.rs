@@ -218,9 +218,15 @@ fn parse_simple(reader: &mut Reader, num_contours: usize) -> ParseResult<Vec<Con
         return Ok(Vec::new());
     }
 
-    let mut ends = Vec::with_capacity(num_contours);
+    let mut ends: Vec<usize> = Vec::with_capacity(num_contours);
     for _ in 0..num_contours {
-        ends.push(reader.u16()? as usize);
+        let end = reader.u16()? as usize;
+        // Each contour ends after the last one: the point count comes from
+        // the final end, and every contour is a range below it.
+        if ends.last().is_some_and(|&previous| end <= previous) {
+            return Err(reader.error("contour end points are not increasing"));
+        }
+        ends.push(end);
     }
     let point_count = ends.last().copied().unwrap_or(0) + 1;
 
@@ -354,4 +360,42 @@ fn midpoint(a: &Point, b: &Point) -> (f32, f32) {
 
 fn same(a: (f32, f32), b: (f32, f32)) -> bool {
     (a.0 - b.0).abs() < 1e-6 && (a.1 - b.1).abs() < 1e-6
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A simple glyph: contour end indices, no instructions, then one
+    /// on-curve flag per point with zero-length (same-as-previous) deltas.
+    fn simple_glyph(ends: &[u16], points: usize) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        for end in ends {
+            bytes.extend_from_slice(&end.to_be_bytes());
+        }
+        bytes.extend_from_slice(&0u16.to_be_bytes());
+        // On-curve, x and y "same as previous": no coordinate bytes.
+        bytes.extend(std::iter::repeat_n(0x01 | 0x10 | 0x20, points));
+        bytes
+    }
+
+    #[test]
+    fn a_well_formed_simple_glyph_parses() {
+        let bytes = simple_glyph(&[2, 5], 6);
+        let contours = parse_simple(&mut Reader::new(&bytes), 2).unwrap();
+        assert_eq!(contours.len(), 2);
+        assert_eq!(contours[0].points.len(), 3);
+        assert_eq!(contours[1].points.len(), 3);
+    }
+
+    /// Contour ends must increase. Out of order, the first contour ran past
+    /// the points (the point count comes from the last end) and the next one
+    /// underflowed its length.
+    #[test]
+    fn contour_ends_out_of_order_are_an_error() {
+        let bytes = simple_glyph(&[5, 2], 3);
+        assert!(parse_simple(&mut Reader::new(&bytes), 2).is_err());
+        let bytes = simple_glyph(&[2, 2], 3);
+        assert!(parse_simple(&mut Reader::new(&bytes), 2).is_err());
+    }
 }
