@@ -45,3 +45,4 @@ Options: `--width`/`--height` (viewport, 1024 × 768), `--tolerance` (px, 1),
 |---|---|---|
 | our pages + 8 public pages | 3% | 17% |
 | after `ec84ff1` (margins, centring, invalid `display`, percentage cells) | 3% | 24% |
+| after `dd3a669` (text fields, preserved newlines, implied `html`/`body`; danluu.com now compares) | 20% | 47% |
