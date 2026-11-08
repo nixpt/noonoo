@@ -168,10 +168,6 @@ impl LayoutBox {
     }
 }
 
-/// Whether `display` makes an *atomic* inline-level box: one that sits on a
-/// line like a word but is a box of its own, with its own width, height,
-/// padding, border, and interior layout (`inline-block`, `inline-flex`,
-/// `inline-grid`, and through the UA sheet, form controls and images).
 /// Whether `element` is a single-line text field: an `<input>` whose type
 /// takes typed text (the default type is `text`).
 fn is_text_field(element: &noonoo_dom::ElementData) -> bool {
@@ -186,6 +182,10 @@ fn is_text_field(element: &noonoo_dom::ElementData) -> bool {
         )
 }
 
+/// Whether `display` makes an *atomic* inline-level box: one that sits on a
+/// line like a word but is a box of its own, with its own width, height,
+/// padding, border, and interior layout (`inline-block`, `inline-flex`,
+/// `inline-grid`, and through the UA sheet, form controls and images).
 pub(crate) fn is_atomic_inline(display: Display) -> bool {
     matches!(
         display,
@@ -878,6 +878,25 @@ impl Ctx<'_> {
         let text = element.placeholder_text();
         // A text field is a line tall even when it's empty.
         (!text.is_empty() || is_text_field(element)).then(|| text.to_owned())
+    }
+
+    /// A text field's intrinsic content width: `size` characters (20
+    /// unless the attribute is a positive integer), each as wide as a "0"
+    /// in its font, whatever its value (HTML's rendering of text fields).
+    pub(crate) fn text_field_width(&self, node: NodeId, style: &ComputedStyle) -> Option<f32> {
+        let element = self.document.element(node)?;
+        if !is_text_field(element) {
+            return None;
+        }
+        let size = element
+            .attr("size")
+            .and_then(|size| size.trim().parse::<u32>().ok())
+            .filter(|&size| size > 0)
+            .unwrap_or(20);
+        let zero = self
+            .shaper
+            .advance("0", style.font_request(), style.font_size);
+        Some(size as f32 * zero)
     }
 
     /// Lay out a replaced element's placeholder as its content: one line of

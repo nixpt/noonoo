@@ -2263,3 +2263,21 @@ fn nested_percentage_tables_stay_finite() {
         );
     }
 }
+
+/// bliss-diff (the surfer shell's find bar): an empty text field laid out
+/// 0 px wide. A text field is `size` characters wide (20 by default),
+/// whatever its value; a CSS width still wins.
+#[test]
+fn a_text_field_is_as_wide_as_its_size() {
+    let (doc, tree) = page(
+        r#"<p><input id="a"> <input id="b" size="5" value="a much longer value than five"> <input id="c" style="width: 50px"> <input id="d" type="checkbox"></p>"#,
+        "input { padding: 0; border: 0 }",
+        400.0,
+    );
+    let width = |name: &str| tree.get(id(&doc, name)).unwrap().content_box().width;
+    // MetricShaper: a 16px "0" is 8px wide.
+    assert_eq!(width("a"), 160.0);
+    assert_eq!(width("b"), 40.0);
+    assert_eq!(width("c"), 50.0);
+    assert_eq!(width("d"), 0.0, "only text fields take a size");
+}

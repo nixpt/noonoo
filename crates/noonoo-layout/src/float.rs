@@ -306,6 +306,9 @@ fn preferred_content(ctx: &Ctx<'_>, node: NodeId) -> f32 {
     if let Some((width, _)) = ctx.image_size(node, style, f32::INFINITY, None) {
         return width;
     }
+    if let Some(width) = ctx.text_field_width(node, style) {
+        return width;
+    }
     if let Some(text) = ctx.placeholder(node) {
         return text_width(ctx, &text, style);
     }
@@ -416,6 +419,9 @@ pub(crate) fn min_content_of_contents(ctx: &Ctx<'_>, node: NodeId) -> f32 {
 /// its items side by side; everything else may break between items.
 fn min_content(ctx: &Ctx<'_>, node: NodeId, style: &ComputedStyle) -> f32 {
     if let Some((width, _)) = ctx.image_size(node, style, f32::INFINITY, None) {
+        return width;
+    }
+    if let Some(width) = ctx.text_field_width(node, style) {
         return width;
     }
     if let Some(text) = ctx.placeholder(node) {
