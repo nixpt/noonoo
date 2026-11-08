@@ -156,6 +156,14 @@ impl<'a> SelectorParser<'a> {
                     if matches!(self.peek(), Some(TokenKind::Colon)) {
                         self.pos += 1;
                         compound.pseudo_element = Some(self.parse_ident_name()?);
+                    } else if let Some(TokenKind::Ident(name)) = self.peek()
+                        && matches!(
+                            name.to_ascii_lowercase().as_str(),
+                            "before" | "after" | "first-line" | "first-letter"
+                        )
+                    {
+                        // CSS2's single-colon spelling of these pseudo-elements.
+                        compound.pseudo_element = Some(self.parse_ident_name()?);
                     } else {
                         let pseudo = self.parse_pseudo_class()?;
                         compound.simples.push(SimpleSelector::PseudoClass(pseudo));

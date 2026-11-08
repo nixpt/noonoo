@@ -23,6 +23,22 @@ impl SelectorList {
             .max()
     }
 
+    /// The specificity of the most specific selector that styles
+    /// `element`'s `::pseudo` (e.g. `"before"`), if any: one whose last
+    /// compound names that pseudo-element and otherwise matches `element`.
+    pub fn pseudo_matching_specificity<E: Element>(
+        &self,
+        element: &E,
+        ctx: MatchContext,
+        pseudo: &str,
+    ) -> Option<Specificity> {
+        self.selectors
+            .iter()
+            .filter(|selector| selector.matches_pseudo(element, ctx, pseudo))
+            .map(ComplexSelector::specificity)
+            .max()
+    }
+
     /// The highest specificity across all selectors, regardless of matching.
     pub fn max_specificity(&self) -> Specificity {
         self.selectors
@@ -42,11 +58,35 @@ impl ComplexSelector {
         self.match_at(self.compounds.len() - 1, element, ctx)
     }
 
+    /// Whether this selector styles `element`'s `::pseudo`: the last
+    /// compound names it, no other compound names one, and the rest
+    /// matches `element` as usual.
+    pub fn matches_pseudo<E: Element>(&self, element: &E, ctx: MatchContext, pseudo: &str) -> bool {
+        let Some((last, rest)) = self.compounds.split_last() else {
+            return false;
+        };
+        let names_it = last
+            .pseudo_element
+            .as_deref()
+            .is_some_and(|name| name.eq_ignore_ascii_case(pseudo));
+        if !names_it || rest.iter().any(|c| c.pseudo_element.is_some()) {
+            return false;
+        }
+        last.matches_element(element, ctx)
+            && self.match_left(self.compounds.len() - 1, element, ctx)
+    }
+
     /// Match `compounds[index]` against `element`, then walk leftward.
     fn match_at<E: Element>(&self, index: usize, element: &E, ctx: MatchContext) -> bool {
         if !self.compounds[index].matches(element, ctx) {
             return false;
         }
+        self.match_left(index, element, ctx)
+    }
+
+    /// With `compounds[index]` matched by `element`, match the compounds to
+    /// its left through their combinators.
+    fn match_left<E: Element>(&self, index: usize, element: &E, ctx: MatchContext) -> bool {
         if index == 0 {
             return true;
         }
@@ -93,6 +133,12 @@ impl CompoundSelector {
             // real element, so it never matches one.
             return false;
         }
+        self.matches_element(element, ctx)
+    }
+
+    /// Whether the type and simple selectors match `element`, setting any
+    /// pseudo-element aside.
+    fn matches_element<E: Element>(&self, element: &E, ctx: MatchContext) -> bool {
         if let TypeSelector::Named(name) = &self.type_selector
             && &element.tag_name() != name
         {

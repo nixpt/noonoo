@@ -340,3 +340,85 @@ fn parse_errors_are_reported() {
     assert!(SelectorList::parse("li >").is_err());
     assert!(SelectorList::parse("[href").is_err());
 }
+
+#[test]
+fn a_pseudo_element_selector_matches_for_its_originating_element() {
+    let (doc, body, ul) = sample();
+    let ul = view(&doc, ul);
+    let list = SelectorList::parse("body > ul::before, #items::after, li::before").unwrap();
+    // `ul::before` has specificity (0,0,2+1): type + pseudo-element.
+    assert_eq!(
+        list.pseudo_matching_specificity(&ul, ctx(), "before"),
+        Some(Specificity {
+            ids: 0,
+            classes: 0,
+            types: 3
+        })
+    );
+    assert_eq!(
+        list.pseudo_matching_specificity(&ul, ctx(), "AFTER"),
+        Some(Specificity {
+            ids: 1,
+            classes: 0,
+            types: 1
+        })
+    );
+    assert_eq!(list.pseudo_matching_specificity(&ul, ctx(), "marker"), None);
+    assert_eq!(
+        list.pseudo_matching_specificity(&view(&doc, body), ctx(), "before"),
+        None
+    );
+    // A selector without a pseudo-element doesn't style one.
+    let plain = SelectorList::parse("ul").unwrap();
+    assert_eq!(
+        plain.pseudo_matching_specificity(&ul, ctx(), "before"),
+        None
+    );
+}
+
+#[test]
+fn a_pseudo_element_only_counts_on_the_last_compound() {
+    let (doc, _body, ul) = sample();
+    let li = doc.get_elements_by_tag_name("li")[0];
+    let s = SelectorList::parse("ul::before li").unwrap();
+    assert_eq!(
+        s.pseudo_matching_specificity(&view(&doc, li), ctx(), "before"),
+        None
+    );
+    assert!(!s.matches(&view(&doc, li), ctx()));
+    let _ = ul;
+}
+
+#[test]
+fn legacy_single_colon_before_and_after_are_pseudo_elements() {
+    let (doc, _body, ul) = sample();
+    let ul = view(&doc, ul);
+    let s = SelectorList::parse("ul:before").unwrap();
+    assert!(!s.matches(&ul, ctx()));
+    assert!(
+        s.pseudo_matching_specificity(&ul, ctx(), "before")
+            .is_some()
+    );
+    assert!(
+        SelectorList::parse("ul:after")
+            .unwrap()
+            .pseudo_matching_specificity(&ul, ctx(), "after")
+            .is_some()
+    );
+}
+
+#[test]
+fn dynamic_state_applies_to_the_originating_element() {
+    let (doc, _body, ul) = sample();
+    let ul = view(&doc, ul);
+    let s = SelectorList::parse("ul:hover::after").unwrap();
+    assert!(s.pseudo_matching_specificity(&ul, ctx(), "after").is_none());
+    let hovered = MatchContext {
+        hovered: true,
+        ..MatchContext::default()
+    };
+    assert!(
+        s.pseudo_matching_specificity(&ul, hovered, "after")
+            .is_some()
+    );
+}
