@@ -337,18 +337,32 @@ pub(crate) fn layout_inline_run(
                     content
                 };
                 let height = ctx.line_height_of(&style);
-                groups
-                    .last_mut()
-                    .expect("the first group always exists")
-                    .push(Item {
-                        node,
-                        style_node: node,
-                        kind: BoxKind::Inline,
-                        width: ctx.advance(&content, &style),
-                        text: content,
-                        height,
-                        atomic: None,
-                    });
+                // A newline the element's white space preserves breaks the
+                // line like a `<br>`: one run per line, the element's own.
+                for (piece, line) in crate::forced_lines(&content, style.white_space)
+                    .into_iter()
+                    .enumerate()
+                {
+                    if piece > 0 {
+                        had_break = true;
+                        groups.push(Vec::new());
+                    }
+                    if line.is_empty() {
+                        continue;
+                    }
+                    groups
+                        .last_mut()
+                        .expect("the first group always exists")
+                        .push(Item {
+                            node,
+                            style_node: node,
+                            kind: BoxKind::Inline,
+                            width: ctx.advance(line, &style),
+                            text: line.to_owned(),
+                            height,
+                            atomic: None,
+                        });
+                }
             }
             _ => {}
         }

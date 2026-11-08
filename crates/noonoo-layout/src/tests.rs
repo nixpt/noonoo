@@ -2386,3 +2386,50 @@ fn a_normal_line_height_is_the_fonts_own() {
     assert_eq!(height("z"), 0.0, "a zero line height is not `normal`");
     assert_eq!(height("x"), 30.0);
 }
+
+/// A highlighted code block: the newline sits inside an inline element's
+/// own text (`<span>`), which lays out as one item on the line.
+#[test]
+fn a_preserved_newline_inside_an_inline_element_breaks_the_line() {
+    let (_doc, tree) = page(
+        r#"<pre><span id="s">ab\ncd</span>ef</pre>"#.replace("\\n", "\n").as_str(),
+        "pre { margin: 0; line-height: 20px }",
+        400.0,
+    );
+    let lines = drawn_text(&tree);
+    let at = |word: &str| lines.iter().find(|(text, _)| text == word).map(|(_, y)| *y);
+    assert_eq!(at("ab"), Some(0.0), "{lines:?}");
+    assert_eq!(at("cd"), Some(20.0), "{lines:?}");
+    assert_eq!(at("ef"), Some(20.0), "ef follows cd on its line: {lines:?}");
+    // Collapsible white space keeps the element on one line.
+    let (_doc, tree) = page(
+        "<div><span>ab\ncd</span>ef</div>",
+        "div { line-height: 20px }",
+        400.0,
+    );
+    assert!(drawn_text(&tree).iter().all(|(_, y)| *y == 0.0));
+}
+
+/// Every box that draws text, element runs included, as (text, y).
+fn drawn_text(tree: &LayoutTree) -> Vec<(String, f32)> {
+    tree.boxes()
+        .iter()
+        .filter_map(|b| {
+            b.text
+                .clone()
+                .filter(|t| !t.is_empty())
+                .map(|t| (t, b.rect.y))
+        })
+        .collect()
+}
+
+#[test]
+fn a_shrink_to_fit_box_takes_the_widest_line_of_an_inline_element() {
+    let (doc, tree) = page(
+        "<div id=\"f\"><span>abcd\nab</span></div>",
+        "#f { float: left; white-space: pre }",
+        400.0,
+    );
+    // MetricShaper: 8px a character at 16px.
+    assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 32.0);
+}
