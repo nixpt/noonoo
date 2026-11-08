@@ -26,7 +26,7 @@
 //!   modelled; stray content contributes nothing.
 
 use noonoo_dom::NodeId;
-use noonoo_style::{BorderCollapse, BoxSizing, ComputedStyle, Display};
+use noonoo_style::{BorderCollapse, ComputedStyle, Display};
 
 use crate::{Ctx, float, resolve};
 
@@ -49,6 +49,9 @@ struct Row {
 /// attribute cannot explode a row's column walk.
 const MAX_SPAN: usize = 1000;
 
+/// Lay the rows out in a table content box `content_width` wide. A table
+/// box's columns `fill` that width; an anonymous table's only shrink to
+/// fit it.
 pub(crate) fn layout_table_children(
     ctx: &mut Ctx<'_>,
     style: &ComputedStyle,
@@ -56,44 +59,19 @@ pub(crate) fn layout_table_children(
     content_x: f32,
     content_y: f32,
     content_width: f32,
+    fill: bool,
 ) -> (Vec<usize>, f32) {
     let rows = collect_rows(ctx, children);
     if rows.is_empty() {
         return (Vec::new(), 0.0);
     }
-
-    // Column sizing: every cell demands its max-content border-box width
-    // (plus its margins, as track sizing counts outer boxes); a spanning
-    // cell spreads its demand evenly across the columns it covers.
-    let column_count = rows
-        .iter()
-        .map(|row| row.cells.iter().map(|cell| cell.span).sum::<usize>())
-        .max()
-        .unwrap_or(0);
-    let mut columns = vec![0.0_f32; column_count];
-    for row in &rows {
-        for cell in &row.cells {
-            let cell_style = ctx.style(cell.node);
-            let margin = resolve::margins(&cell_style.margin, content_width);
-            let demand = float::preferred_width(ctx, cell.node) + margin.left + margin.right;
-            let share = demand / cell.span as f32;
-            let end = (cell.column + cell.span).min(column_count);
-            for column_index in cell.column..end.max(cell.column) {
-                if let Some(column) = columns.get_mut(column_index) {
-                    *column = column.max(share);
-                }
-            }
-        }
-    }
+    let mut columns = column_demands(ctx, &rows, content_width);
 
     // Fit within the table's content box: an over-wide column set shrinks
-    // proportionally, and a definite table width distributes leftover space
-    // proportionally (like the spec's §17.5.2 distribution).
+    // proportionally, and a table wider than its columns shares the
+    // leftover space proportionally (like the spec's §17.5.2 distribution).
     let max_content = columns.iter().sum::<f32>();
-    let table_width = table_content_width(style, content_width);
-    if let Some(table_width) = table_width {
-        distribute(&mut columns, table_width, max_content);
-    } else if max_content > content_width {
+    if max_content > content_width || fill {
         distribute(&mut columns, content_width, max_content);
     }
 
@@ -147,18 +125,37 @@ pub(crate) fn layout_table_children(
     (indices, cursor_y - content_y)
 }
 
-/// The table's content-box width when its `width` is definite, else `None`
-/// (the box autofits its columns).
-fn table_content_width(style: &ComputedStyle, available: f32) -> Option<f32> {
-    let width = resolve::dimension(style.width.clone(), available)?;
-    let horizontal = resolve::paddings(&style.padding, available).left
-        + resolve::paddings(&style.padding, available).right
-        + resolve::borders(style).left
-        + resolve::borders(style).right;
-    Some(match style.box_sizing {
-        BoxSizing::BorderBox => (width - horizontal).max(0.0),
-        BoxSizing::ContentBox => width,
-    })
+/// A table's max-content content width: its columns' widest demands.
+pub(crate) fn max_content_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
+    let rows = collect_rows(ctx, &crate::child_nodes(ctx.document, node));
+    column_demands(ctx, &rows, 0.0).iter().sum()
+}
+
+/// Each column's width demand: every cell demands its max-content
+/// border-box width (plus its margins, as track sizing counts outer boxes);
+/// a spanning cell spreads its demand evenly across the columns it covers.
+fn column_demands(ctx: &Ctx<'_>, rows: &[Row], content_width: f32) -> Vec<f32> {
+    let column_count = rows
+        .iter()
+        .map(|row| row.cells.iter().map(|cell| cell.span).sum::<usize>())
+        .max()
+        .unwrap_or(0);
+    let mut columns = vec![0.0_f32; column_count];
+    for row in rows {
+        for cell in &row.cells {
+            let cell_style = ctx.style(cell.node);
+            let margin = resolve::margins(&cell_style.margin, content_width);
+            let demand = float::preferred_width(ctx, cell.node) + margin.left + margin.right;
+            let share = demand / cell.span as f32;
+            let end = (cell.column + cell.span).min(column_count);
+            for column_index in cell.column..end.max(cell.column) {
+                if let Some(column) = columns.get_mut(column_index) {
+                    *column = column.max(share);
+                }
+            }
+        }
+    }
+    columns
 }
 
 /// Redistribute `columns` so their sum equals `target`, proportionally to

@@ -315,6 +315,9 @@ fn preferred_content(ctx: &Ctx<'_>, node: NodeId) -> f32 {
     if matches!(style.display, Display::Flex | Display::InlineFlex) {
         return preferred_flex_content(ctx, node, style);
     }
+    if style.display == Display::Table {
+        return crate::table::max_content_width(ctx, node);
+    }
     let mut widest = 0.0f32;
     let mut run = 0.0f32;
     // A row's cells, or a run of cells outside a table, sit side by side.

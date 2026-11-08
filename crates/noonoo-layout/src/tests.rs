@@ -2850,3 +2850,56 @@ fn a_block_inside_an_inline_counts_in_a_shrink_to_fit_width() {
     );
     assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 14.0);
 }
+
+/// An auto-width table shrinks to fit its columns (CSS 2 §17.5.2): it
+/// doesn't fill its container like a block. MetricShaper: 8px a character.
+#[test]
+fn an_auto_width_table_shrinks_to_fit_its_columns() {
+    let (doc, tree) = page(
+        r#"<table id="t"><tr><td>ab</td><td>c</td></tr><tr><td>d</td><td>efgh</td></tr></table>"#,
+        "",
+        400.0,
+    );
+    // Columns: 16 and 32, the widest cell in each.
+    assert_eq!(tree.get(id(&doc, "t")).unwrap().rect.width, 48.0);
+}
+
+/// A table's set width is resolved once, against its container, and its
+/// columns stretch to fill it in proportion to their content.
+#[test]
+fn a_tables_columns_stretch_to_its_set_width() {
+    let (doc, tree) = page(
+        r#"<table id="t"><tr><td id="a">ab</td><td id="b">c</td></tr></table>"#,
+        "#t { width: 50% }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "t")).unwrap().rect.width, 200.0);
+    let (a, b) = (
+        tree.get(id(&doc, "a")).unwrap().rect,
+        tree.get(id(&doc, "b")).unwrap().rect,
+    );
+    assert!((a.width - 400.0 / 3.0).abs() < 0.01, "{}", a.width);
+    assert!((b.x + b.width - 200.0).abs() < 0.01, "{}", b.x + b.width);
+}
+
+/// A table's `width` attribute sizes it, as on Hacker News' main table.
+#[test]
+fn a_tables_width_attribute_sizes_it() {
+    let (doc, tree) = page(
+        r#"<table id="t" width="85%"><tr><td>a</td></tr></table>"#,
+        "",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "t")).unwrap().rect.width, 340.0);
+}
+
+/// A shrink-to-fit box sizes around a table's columns, not its widest row.
+#[test]
+fn a_tables_max_content_width_sums_its_widest_columns() {
+    let (doc, tree) = page(
+        r#"<div id="f"><table><tr><td>ab</td><td>c</td></tr><tr><td>d</td><td>efgh</td></tr></table></div>"#,
+        "#f { float: left }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 48.0);
+}

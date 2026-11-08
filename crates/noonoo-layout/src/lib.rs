@@ -1208,7 +1208,16 @@ impl Ctx<'_> {
             (Some(width), _) => width,
             (None, Some((width, _))) => width + horizontal,
             (None, None) => {
-                let mut width = specified.unwrap_or_else(|| available_width.max(0.0));
+                // An auto-width table shrinks to fit its columns, but never
+                // below their minimum (CSS 2 §17.5.2).
+                let auto = if style.display == Display::Table {
+                    float::preferred_width(self, node)
+                        .min(available_width)
+                        .max(float::min_content_width(self, node))
+                } else {
+                    available_width
+                };
+                let mut width = specified.unwrap_or_else(|| auto.max(0.0));
                 if let Some(maximum) = maximum {
                     width = width.min(maximum);
                 }
@@ -1333,6 +1342,7 @@ impl Ctx<'_> {
                 content_x,
                 content_y,
                 content_width,
+                true,
             ),
             _ => {
                 let (indices, height) = block::layout_block_children(
@@ -1591,6 +1601,7 @@ impl Ctx<'_> {
                 content_x,
                 content_y,
                 content_width,
+                true,
             ),
             _ => {
                 let (indices, height) = block::layout_block_children(

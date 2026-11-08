@@ -247,6 +247,22 @@ fn winners_for(
         add_rule(&mut winners, rule, specificity.to_u32());
     }
 
+    // Presentational attributes beat the UA sheet and lose to every
+    // author rule (HTML's rendering section, "presentational hints").
+    for (order, (property, value)) in presentational_hints(element).into_iter().enumerate() {
+        let Ok(decls) = parse_declaration(property, &value, false) else {
+            continue;
+        };
+        for decl in decls {
+            let key = Key {
+                rank: rank(Origin::Ua, false),
+                specificity: u32::MAX,
+                order: order as u32,
+            };
+            insert_best(&mut winners, decl.property, key, decl.values);
+        }
+    }
+
     // Inline `style` attributes win over author rules of equal importance.
     if let Some(style) = element.attr("style") {
         let mut order = 0u32;
@@ -267,6 +283,36 @@ fn winners_for(
     }
 
     winners
+}
+
+/// The CSS an element's presentational attributes ask for, as
+/// `(property, value)` declarations.
+fn presentational_hints(element: &noonoo_dom::ElementData) -> Vec<(&'static str, String)> {
+    let mut hints = Vec::new();
+    if matches!(element.name.as_str(), "table" | "td" | "th")
+        && let Some(width) = element.attr("width").and_then(dimension_attribute)
+    {
+        hints.push(("width", width));
+    }
+    hints
+}
+
+/// HTML's "rules for parsing dimension values", nonzero: a number, read
+/// as pixels, or a percentage.
+fn dimension_attribute(value: &str) -> Option<String> {
+    let value = value.trim_start();
+    let end = value
+        .find(|c: char| !(c.is_ascii_digit() || c == '.'))
+        .unwrap_or(value.len());
+    let number: f32 = value[..end].parse().ok()?;
+    if !number.is_finite() || number <= 0.0 {
+        return None;
+    }
+    Some(if value[end..].starts_with('%') {
+        format!("{number}%")
+    } else {
+        format!("{number}px")
+    })
 }
 
 /// The per-element results a child inherits from.

@@ -1009,7 +1009,7 @@ fn layout_anonymous_table(
     }
     let anonymous = Box::new(ComputedStyle::default());
     let (mut placed, height) =
-        crate::table::layout_table_children(ctx, &anonymous, &run, x, y, width);
+        crate::table::layout_table_children(ctx, &anonymous, &run, x, y, width, false);
     indices.append(&mut placed);
     height
 }
