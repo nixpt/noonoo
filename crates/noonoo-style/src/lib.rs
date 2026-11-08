@@ -62,6 +62,7 @@ mod vars;
 use noonoo_css::Stylesheet;
 use noonoo_dom::{Document, NodeId};
 
+pub use cascade::Cascade;
 pub use computed::{
     AlignItems, BorderCollapse, BorderStyle, BoxShadow, BoxSizing, CalcTerm, Clear, ComputedStyle,
     Corners, Cursor, Dimension, Display, Edges, Extreme, FlexDirection, FlexWrap, Float, FontStyle,
@@ -76,6 +77,7 @@ pub use edit::{StyleEditError, remove_style_property, set_style_property};
 pub struct Styles {
     entries: Vec<Option<ComputedStyle>>,
     generated: Vec<Generated>,
+    inherited: cascade::Inherited,
 }
 
 impl Styles {
@@ -192,8 +194,7 @@ pub fn compute_interactive(
     viewport: Viewport,
     interaction: Interaction,
 ) -> Styles {
-    let (entries, generated) = cascade::compute(document, stylesheets, viewport, interaction);
-    Styles { entries, generated }
+    Cascade::new(stylesheets, viewport).compute(document, interaction)
 }
 
 /// The version of this crate, taken from the workspace.

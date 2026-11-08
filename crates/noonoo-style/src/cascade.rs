@@ -6,15 +6,17 @@
 //! applies inheritance and initial values into a [`ComputedStyle`].
 
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::collections::HashSet;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::{Generated, Interaction, PseudoElement};
+use crate::{Generated, Interaction, PseudoElement, Styles};
 use noonoo_css::value::Value;
 use noonoo_css::{
     Declaration, Property, Stylesheet, expand_declaration, parse_declaration, parse_declarations,
     pending_shorthand,
 };
-use noonoo_dom::{Document, NodeId};
+use noonoo_dom::{Change, Changes, Document, NodeId};
 use noonoo_query::ElementRef;
 use noonoo_selectors::{MatchContext, SelectorList};
 
@@ -55,6 +57,7 @@ fn rank(origin: Origin, important: bool) -> u8 {
     }
 }
 
+#[derive(Debug)]
 struct Rule {
     selector: SelectorList,
     declarations: Vec<Declaration>,
@@ -270,53 +273,284 @@ fn winners_for(
 struct Resolved {
     style: ComputedStyle,
     /// Shared with the parent unless this element sets one.
-    custom: Rc<CustomProperties>,
+    custom: Arc<CustomProperties>,
     line_height: InheritedLineHeight,
 }
 
-/// Compute every element's style, in document order (parents before
-/// children), plus the `::before`/`::after` boxes that have `content`.
-pub(crate) fn compute(
-    doc: &Document,
-    stylesheets: &[Stylesheet],
-    viewport: Viewport,
+/// What a child inherits beyond its parent's computed style, kept per node
+/// so one subtree can be restyled without the rest.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Inherited {
+    custom: Vec<Arc<CustomProperties>>,
+    line_heights: Vec<InheritedLineHeight>,
+    root_font_size: f32,
+    /// The hovered, focused and pressed nodes they were computed for.
     interaction: Interaction,
-) -> (Vec<Option<ComputedStyle>>, Vec<Generated>) {
-    let rules = collect_rules(stylesheets, &viewport);
-    let index = RuleIndex::new(rules.iter().map(|rule| &rule.selector));
-    let mut candidates = Vec::new();
-    let mut out: Vec<Option<ComputedStyle>> = vec![None; doc.tree().len()];
-    let mut custom: Vec<Rc<CustomProperties>> = vec![Rc::default(); doc.tree().len()];
-    let mut line_heights: Vec<InheritedLineHeight> =
-        vec![InheritedLineHeight::Normal; doc.tree().len()];
-    let mut root_font_size = 16.0_f32;
-    let mut first_element = true;
-    let mut generated: Vec<(Generated, ComputedStyle)> = Vec::new();
+    /// The [`Cascade`] that computed these styles.
+    cascade: u64,
+    /// The document's node count when they were computed: generated boxes
+    /// take the ids after it.
+    nodes: usize,
+}
 
-    for id in doc.elements() {
+/// A `::before`/`::after` box before its ids are handed out.
+struct Pending {
+    owner: NodeId,
+    pseudo: PseudoElement,
+    content: String,
+    style: ComputedStyle,
+}
+
+/// The stylesheets prepared for styling: the user-agent sheet and the
+/// author sheets in cascade order, `@media` rules settled for one viewport,
+/// and the rules indexed by what their selectors need.
+///
+/// Build one when the stylesheets or the viewport change, then
+/// [`compute`](Cascade::compute) a document's styles and
+/// [`restyle`](Cascade::restyle) them after edits.
+#[derive(Debug)]
+pub struct Cascade {
+    rules: Vec<Rule>,
+    index: RuleIndex,
+    viewport: Viewport,
+    id: u64,
+}
+
+static NEXT_CASCADE: AtomicU64 = AtomicU64::new(1);
+
+impl Cascade {
+    /// Prepare `stylesheets`, after the user-agent sheet, for `viewport`.
+    pub fn new(stylesheets: &[Stylesheet], viewport: Viewport) -> Self {
+        let rules = collect_rules(stylesheets, &viewport);
+        let index = RuleIndex::new(rules.iter().map(|rule| &rule.selector));
+        Self {
+            rules,
+            index,
+            viewport,
+            id: NEXT_CASCADE.fetch_add(1, Ordering::Relaxed),
+        }
+    }
+
+    /// The viewport `@media` rules and viewport units were settled for.
+    pub fn viewport(&self) -> Viewport {
+        self.viewport
+    }
+
+    /// Compute every element's style, plus the `::before`/`::after` boxes
+    /// that have `content`.
+    pub fn compute(&self, doc: &Document, interaction: Interaction) -> Styles {
+        let nodes = doc.tree().len();
+        let mut styles = Styles {
+            entries: vec![None; nodes],
+            generated: Vec::new(),
+            inherited: Inherited {
+                custom: vec![Arc::default(); nodes],
+                line_heights: vec![InheritedLineHeight::Normal; nodes],
+                root_font_size: 16.0,
+                interaction,
+                cascade: self.id,
+                nodes,
+            },
+        };
+        let mut pass = Pass::new(interaction);
+        let mut first_element = true;
+        for id in doc.elements() {
+            self.style_element(doc, id, &mut styles, &mut pass, &mut first_element);
+        }
+        place_generated(&mut styles, doc, pass.generated);
+        styles
+    }
+
+    /// Bring `styles` up to date with the edits in `changes`, restyling
+    /// only the elements they can reach. Returns how many times an element
+    /// was styled: the work done.
+    ///
+    /// `styles` should come from this cascade's [`compute`](Cascade::compute)
+    /// or `restyle` on `doc`, with `changes` the document's edits since then
+    /// ([`Document::take_changes`]). Styles from another cascade, an
+    /// overflowed log, or an edit that reaches the root element restyle
+    /// everything.
+    pub fn restyle(
+        &self,
+        styles: &mut Styles,
+        doc: &Document,
+        interaction: Interaction,
+        changes: &Changes,
+    ) -> usize {
+        if changes.overflowed() {
+            return self.recompute(styles, doc, interaction);
+        }
+        self.restyle_for(styles, doc, interaction, changes.iter().copied())
+    }
+
+    /// [`restyle`](Cascade::restyle) for edits named one by one.
+    ///
+    /// A different `interaction` from the one `styles` were computed for
+    /// counts as an attribute edit to each node that gained or lost
+    /// hover, focus or press.
+    ///
+    /// No selector looks at a later sibling, a descendant or text, so an
+    /// element's style can depend on an edit only if the element is under
+    /// the edited node's parent (attributes) or under the edited node
+    /// itself (children). Those subtrees are restyled; the rest is kept.
+    pub fn restyle_for(
+        &self,
+        styles: &mut Styles,
+        doc: &Document,
+        interaction: Interaction,
+        changes: impl IntoIterator<Item = Change>,
+    ) -> usize {
+        if styles.inherited.cascade != self.id {
+            return self.recompute(styles, doc, interaction);
+        }
+        let tree = doc.tree();
+        let before = std::mem::replace(&mut styles.inherited.interaction, interaction);
+        let moved = [
+            (before.hovered, interaction.hovered),
+            (before.focused, interaction.focused),
+            (before.active, interaction.active),
+        ]
+        .into_iter()
+        .filter(|(old, new)| old != new)
+        .flat_map(|(old, new)| [old, new])
+        .flatten()
+        .map(Change::Attributes);
+        // Each change names the node whose descendants it can restyle.
+        let mut roots = Vec::new();
+        for change in changes.into_iter().chain(moved) {
+            let root = match change {
+                Change::Attributes(element) => tree.parent(element),
+                Change::Children(parent) => Some(parent),
+                Change::Text(_) => None,
+            };
+            let Some(root) = root.filter(|&root| doc.is_connected(root)) else {
+                continue;
+            };
+            roots.push(root);
+        }
+        if roots.is_empty() {
+            return 0;
+        }
+        // A root inside another's subtree is restyled with it.
+        roots.sort_unstable();
+        roots.dedup();
+        let marked: HashSet<NodeId> = roots.iter().copied().collect();
+        roots.retain(|&root| !tree.ancestors(root).iter().any(|a| marked.contains(a)));
+        // A root with no style for its children to inherit — the document
+        // node, when the root element itself was edited (that reaches `rem`
+        // too), or a node whose insertion went unrecorded — starts over.
+        // (Past the old node count, an entry is a generated box's.)
+        let unstyled =
+            |root: &NodeId| root.index() >= styles.inherited.nodes || styles.get(*root).is_none();
+        if roots.iter().any(unstyled) {
+            return self.recompute(styles, doc, interaction);
+        }
+
+        // The generated boxes as they were, before their ids move.
+        let old: Vec<Pending> = std::mem::take(&mut styles.generated)
+            .into_iter()
+            .filter_map(|item| {
+                Some(Pending {
+                    style: styles.entries.get(item.element.index())?.clone()?,
+                    owner: item.owner,
+                    pseudo: item.pseudo,
+                    content: item.content,
+                })
+            })
+            .collect();
+        // Make room for nodes created since.
+        let nodes = tree.len();
+        let inherited = &mut styles.inherited;
+        styles.entries.truncate(inherited.nodes);
+        styles.entries.resize(nodes, None);
+        inherited.custom.resize(nodes, Arc::default());
+        inherited
+            .line_heights
+            .resize(nodes, InheritedLineHeight::Normal);
+        inherited.nodes = nodes;
+
+        let mut pass = Pass::new(interaction);
+        let mut restyled = HashSet::new();
+        let mut styled = 0;
+        for root in roots {
+            for id in tree.descendants(root) {
+                if doc.element(id).is_some() {
+                    self.style_element(doc, id, styles, &mut pass, &mut false);
+                    restyled.insert(id);
+                    styled += 1;
+                }
+            }
+        }
+
+        // Generated boxes in document order: fresh ones for the restyled
+        // owners, the old ones for the rest.
+        let generated = if old.is_empty() && pass.generated.is_empty() {
+            Vec::new()
+        } else {
+            let mut fresh = by_owner(pass.generated);
+            let mut kept = by_owner(old);
+            let mut list = Vec::new();
+            for id in doc.elements() {
+                let source = if restyled.contains(&id) {
+                    &mut fresh
+                } else {
+                    &mut kept
+                };
+                list.extend(source.remove(&id).unwrap_or_default());
+            }
+            list
+        };
+        place_generated(styles, doc, generated);
+        styled
+    }
+
+    fn recompute(&self, styles: &mut Styles, doc: &Document, interaction: Interaction) -> usize {
+        *styles = self.compute(doc, interaction);
+        doc.elements().len()
+    }
+
+    /// Style one element from its parent's results, already in `styles`.
+    fn style_element(
+        &self,
+        doc: &Document,
+        id: NodeId,
+        styles: &mut Styles,
+        pass: &mut Pass,
+        first_element: &mut bool,
+    ) {
+        let viewport = self.viewport;
         let parent_id = doc.tree().parent(id);
-        let parent = parent_id.and_then(|p| out[p.index()].clone());
+        let parent = parent_id.and_then(|p| styles.entries[p.index()].as_ref());
+        let inherited = &mut styles.inherited;
         let parent_custom = parent_id
-            .map(|p| custom[p.index()].clone())
+            .map(|p| inherited.custom[p.index()].clone())
             .unwrap_or_default();
         let inherited_line = parent_id
-            .map(|p| line_heights[p.index()])
+            .map(|p| inherited.line_heights[p.index()])
             .unwrap_or(InheritedLineHeight::Normal);
 
-        let winners = winners_for(doc, id, &rules, &index, &mut candidates, interaction);
+        let winners = winners_for(
+            doc,
+            id,
+            &self.rules,
+            &self.index,
+            &mut pass.candidates,
+            pass.interaction,
+        );
         let resolved = resolve(
             &winners,
-            parent.as_ref(),
+            parent,
             parent_custom,
             inherited_line,
-            &mut root_font_size,
-            &mut first_element,
+            &mut inherited.root_font_size,
+            first_element,
             viewport,
         );
 
         if generates_content(doc, id) {
             for pseudo in [PseudoElement::Before, PseudoElement::After] {
-                let winners = pseudo_winners_for(doc, id, &rules, &index, interaction, pseudo);
+                let winners =
+                    pseudo_winners_for(doc, id, &self.rules, &self.index, pass.interaction, pseudo);
                 let Some(content) = winners
                     .get(&Property::Content)
                     .and_then(|c| computed_values(&Property::Content, &c.values, &resolved.custom))
@@ -324,44 +558,74 @@ pub(crate) fn compute(
                 else {
                     continue;
                 };
-                let pseudo_style = resolve(
+                let style = resolve(
                     &winners,
                     Some(&resolved.style),
                     resolved.custom.clone(),
                     resolved.line_height,
-                    &mut root_font_size,
+                    &mut inherited.root_font_size,
                     &mut false,
                     viewport,
                 )
                 .style;
-                let k = generated.len();
-                generated.push((
-                    Generated {
-                        owner: id,
-                        pseudo,
-                        element: doc.tree().upcoming_id(2 * k),
-                        text: doc.tree().upcoming_id(2 * k + 1),
-                        content,
-                    },
-                    pseudo_style,
-                ));
+                pass.generated.push(Pending {
+                    owner: id,
+                    pseudo,
+                    content,
+                    style,
+                });
             }
         }
 
-        custom[id.index()] = resolved.custom;
-        line_heights[id.index()] = resolved.line_height;
-        out[id.index()] = Some(resolved.style);
+        inherited.custom[id.index()] = resolved.custom;
+        inherited.line_heights[id.index()] = resolved.line_height;
+        styles.entries[id.index()] = Some(resolved.style);
     }
+}
 
-    // Generated elements take the ids the document would hand out next, so
-    // a layout copy that inserts them finds their styles by id.
-    out.resize(doc.tree().len() + 2 * generated.len(), None);
-    let mut list = Vec::with_capacity(generated.len());
-    for (item, style) in generated {
-        out[item.element.index()] = Some(style);
-        list.push(item);
+/// Scratch state for one compute or restyle.
+struct Pass {
+    interaction: Interaction,
+    candidates: Vec<usize>,
+    generated: Vec<Pending>,
+}
+
+impl Pass {
+    fn new(interaction: Interaction) -> Self {
+        Self {
+            interaction,
+            candidates: Vec::new(),
+            generated: Vec::new(),
+        }
     }
-    (out, list)
+}
+
+fn by_owner(boxes: Vec<Pending>) -> HashMap<NodeId, Vec<Pending>> {
+    let mut map: HashMap<NodeId, Vec<Pending>> = HashMap::new();
+    for item in boxes {
+        map.entry(item.owner).or_default().push(item);
+    }
+    map
+}
+
+/// Hand `generated` the ids the document would give out next, so a layout
+/// copy that inserts them finds their styles by id.
+fn place_generated(styles: &mut Styles, doc: &Document, generated: Vec<Pending>) {
+    let nodes = styles.inherited.nodes;
+    styles.entries.truncate(nodes);
+    styles.entries.resize(nodes + 2 * generated.len(), None);
+    styles.generated = Vec::with_capacity(generated.len());
+    for (k, item) in generated.into_iter().enumerate() {
+        let element = doc.tree().upcoming_id(2 * k);
+        styles.entries[element.index()] = Some(item.style);
+        styles.generated.push(Generated {
+            owner: item.owner,
+            pseudo: item.pseudo,
+            element,
+            text: doc.tree().upcoming_id(2 * k + 1),
+            content: item.content,
+        });
+    }
 }
 
 /// Cascade `winners` over what the parent passes down.
@@ -369,7 +633,7 @@ pub(crate) fn compute(
 fn resolve(
     winners: &HashMap<Property, Candidate>,
     parent: Option<&ComputedStyle>,
-    parent_custom: Rc<CustomProperties>,
+    parent_custom: Arc<CustomProperties>,
     inherited_line: InheritedLineHeight,
     root_font_size: &mut f32,
     first_element: &mut bool,
@@ -384,7 +648,7 @@ fn resolve(
     let mut props = parent_custom;
     for (property, candidate) in winners {
         if let Property::Custom(name) = property {
-            Rc::make_mut(&mut props).insert(name.clone(), candidate.values.clone());
+            Arc::make_mut(&mut props).insert(name.clone(), candidate.values.clone());
         }
     }
 
