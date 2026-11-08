@@ -74,6 +74,11 @@ helpers surfer hand-rolled. Each is a small, headless-testable add.
    sizing seam, with the *decode cache* staying host-side (surfer's `image`
    crate + LRU). Layout needs an image descriptor to size `<img>` correctly;
    paint to place it. No image codecs in the engine.
+   *Status (2026-11-08):* `<img>` is sized from a loaded image (CSS size,
+   then `width`/`height` attributes, then the natural size from the PNG,
+   JPEG, GIF or WebP header, keeping the ratio) and painted as `DrawImage`
+   over its content box; until it loads, its `alt` text holds the place.
+   `srcset`/`<picture>` and `object-fit` are not in yet.
 6. **Incremental restyle/relayout**: surfer scripts mutate the DOM on every
    callback and then call `resolve()`. Noonoo's pipeline is full recompute today;
    fine for small pages, quadratic-ish for big ones. The seam to own is
@@ -88,6 +93,12 @@ helpers surfer hand-rolled. Each is a small, headless-testable add.
    `noonoo-net::load` should grow a `Loader` trait injection so surfer's hardened
    HTTP/cookie/SSRF client is the transport while the engine stays
    dependency-free. The dormant `http`/TLS feature stays borrowed regardless.
+   *Status (2026-11-08):* `noonoo_net::Loader` starts a `Request` and answers
+   through a `Send` `Completion`, from any thread; `Engine::set_loader`,
+   `load_resources` and `poll_resources` drive it for `<img src>` (resolved
+   against `set_base_url` with `noonoo_net::resolve`). `FileLoader` covers
+   `file:` and `data:`; surfer's client goes behind the same trait.
+   `<link rel=stylesheet>` does not load through it yet.
 8. **Node positioning helpers**: `bounding_client_rect`/`absolute_position` —
    nearly free once `LayoutTree` boxes are exposed (`Rect` in page coordinates).
    *Status (2026-11-08):* `LayoutTree::bounding_client_rect` is in.

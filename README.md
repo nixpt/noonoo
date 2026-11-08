@@ -101,6 +101,10 @@ yet:
 - The HTML parser implements the common implied end tags and table
   sections, but not foster parenting or active formatting elements.
 - `@keyframes` animations are not implemented.
+- Images: `<img>` sizes and draws from a loaded source, but `srcset`,
+  `<picture>`, `object-fit` and CSS `url()` backgrounds are not supported,
+  and `noonoo-vello` decodes only PNG (JPEG, GIF and WebP are sized from
+  their headers but not drawn).
 
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
