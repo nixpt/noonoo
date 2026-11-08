@@ -460,6 +460,20 @@ pub fn parse_declaration(
 ) -> ParseResult<Vec<Declaration>> {
     let values = parse_values(value)?;
     let lowered = name.trim().to_ascii_lowercase();
+    // An invalid declaration is dropped here, so it never competes in the
+    // cascade: the next one down applies instead.
+    if values.is_empty() && !lowered.starts_with("--") {
+        return Err(noonoo_parse::ParseError::new(
+            0,
+            "a declaration needs a value",
+        ));
+    }
+    if lowered == "display" && !contains_var(&values) && !is_display(&values) {
+        return Err(noonoo_parse::ParseError::new(
+            0,
+            "unsupported display value",
+        ));
+    }
     if contains_var(&values)
         && let Some(longhands) = shorthand_longhands(&lowered)
     {
@@ -475,6 +489,34 @@ pub fn parse_declaration(
             .collect());
     }
     Ok(expand_declaration(name, values, important))
+}
+
+/// The `display` values layout knows, plus the CSS-wide keywords the
+/// cascade resolves. Anything else (`flow-root`, `contents`, a typo) is
+/// dropped rather than letting it win and fall back to `inline`.
+fn is_display(values: &[Value]) -> bool {
+    let [Value::Keyword(keyword)] = values else {
+        return false;
+    };
+    matches!(
+        keyword.to_ascii_lowercase().as_str(),
+        "none"
+            | "block"
+            | "inline"
+            | "inline-block"
+            | "flex"
+            | "inline-flex"
+            | "grid"
+            | "inline-grid"
+            | "list-item"
+            | "table"
+            | "table-row-group"
+            | "table-row"
+            | "table-cell"
+            | "inherit"
+            | "initial"
+            | "unset"
+    )
 }
 
 /// Expand already-parsed values for `name`: a shorthand into its longhands,

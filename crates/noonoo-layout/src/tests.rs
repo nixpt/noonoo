@@ -2201,3 +2201,16 @@ fn a_grid_item_with_margins_fills_its_area_less_them() {
     let a = tree.get(id(&doc, "a")).unwrap().rect;
     assert_eq!((a.x, a.width), (10.0, 180.0));
 }
+
+/// bliss-diff: `display: ` with no value is invalid and dropped, so a
+/// `<div>` stays a block (super-surfer's frame emits it from an empty
+/// template value).
+#[test]
+fn an_empty_declaration_is_dropped() {
+    let (doc, tree) = page(
+        r#"<div id="a" style="display: ">some words</div>"#,
+        "",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().kind, BoxKind::Block);
+}
