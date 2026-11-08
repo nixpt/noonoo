@@ -35,6 +35,12 @@ impl Document {
         self.root
     }
 
+    /// Whether `id` is in the document: the root, or a node under it. A
+    /// created or removed node is not connected, but stays writable.
+    pub fn is_connected(&self, id: NodeId) -> bool {
+        self.tree.get(id).is_some() && self.tree.is_ancestor_of(self.root, id)
+    }
+
     /// Borrow the tree.
     pub fn tree(&self) -> &Tree<NodeData> {
         &self.tree

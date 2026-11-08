@@ -76,9 +76,16 @@ impl<'a> DocumentMutator<'a> {
         Ok(())
     }
 
-    /// Detach `child` from its parent. The node itself is kept.
+    /// Detach `child` from its parent. The node itself is kept, and can be
+    /// written to and reattached.
+    ///
+    /// A node with no parent (already removed, never attached, or the root)
+    /// is [`MutError::NoParent`]: the remove would have no effect.
     pub fn remove(&mut self, child: NodeId) -> Result<(), MutError> {
         self.require(child)?;
+        if self.tree.parent(child).is_none() {
+            return Err(MutError::NoParent(child));
+        }
         self.tree.detach(child);
         Ok(())
     }
@@ -274,5 +281,34 @@ mod tests {
         let mut doc = Document::new();
         let ghost = NodeId::from_index(99);
         assert_eq!(doc.mutate().remove(ghost), Err(MutError::NoSuchNode(ghost)));
+    }
+
+    #[test]
+    fn removing_a_node_with_no_parent_is_reported() {
+        // A second remove has no effect, so it says so instead of `Ok(())`.
+        let (mut doc, body) = doc_with_body();
+        let p = doc.create_element("p");
+        doc.mutate().append_child(body, p).unwrap();
+        doc.mutate().remove(p).unwrap();
+        assert_eq!(doc.mutate().remove(p), Err(MutError::NoParent(p)));
+        let root = doc.root();
+        assert_eq!(doc.mutate().remove(root), Err(MutError::NoParent(root)));
+    }
+
+    #[test]
+    fn a_detached_node_stays_writable_and_reports_disconnected() {
+        // Created nodes start detached, and create → set → append is the
+        // normal flow, so writes to a detached node are honoured; a caller
+        // that only wants to touch the live page checks `is_connected`.
+        let (mut doc, body) = doc_with_body();
+        let p = doc.create_element("p");
+        assert!(!doc.is_connected(p));
+        doc.mutate().set_attribute(p, "id", "x").unwrap();
+        doc.mutate().append_child(body, p).unwrap();
+        assert!(doc.is_connected(p));
+        assert!(doc.is_connected(doc.root()));
+        doc.mutate().remove(body).unwrap();
+        assert!(!doc.is_connected(p), "a removed subtree is disconnected");
+        assert!(!doc.is_connected(NodeId::from_index(99)));
     }
 }
