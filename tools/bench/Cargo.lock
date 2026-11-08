@@ -23,6 +23,7 @@ dependencies = [
  "noonoo-html",
  "noonoo-json",
  "noonoo-layout",
+ "noonoo-paint",
  "noonoo-toml",
 ]
 
@@ -96,6 +97,15 @@ name = "noonoo-parse"
 version = "0.20.0"
 
 [[package]]
+name = "noonoo-query"
+version = "0.20.0"
+dependencies = [
+ "noonoo-dom",
+ "noonoo-parse",
+ "noonoo-selectors",
+]
+
+[[package]]
 name = "noonoo-selectors"
 version = "0.20.0"
 dependencies = [
@@ -109,6 +119,7 @@ version = "0.20.0"
 dependencies = [
  "noonoo-css",
  "noonoo-dom",
+ "noonoo-query",
  "noonoo-selectors",
  "noonoo-text",
 ]

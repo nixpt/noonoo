@@ -16,4 +16,5 @@ noonoo-geometry = { path = "../../crates/noonoo-geometry" }
 noonoo-html = { path = "../../crates/noonoo-html" }
 noonoo-json = { path = "../../crates/noonoo-json" }
 noonoo-layout = { path = "../../crates/noonoo-layout" }
+noonoo-paint = { path = "../../crates/noonoo-paint" }
 noonoo-toml = { path = "../../crates/noonoo-toml" }

@@ -38,7 +38,10 @@ fn main() {
             }
             "--iters" => {
                 let value = args.next().expect("--iters needs a number");
-                iters = value.parse::<usize>().expect("--iters needs a number").max(1);
+                iters = value
+                    .parse::<usize>()
+                    .expect("--iters needs a number")
+                    .max(1);
             }
             "--only" => {
                 only = Some(args.next().expect("--only needs a name"));
@@ -105,17 +108,139 @@ fn main() {
         }
     }
 
+    if selected("ui") {
+        ui_benches(iters);
+    }
+
+    if selected("nested") {
+        nested_benches(iters);
+    }
+
     if selected("a11y") {
         let input = html_document(64 * 1024);
         let engine = noonoo_engine::Engine::from_html(&input);
         let viewport = Size::new(1024.0, 768.0);
         let styles = engine.compute_styles_for(viewport);
-        let layout =
-            noonoo_layout::layout(engine.dom(), &styles, viewport, &MetricShaper);
+        let layout = noonoo_layout::layout(engine.dom(), &styles, viewport, &MetricShaper);
         report("a11y/build", input.len(), iters.max(3), || {
             noonoo_a11y::build_in(engine.dom(), &styles, Some(&layout), None)
         });
     }
+}
+
+/// The arniko component stylesheet, as the engine's coverage test uses it.
+const ARNIKO_CSS: &str =
+    include_str!("../../../crates/noonoo-engine/tests/fixtures/arniko_styles.css");
+
+/// How many cards the UI benchmarks lay out: about 4,800 boxes.
+const UI_CARDS: usize = 320;
+
+/// A page of `cards` arniko cards under the arniko stylesheet.
+fn ui_page(cards: usize) -> String {
+    let mut html = format!("<html><head><style>{ARNIKO_CSS}</style></head><body>");
+    for i in 0..cards {
+        html.push_str(&format!(
+            r#"<div class="arniko-card"><div class="arniko-card-header"><h3 class="arniko-card-title">Card {i}</h3><span class="arniko-badge arniko-badge-info">new</span></div><div class="arniko-card-body"><p>Body text for card {i}, a few words long.</p><ul><li>one</li><li>two</li><li>three</li></ul></div><div class="arniko-card-footer"><button class="arniko-btn arniko-btn-default arniko-btn-sm">Open</button><button class="arniko-btn arniko-btn-ghost arniko-btn-sm">Dismiss</button></div></div>"#
+        ));
+    }
+    html.push_str("</body></html>");
+    html
+}
+
+/// Style, layout and paint of an arniko-sized UI, and the cost of bringing
+/// it up to date after one element changes.
+fn ui_benches(iters: usize) {
+    let viewport = Size::new(1280.0, 800.0);
+    let mut engine = noonoo_engine::Engine::from_html(&ui_page(UI_CARDS));
+    let elements = engine.dom().elements().len();
+    let styles = engine.compute_styles_for(viewport);
+    let layout = noonoo_layout::layout(engine.dom(), &styles, viewport, &MetricShaper);
+    let iters = iters.max(5);
+
+    report_items("ui/style", elements, iters, || {
+        engine.compute_styles_for(black_box(viewport))
+    });
+    report_items("ui/layout", elements, iters, || {
+        noonoo_layout::layout(engine.dom(), &styles, black_box(viewport), &MetricShaper)
+    });
+    report_items("ui/paint", elements, iters, || {
+        noonoo_paint::paint(&styles, black_box(&layout))
+    });
+
+    // One badge changes class; the styles are then brought up to date.
+    let badge = engine.dom().get_elements_by_tag_name("span")[UI_CARDS / 2];
+    let mut flip = false;
+    report_items("ui/restyle-one", 1, iters, || {
+        flip = !flip;
+        let class = if flip {
+            "arniko-badge arniko-badge-error"
+        } else {
+            "arniko-badge arniko-badge-info"
+        };
+        let _ = engine
+            .dom_mut()
+            .mutate()
+            .set_attribute(badge, "class", class);
+        engine.compute_styles_for(black_box(viewport))
+    });
+}
+
+/// Layout of grids nested `depth` deep, each holding an item that spans
+/// 1,000 rows: intrinsic sizing measures each level's contents again, so
+/// the cost grows with depth faster than the box count does.
+fn nested_benches(iters: usize) {
+    let viewport = Size::new(1024.0, 768.0);
+    let shapes: &[(&str, &str)] = &[
+        (
+            "grid",
+            "div { display: grid } p { margin: 0; grid-row: span 1000 }",
+        ),
+        ("flex", "div { display: flex }"),
+        ("flex-col", "div { display: flex; flex-direction: column }"),
+        ("inline-block", "div { display: inline-block }"),
+        ("float", "div { float: left }"),
+        ("table", "div { display: table-cell }"),
+        ("abs", "div { position: absolute }"),
+    ];
+    let depths: Vec<usize> = std::env::var("NESTED_DEPTHS")
+        .ok()
+        .map(|v| v.split(',').filter_map(|d| d.parse().ok()).collect())
+        .unwrap_or_else(|| vec![4, 8, 16, 32]);
+    for (shape, css) in shapes {
+        for &depth in &depths {
+            let html = format!(
+                "<style>{css}</style>{}<p>x</p>{}",
+                "<div>".repeat(depth),
+                "</div>".repeat(depth)
+            );
+            let engine = noonoo_engine::Engine::from_html(&html);
+            let styles = engine.compute_styles_for(viewport);
+            report_items(
+                &format!("nested/{shape}-{depth}"),
+                depth,
+                iters.max(3),
+                || noonoo_layout::layout(engine.dom(), &styles, black_box(viewport), &MetricShaper),
+            );
+        }
+    }
+}
+
+/// Like [`report`], for work measured in elements rather than bytes.
+fn report_items<T>(name: &str, items: usize, iters: usize, mut f: impl FnMut() -> T) {
+    black_box(f());
+    let mut samples = Vec::with_capacity(iters);
+    for _ in 0..iters {
+        let start = Instant::now();
+        black_box(f());
+        samples.push(start.elapsed());
+    }
+    samples.sort_unstable();
+    let median = samples[samples.len() / 2];
+    println!(
+        "{name:<20} {:>10} {iters:>6} {:>12}",
+        format!("{items} el"),
+        human_time(median),
+    );
 }
 
 fn iters_for(bytes: usize, cap: usize) -> usize {
@@ -246,7 +371,7 @@ OPTIONS:
     --bytes N     Run one input size instead of 1 KiB / 64 KiB / 1 MiB
     --iters N     Minimum sample count (default 5; small inputs get more)
     --only NAME   Run benchmarks whose name contains NAME
-                  (html, css, json, toml, pipeline, a11y)
+                  (html, css, json, toml, pipeline, ui, nested, a11y)
     -h, --help    Show this help"
     );
 }
