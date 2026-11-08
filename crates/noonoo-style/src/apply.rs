@@ -88,6 +88,9 @@ pub(crate) fn resolve_font_size(
             "xx-large" => Some(32.0),
             "smaller" => Some(parent * 0.8),
             "larger" => Some(parent * 1.2),
+            // CSS-wide keywords: `font-size` inherits, and starts `medium`.
+            "initial" => Some(16.0),
+            "inherit" | "unset" => Some(parent),
             _ => None,
         },
         _ => None,

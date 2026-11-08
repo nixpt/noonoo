@@ -49,3 +49,15 @@ pre, code, kbd, samp, listing, plaintext, xmp { font-family: monospace }
 a { color: #0000ee; text-decoration: underline }
 [hidden] { display: none }
 "#;
+
+/// The user-agent rules for quirks-mode documents only, after HTML's
+/// rendering section: legacy pages expect tables not to inherit text and
+/// font settings, and forms to keep a bottom margin.
+pub const QUIRKS_STYLESHEET: &str = r#"
+form { margin-bottom: 1em }
+table {
+  font-weight: initial; font-style: initial; font-variant: initial;
+  font-size: initial; line-height: initial; white-space: initial;
+  text-align: initial;
+}
+"#;

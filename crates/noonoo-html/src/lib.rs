@@ -28,6 +28,7 @@
 #![warn(missing_docs)]
 
 mod implied;
+mod mode;
 
 use noonoo_dom::{Document, MutError, NodeId};
 
@@ -38,6 +39,10 @@ pub enum Token {
     Doctype {
         /// The doctype name (`"html"` for the common case).
         name: String,
+        /// The `PUBLIC` identifier, if any.
+        public_id: Option<String>,
+        /// The system identifier, if any.
+        system_id: Option<String>,
     },
     /// A start tag.
     StartTag {
@@ -146,15 +151,7 @@ pub fn tokenize(source: &str) -> Vec<Token> {
                 .map(|i| start + i)
                 .unwrap_or(source.len());
             let inner = source[start..end].trim();
-            let name = inner
-                .strip_prefix("doctype")
-                .or_else(|| inner.strip_prefix("DOCTYPE"))
-                .unwrap_or(inner)
-                .split_whitespace()
-                .next()
-                .unwrap_or("")
-                .to_owned();
-            tokens.push(Token::Doctype { name });
+            tokens.push(doctype_token(inner));
             pos = (end + 1).min(source.len());
             continue;
         }
@@ -314,9 +311,55 @@ pub fn parse(source: &str) -> Document {
     let root = doc.root();
     // The skeleton may wrap the content in `html` and `body` afterwards:
     // leave room for them under the depth limit.
-    build(&mut doc, root, tokenize(source), MAX_TREE_DEPTH - 2);
+    let tokens = tokenize(source);
+    doc.set_quirks_mode(mode::of(&tokens));
+    build(&mut doc, root, tokens, MAX_TREE_DEPTH - 2);
     skeleton(&mut doc);
     doc
+}
+
+/// A `<!...>` declaration's token from its inside: `doctype`, the name, and
+/// an optional `PUBLIC "id" "id"` or `SYSTEM "id"`.
+fn doctype_token(inner: &str) -> Token {
+    let rest = match inner.get(..7) {
+        Some(keyword) if keyword.eq_ignore_ascii_case("doctype") => &inner[7..],
+        _ => inner,
+    };
+    let rest = rest.trim_start();
+    let name_end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+    let name = rest[..name_end].to_owned();
+    let mut rest = rest[name_end..].trim_start();
+    let keyword_end = rest
+        .find(|c: char| !c.is_ascii_alphabetic())
+        .unwrap_or(rest.len());
+    let keyword = rest[..keyword_end].to_ascii_lowercase();
+    rest = &rest[keyword_end..];
+    // One quoted identifier from the start of `rest`, and what follows it.
+    let quoted = |rest: &str| -> Option<(String, usize)> {
+        let rest_trimmed = rest.trim_start();
+        let skipped = rest.len() - rest_trimmed.len();
+        let quote = rest_trimmed
+            .chars()
+            .next()
+            .filter(|c| *c == '"' || *c == '\'')?;
+        let body = &rest_trimmed[1..];
+        let close = body.find(quote).unwrap_or(body.len());
+        let consumed = skipped + 1 + close + usize::from(close < body.len());
+        Some((body[..close].to_owned(), consumed))
+    };
+    let (public_id, system_id) = match keyword.as_str() {
+        "public" => match quoted(rest) {
+            Some((public, used)) => (Some(public), quoted(&rest[used..]).map(|(id, _)| id)),
+            None => (None, None),
+        },
+        "system" => (None, quoted(rest).map(|(id, _)| id)),
+        _ => (None, None),
+    };
+    Token::Doctype {
+        name,
+        public_id,
+        system_id,
+    }
 }
 
 /// Elements that belong in `<head>` (the spec's "in head" start tags).
@@ -573,7 +616,7 @@ fn build(doc: &mut Document, base: NodeId, tokens: Vec<Token>, depth: usize) {
 
     for token in tokens {
         match token {
-            Token::Doctype { name } => {
+            Token::Doctype { name, .. } => {
                 let node = doc
                     .tree_mut()
                     .insert_raw(noonoo_dom::NodeData::Doctype { name });

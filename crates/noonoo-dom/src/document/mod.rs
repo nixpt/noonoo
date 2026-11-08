@@ -16,6 +16,21 @@ pub struct Document {
     tree: Tree<NodeData>,
     root: NodeId,
     changes: Changes,
+    quirks_mode: QuirksMode,
+}
+
+/// A document's mode (DOM's "mode"), which the HTML parser sets from the
+/// doctype. Quirks mode turns on rendering rules kept for legacy pages.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum QuirksMode {
+    /// Standards mode: `<!DOCTYPE html>`, and every new document.
+    #[default]
+    NoQuirks,
+    /// Quirks mode: no doctype, or a legacy one.
+    Quirks,
+    /// Limited-quirks ("almost standards") mode: the transitional HTML 4.01
+    /// and XHTML 1.0 doctypes.
+    LimitedQuirks,
 }
 
 impl Default for Document {
@@ -34,7 +49,18 @@ impl Document {
             tree,
             root,
             changes: Changes::default(),
+            quirks_mode: QuirksMode::NoQuirks,
         }
+    }
+
+    /// The document's mode.
+    pub fn quirks_mode(&self) -> QuirksMode {
+        self.quirks_mode
+    }
+
+    /// Set the document's mode; the parser does, from the doctype.
+    pub fn set_quirks_mode(&mut self, mode: QuirksMode) {
+        self.quirks_mode = mode;
     }
 
     /// How many edits the change log holds before it gives up and reports

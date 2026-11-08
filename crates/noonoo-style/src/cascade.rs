@@ -24,7 +24,7 @@ use crate::Viewport;
 use crate::apply::{apply, resolve_font_size};
 use crate::computed::*;
 use crate::rule_index::RuleIndex;
-use crate::ua::UA_STYLESHEET;
+use crate::ua::{QUIRKS_STYLESHEET, UA_STYLESHEET};
 use crate::vars::{self, CustomProperties};
 
 /// Where a rule came from.
@@ -63,6 +63,15 @@ struct Rule {
     declarations: Vec<Declaration>,
     origin: Origin,
     order: u32,
+    /// A UA rule for quirks-mode documents only.
+    quirks: bool,
+}
+
+impl Rule {
+    /// Whether the rule applies in `doc` at all, whatever its selector.
+    fn applies_in(&self, doc: &Document) -> bool {
+        !self.quirks || doc.quirks_mode() == noonoo_dom::QuirksMode::Quirks
+    }
 }
 
 struct Candidate {
@@ -100,6 +109,12 @@ fn collect_rules(stylesheets: &[Stylesheet], viewport: &Viewport) -> Vec<Rule> {
     let mut order = 0u32;
     let ua = Stylesheet::parse(UA_STYLESHEET).unwrap_or_default();
     push_sheet(&ua, Origin::Ua, viewport, &mut rules, &mut order);
+    let quirks_from = rules.len();
+    let quirks = Stylesheet::parse(QUIRKS_STYLESHEET).unwrap_or_default();
+    push_sheet(&quirks, Origin::Ua, viewport, &mut rules, &mut order);
+    for rule in &mut rules[quirks_from..] {
+        rule.quirks = true;
+    }
     for sheet in stylesheets {
         push_sheet(sheet, Origin::Author, viewport, &mut rules, &mut order);
     }
@@ -157,6 +172,7 @@ fn push_sheet(
             declarations: typed,
             origin,
             order: *order,
+            quirks: false,
         });
     }
 }
@@ -191,6 +207,9 @@ fn pseudo_winners_for(
     let ctx = match_context(id, interaction);
     let mut winners = HashMap::new();
     for rule in index.pseudo().iter().map(|&i| &rules[i]) {
+        if !rule.applies_in(doc) {
+            continue;
+        }
         let Some(specificity) =
             rule.selector
                 .pseudo_matching_specificity(&view, ctx, pseudo.name())
@@ -241,6 +260,9 @@ fn winners_for(
     // under no key) can match it.
     index.candidates(element, candidates);
     for rule in candidates.iter().map(|&i| &rules[i]) {
+        if !rule.applies_in(doc) {
+            continue;
+        }
         let Some(specificity) = rule.selector.matching_specificity(&view, ctx) else {
             continue;
         };

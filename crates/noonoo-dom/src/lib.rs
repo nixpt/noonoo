@@ -42,7 +42,7 @@ pub mod query;
 pub mod tree;
 
 pub use changes::{Change, Changes};
-pub use document::Document;
+pub use document::{Document, QuirksMode};
 pub use mutate::{DocumentMutator, MutError};
 pub use node::{Attribute, ElementData, NodeData};
 pub use query::{Selector, SelectorError};
