@@ -163,3 +163,93 @@ fn a_mutation_that_is_allowed_can_still_be_invalid() {
         Err(CapsError::Mutation(_))
     ));
 }
+
+/// The fixture with `#secret` guarded, plus the secret `<p>`.
+fn guarded() -> (Document, Gate, NodeId, NodeId, NodeId) {
+    let (document, public, secret) = fixture();
+    let mut gate = Gate::new();
+    gate.guard(secret, secret_scope());
+    let secret_p = document.tree().children(secret)[0];
+    (document, gate, public, secret, secret_p)
+}
+
+#[test]
+fn set_text_is_gated_by_the_target_node() {
+    let (mut document, gate, public, secret, _) = guarded();
+    let subject = Subject::anonymous();
+    let policy = Policy::new();
+    let mut writer = GatedMutator::new(&mut document, &gate, &policy, &subject);
+    assert!(matches!(
+        writer.set_text(secret, "overwritten"),
+        Err(CapsError::Denied(_))
+    ));
+    writer.set_text(public, "fine").unwrap();
+    assert_eq!(document.text_content(public), "fine");
+    assert_eq!(document.text_content(secret), "classified");
+}
+
+#[test]
+fn replace_children_is_gated_by_the_parent() {
+    let (mut document, gate, public, secret, _) = guarded();
+    let fresh = document.create_element("span");
+    let subject = Subject::anonymous();
+    let policy = Policy::new();
+    let mut writer = GatedMutator::new(&mut document, &gate, &policy, &subject);
+    assert!(matches!(
+        writer.replace_children(secret, &[fresh]),
+        Err(CapsError::Denied(_))
+    ));
+    writer.replace_children(public, &[fresh]).unwrap();
+    assert_eq!(document.tree().children(public), &[fresh]);
+}
+
+#[test]
+fn a_node_cannot_be_moved_out_of_a_guarded_subtree() {
+    // Moving detaches the node from its old parent, which is a write there:
+    // without this, appending a secret node into an open parent would let
+    // a subject who cannot write `#secret` take it out.
+    let (mut document, gate, public, secret, secret_p) = guarded();
+    let public_p = document.tree().children(public)[0];
+    let subject = Subject::anonymous();
+    let policy = Policy::new();
+    let mut writer = GatedMutator::new(&mut document, &gate, &policy, &subject);
+    assert!(matches!(
+        writer.append_child(public, secret_p),
+        Err(CapsError::Denied(_))
+    ));
+    assert!(matches!(
+        writer.insert_before(public_p, secret_p),
+        Err(CapsError::Denied(_))
+    ));
+    assert!(matches!(
+        writer.replace_children(public, &[secret_p]),
+        Err(CapsError::Denied(_))
+    ));
+    assert_eq!(
+        document.tree().children(secret),
+        &[secret_p],
+        "still in place"
+    );
+}
+
+#[test]
+fn replacing_children_cannot_drop_a_guarded_child() {
+    // `remove` needs write on the node removed; replacing an open parent's
+    // children removes each of them, so the same rule applies.
+    let (mut document, mut gate, public, _, _) = guarded();
+    let public_p = document.tree().children(public)[0];
+    gate.guard(public_p, Scope::path(CAP, "#public p"));
+    let fresh = document.create_element("span");
+    let subject = Subject::anonymous();
+    let policy = Policy::new();
+    let mut writer = GatedMutator::new(&mut document, &gate, &policy, &subject);
+    assert!(matches!(
+        writer.replace_children(public, &[fresh]),
+        Err(CapsError::Denied(_))
+    ));
+    assert!(matches!(
+        writer.set_text(public, "wiped"),
+        Err(CapsError::Denied(_))
+    ));
+    assert_eq!(document.tree().children(public), &[public_p]);
+}

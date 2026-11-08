@@ -233,9 +233,12 @@ impl<'a> GatedDocument<'a> {
 
 /// A write view: a mutation is refused unless the subject may write the node.
 ///
-/// The permission check runs against the target node (the parent for an
-/// insertion, the node itself for a removal or attribute change), so a guarded
-/// subtree cannot be edited by a subject who cannot write its guard.
+/// The permission check runs against every node a write changes: the parent
+/// for an insertion, the node itself for a removal or attribute change. A
+/// moved node is also removed from where it was, so it needs write too, and
+/// replacing a node's children removes each of them. A guarded subtree
+/// cannot be edited, emptied, or moved out of by a subject who cannot write
+/// its guard.
 pub struct GatedMutator<'a> {
     document: &'a mut Document,
     gate: &'a Gate,
@@ -306,18 +309,31 @@ impl<'a> GatedMutator<'a> {
             .map_err(CapsError::Mutation)
     }
 
-    /// Append `child` to `parent`, if the subject may write `parent`.
+    /// Write access to each of `parent`'s current children: the ones a
+    /// replacement removes.
+    fn require_children(&self, parent: NodeId) -> Result<(), CapsError> {
+        for &child in self.document.tree().children(parent) {
+            self.require(child)?;
+        }
+        Ok(())
+    }
+
+    /// Append `child` to `parent`, if the subject may write `parent` and
+    /// `child` (a move takes it from where it was).
     pub fn append_child(&mut self, parent: NodeId, child: NodeId) -> Result<(), CapsError> {
         self.require(parent)?;
+        self.require(child)?;
         self.document
             .mutate()
             .append_child(parent, child)
             .map_err(CapsError::Mutation)
     }
 
-    /// Insert `child` before `sibling`, if the subject may write `sibling`.
+    /// Insert `child` before `sibling`, if the subject may write `sibling`
+    /// and `child`.
     pub fn insert_before(&mut self, sibling: NodeId, child: NodeId) -> Result<(), CapsError> {
         self.require(sibling)?;
+        self.require(child)?;
         self.document
             .mutate()
             .insert_before(sibling, child)
@@ -330,6 +346,35 @@ impl<'a> GatedMutator<'a> {
         self.document
             .mutate()
             .remove(child)
+            .map_err(CapsError::Mutation)
+    }
+
+    /// Replace `parent`'s children with `new_children`, if the subject may
+    /// write `parent`, each child it removes, and each child it moves in.
+    pub fn replace_children(
+        &mut self,
+        parent: NodeId,
+        new_children: &[NodeId],
+    ) -> Result<(), CapsError> {
+        self.require(parent)?;
+        self.require_children(parent)?;
+        for &child in new_children {
+            self.require(child)?;
+        }
+        self.document
+            .mutate()
+            .replace_children(parent, new_children)
+            .map_err(CapsError::Mutation)
+    }
+
+    /// Set `node`'s text (`textContent` semantics), if the subject may write
+    /// `node` and, on an element, each child the new text replaces.
+    pub fn set_text(&mut self, node: NodeId, text: impl Into<String>) -> Result<(), CapsError> {
+        self.require(node)?;
+        self.require_children(node)?;
+        self.document
+            .mutate()
+            .set_text(node, text)
             .map_err(CapsError::Mutation)
     }
 }
