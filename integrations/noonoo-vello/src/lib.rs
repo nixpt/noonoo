@@ -130,6 +130,18 @@ pub fn draw(scene: &mut Scene, commands: &CommandList) {
                 );
             }
             Command::PopLayer => scene.pop_layer(),
+            Command::FillRing {
+                outer,
+                outer_radius,
+                inner,
+                inner_radius,
+                color,
+            } => {
+                // Even-odd: the inner outline cuts the hole.
+                let mut ring = rounded_rect(*outer, *outer_radius);
+                ring.extend(rounded_rect(*inner, *inner_radius));
+                scene.fill(Fill::EvenOdd, transform, brush(*color), None, &ring);
+            }
             Command::BoxShadow {
                 rect,
                 radius,
@@ -410,6 +422,30 @@ mod tests {
         let hard = tags(shadow(0.0));
         assert!(hard.contains(&BEGIN_CLIP), "{hard:x?}");
         assert!(!hard.contains(&BLUR_RECT), "{hard:x?}");
+    }
+
+    /// A ring is one even-odd fill of its outer and inner rounded paths.
+    #[test]
+    fn a_ring_fills_once_with_both_outlines() {
+        let ring = scene(&CommandList(vec![Command::FillRing {
+            outer: NRect::new(0.0, 0.0, 20.0, 20.0),
+            outer_radius: (5.0, 5.0, 5.0, 5.0),
+            inner: NRect::new(2.0, 2.0, 16.0, 16.0),
+            inner_radius: (3.0, 3.0, 3.0, 3.0),
+            color: Color::rgb(0, 0, 255),
+        }]));
+        let single = scene(&CommandList(vec![Command::FillRect {
+            rect: NRect::new(0.0, 0.0, 20.0, 20.0),
+            color: Color::rgb(0, 0, 255),
+            radius: (5.0, 5.0, 5.0, 5.0),
+        }]));
+        assert_eq!(
+            ring.encoding().draw_tags.len(),
+            single.encoding().draw_tags.len()
+        );
+        // Two closed outlines instead of one.
+        assert!(ring.encoding().path_tags.len() > single.encoding().path_tags.len());
+        assert_eq!(ring.encoding().styles.len(), 1);
     }
 
     #[test]

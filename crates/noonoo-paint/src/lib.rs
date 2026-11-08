@@ -133,6 +133,20 @@ pub enum Command {
     },
     /// End the most recent [`Command::PushTransform`].
     PopTransform,
+    /// A rounded border: `outer` minus `inner`, each a rounded rectangle,
+    /// filled with `color`.
+    FillRing {
+        /// The border box.
+        outer: Rect,
+        /// Its corner radii (top-left, top-right, bottom-right, bottom-left).
+        outer_radius: (f32, f32, f32, f32),
+        /// The padding box (the border box less the border widths).
+        inner: Rect,
+        /// Its corner radii.
+        inner_radius: (f32, f32, f32, f32),
+        /// The border colour.
+        color: Color,
+    },
     /// An outer CSS `box-shadow`: the rounded `rect` filled with `color`,
     /// blurred by `blur` (the CSS blur radius; `0` is a hard edge), and
     /// never drawn inside the element's own border box (`element`, with
@@ -376,15 +390,19 @@ fn paint_box(
             }
         }
 
-        // Border bands stay rectangular: rounded *borders* are not painted
-        // yet (only the background rounds).
-        for (band, width, color) in border_sides(rect, b, style) {
-            if width > 0.0 {
-                out.0.push(Command::FillRect {
-                    rect: band,
-                    color,
-                    radius: (0.0, 0.0, 0.0, 0.0),
-                });
+        // A rounded border in one colour is one ring; otherwise each side
+        // is a band (and with mixed colours, the corners stay square).
+        if let Some(ring) = rounded_border(rect, b, style) {
+            out.0.push(ring);
+        } else {
+            for (band, width, color) in border_sides(rect, b, style) {
+                if width > 0.0 {
+                    out.0.push(Command::FillRect {
+                        rect: band,
+                        color,
+                        radius: (0.0, 0.0, 0.0, 0.0),
+                    });
+                }
             }
         }
     }
@@ -469,6 +487,56 @@ fn paint_box(
 }
 
 /// The four border side bands `(rect, width, colour)`, positioned at `rect`.
+/// The border as one [`Command::FillRing`], when the box has a rounded
+/// corner and every side with a width has the same colour.
+fn rounded_border(
+    rect: Rect,
+    b: &LayoutBox,
+    style: Option<&noonoo_style::ComputedStyle>,
+) -> Option<Command> {
+    let style = style?;
+    let radius = corner_radii(style, rect);
+    if radius.0 <= 0.0 && radius.1 <= 0.0 && radius.2 <= 0.0 && radius.3 <= 0.0 {
+        return None;
+    }
+    let w = &b.border;
+    let colors = &style.border_color;
+    let mut visible = [
+        (w.top, colors.top),
+        (w.right, colors.right),
+        (w.bottom, colors.bottom),
+        (w.left, colors.left),
+    ]
+    .into_iter()
+    .filter(|(width, _)| *width > 0.0)
+    .map(|(_, color)| color);
+    let color = visible.next()?;
+    if visible.any(|other| other != color) {
+        return None;
+    }
+    let inner = Rect::new(
+        rect.x + w.left,
+        rect.y + w.top,
+        (rect.width - w.left - w.right).max(0.0),
+        (rect.height - w.top - w.bottom).max(0.0),
+    );
+    // Circular corners: each inner corner gives up the wider of the two
+    // borders that meet there.
+    let shrink = |r: f32, a: f32, b: f32| (r - a.max(b)).max(0.0);
+    Some(Command::FillRing {
+        outer: rect,
+        outer_radius: radius,
+        inner,
+        inner_radius: (
+            shrink(radius.0, w.top, w.left),
+            shrink(radius.1, w.top, w.right),
+            shrink(radius.2, w.bottom, w.right),
+            shrink(radius.3, w.bottom, w.left),
+        ),
+        color,
+    })
+}
+
 fn border_sides(
     rect: Rect,
     b: &LayoutBox,
@@ -654,6 +722,20 @@ fn command_json(command: &Command) -> Json {
             ),
         ]),
         Command::PopTransform => object(vec![("op", Json::String("pop-transform".into()))]),
+        Command::FillRing {
+            outer,
+            outer_radius,
+            inner,
+            inner_radius,
+            color,
+        } => object(vec![
+            ("op", Json::String("fill-ring".into())),
+            ("outer", rect_json(*outer)),
+            ("outer-radius", radius_json(*outer_radius)),
+            ("inner", rect_json(*inner)),
+            ("inner-radius", radius_json(*inner_radius)),
+            ("color", Json::String(color_hex(*color))),
+        ]),
         Command::BoxShadow {
             rect,
             radius,
@@ -1401,6 +1483,81 @@ mod tests {
         // CSS 5.5: adjacent radii may not exceed a side, so 100px scales to 50
         // on the width and 25 on the height.
         assert_eq!(*radius, (25.0, 25.0, 25.0, 25.0));
+    }
+
+    /// A ring's outer rect and radii, inner rect and radii, and colour.
+    type Ring = (
+        Rect,
+        (f32, f32, f32, f32),
+        Rect,
+        (f32, f32, f32, f32),
+        Color,
+    );
+
+    fn rings(list: &CommandList) -> Vec<Ring> {
+        list.commands()
+            .iter()
+            .filter_map(|c| match c {
+                Command::FillRing {
+                    outer,
+                    outer_radius,
+                    inner,
+                    inner_radius,
+                    color,
+                } => Some((*outer, *outer_radius, *inner, *inner_radius, *color)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_rounded_border_paints_as_one_ring() {
+        let list = render(
+            r#"<div id="a"></div>"#,
+            "#a { width: 96px; height: 46px; border: 2px solid blue; border-left-width: 6px;
+                  border-radius: 10px }",
+        );
+        let blue = Color::rgb(0, 0, 255);
+        assert_eq!(
+            rings(&list),
+            [(
+                Rect::new(0.0, 0.0, 104.0, 50.0),
+                (10.0, 10.0, 10.0, 10.0),
+                Rect::new(6.0, 2.0, 96.0, 46.0),
+                // Each inner corner gives up the wider of its two borders.
+                (4.0, 8.0, 8.0, 4.0),
+                blue,
+            )]
+        );
+        // No square bands as well.
+        assert!(
+            !list
+                .commands()
+                .iter()
+                .any(|c| matches!(c, Command::FillRect { color, .. } if *color == blue))
+        );
+        let json = list.to_json().to_string();
+        assert!(json.contains(r#""op":"fill-ring""#), "{json}");
+    }
+
+    #[test]
+    fn square_or_multicoloured_borders_keep_their_bands() {
+        let square = render(
+            r#"<div id="a"></div>"#,
+            "#a { height: 10px; border: 2px solid blue }",
+        );
+        assert!(rings(&square).is_empty());
+        let mixed = render(
+            r#"<div id="a"></div>"#,
+            "#a { height: 10px; border: 2px solid blue; border-top-color: red; border-radius: 4px }",
+        );
+        assert!(rings(&mixed).is_empty());
+        // A side with no width doesn't count against "one colour".
+        let partial = render(
+            r#"<div id="a"></div>"#,
+            "#a { height: 10px; border-bottom: 2px solid blue; border-radius: 4px }",
+        );
+        assert_eq!(rings(&partial).len(), 1);
     }
 
     #[test]
