@@ -253,9 +253,48 @@ fn would_start_ident(rest: &str) -> bool {
     let mut chars = rest.chars();
     match chars.next() {
         Some(ch) if is_ident_start(ch) => true,
-        Some('-') => matches!(chars.next(), Some(c) if is_ident_start(c) || c == '-'),
+        Some('\\') => starts_escape(chars.as_str()),
+        Some('-') => match chars.next() {
+            Some(c) if is_ident_start(c) || c == '-' => true,
+            Some('\\') => starts_escape(chars.as_str()),
+            _ => false,
+        },
         _ => false,
     }
+}
+
+/// Whether the text after a `\` makes a valid escape (anything but a
+/// newline or the end).
+fn starts_escape(after_backslash: &str) -> bool {
+    !matches!(after_backslash.chars().next(), None | Some('\n'))
+}
+
+/// Decode the escape starting just after a `\` at `pos`: up to six hex
+/// digits (plus one whitespace after them), or the next character as
+/// itself. Zero, surrogates and code points past U+10FFFF are U+FFFD.
+fn consume_escape(source: &str, mut pos: usize) -> (char, usize) {
+    let rest = &source[pos..];
+    let hex_len = rest
+        .chars()
+        .take(6)
+        .take_while(char::is_ascii_hexdigit)
+        .count();
+    if hex_len == 0 {
+        let ch = rest.chars().next().unwrap_or('\u{FFFD}');
+        return (ch, pos + ch.len_utf8().min(rest.len()));
+    }
+    let value = u32::from_str_radix(&rest[..hex_len], 16).unwrap_or(0);
+    pos += hex_len;
+    if let Some(ws) = source[pos..].chars().next()
+        && ws.is_whitespace()
+    {
+        pos += ws.len_utf8();
+    }
+    let ch = match value {
+        0 => '\u{FFFD}',
+        value => char::from_u32(value).unwrap_or('\u{FFFD}'),
+    };
+    (ch, pos)
 }
 
 fn is_number_start(source: &str, pos: usize) -> bool {
@@ -274,39 +313,21 @@ fn is_number_start(source: &str, pos: usize) -> bool {
 }
 
 fn consume_ident(source: &str, mut pos: usize) -> (String, usize) {
-    let start = pos;
+    let mut out = String::new();
     while pos < source.len() {
         let ch = source[pos..].chars().next().unwrap();
         if is_ident_char(ch) {
+            out.push(ch);
             pos += ch.len_utf8();
-        } else if ch == '\\' && pos + 1 < source.len() {
-            pos += ch.len_utf8();
-            pos += source[pos..].chars().next().unwrap().len_utf8();
+        } else if ch == '\\' && starts_escape(&source[pos + 1..]) {
+            let (decoded, end) = consume_escape(source, pos + 1);
+            out.push(decoded);
+            pos = end;
         } else {
             break;
         }
     }
-    // Re-read for escape handling.
-    let raw = &source[start..pos];
-    (unescape_ident(raw), pos)
-}
-
-fn unescape_ident(raw: &str) -> String {
-    if !raw.contains('\\') {
-        return raw.to_owned();
-    }
-    let mut out = String::new();
-    let mut chars = raw.chars();
-    while let Some(ch) = chars.next() {
-        if ch == '\\' {
-            if let Some(next) = chars.next() {
-                out.push(next);
-            }
-        } else {
-            out.push(ch);
-        }
-    }
-    out
+    (out, pos)
 }
 
 fn consume_number(source: &str, mut pos: usize) -> (f64, usize) {
@@ -362,10 +383,15 @@ fn consume_string(source: &str, mut pos: usize, quote: char) -> (String, usize, 
         }
         if ch == '\\' {
             pos += 1;
-            if pos < source.len() {
-                let esc = source[pos..].chars().next().unwrap();
-                value.push(esc);
-                pos += esc.len_utf8();
+            match source[pos..].chars().next() {
+                // A line continuation.
+                Some('\n') => pos += 1,
+                Some(_) => {
+                    let (decoded, end) = consume_escape(source, pos);
+                    value.push(decoded);
+                    pos = end;
+                }
+                None => {}
             }
             continue;
         }
