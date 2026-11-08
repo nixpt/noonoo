@@ -12,7 +12,7 @@
 //!
 //! Text sits behind the [`Glyphs`] seam: [`paint`] draws runs with [`TextRuns`],
 //! while [`paint_with`] takes a renderer — e.g. `noonoo-ttf`'s `OutlineGlyphs`,
-//! which emits one `FillPolygon` per glyph contour, so a real font renders as
+//! which emits one `FillContours` per glyph (holes stay open), so a real font renders as
 //! vector paths with no GPU text backend.
 //!
 //! This is Phase D of the dependency-exit plan (`docs/DEPENDENCY-EXIT.md`). The
@@ -28,7 +28,8 @@ use noonoo_geometry::{Point, Rect};
 use noonoo_json::Json;
 use noonoo_layout::{BoxKind, LayoutBox, LayoutTree};
 use noonoo_style::{Gradient, LinearDirection, RadialShape, RadialSize, Styles, TextDecoration};
-use noonoo_text::FontRequest;
+/// Re-exported for implementers of [`Glyphs`], whose `draw` takes one.
+pub use noonoo_text::FontRequest;
 
 /// One colour stop of a gradient fill.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -87,6 +88,14 @@ pub enum Command {
     FillPolygon {
         /// The vertices.
         points: Vec<Point>,
+        /// The fill colour.
+        color: Color,
+    },
+    /// Fill several closed contours as one shape, with the non-zero winding
+    /// rule: a contour wound the other way cuts a hole, as in a glyph's `o`.
+    FillContours {
+        /// The contours, each at least three points, in order.
+        contours: Vec<Vec<Point>>,
         /// The fill colour.
         color: Color,
     },
@@ -391,6 +400,21 @@ fn command_json(command: &Command) -> Json {
                                 ("x".to_owned(), Json::Number(p.x as f64)),
                                 ("y".to_owned(), Json::Number(p.y as f64)),
                             ])
+                        })
+                        .collect(),
+                ),
+            ),
+            ("color", Json::String(color_hex(*color))),
+        ]),
+        Command::FillContours { contours, color } => object(vec![
+            ("op", Json::String("fill-contours".into())),
+            (
+                "contours",
+                Json::Array(
+                    contours
+                        .iter()
+                        .map(|contour| {
+                            Json::Array(contour.iter().copied().map(point_json).collect())
                         })
                         .collect(),
                 ),
@@ -1010,6 +1034,29 @@ mod tests {
         );
         let json = round.to_json().to_string();
         assert!(json.contains("radius"));
+    }
+
+    #[test]
+    fn json_records_each_contour_of_a_shape() {
+        let list = CommandList(vec![Command::FillContours {
+            contours: vec![
+                vec![
+                    Point::new(0.0, 0.0),
+                    Point::new(4.0, 0.0),
+                    Point::new(4.0, 4.0),
+                ],
+                vec![
+                    Point::new(1.0, 1.0),
+                    Point::new(2.0, 1.0),
+                    Point::new(2.0, 2.0),
+                ],
+            ],
+            color: Color::BLACK,
+        }]);
+        let json = list.to_json().to_string();
+        assert!(json.contains(r#""op":"fill-contours""#), "{json}");
+        assert!(json.contains(r#""contours":[[{"x":0.0,"y":0.0}"#), "{json}");
+        assert_eq!(json.matches(r#""x":"#).count(), 6, "{json}");
     }
 
     #[test]

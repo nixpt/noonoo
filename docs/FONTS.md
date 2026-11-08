@@ -48,7 +48,8 @@ each taking a `FontRequest` (the element's family list, weight, and style):
 **Glyphs** (`noonoo_paint::Glyphs`) — how a run is drawn:
 
 - `TextRuns` (the default) emits `Command::DrawText`.
-- `OutlineGlyphs` emits one `Command::FillPolygon` per glyph contour — **vector
+- `OutlineGlyphs` emits one `Command::FillContours` per glyph, its contours
+  filled together so holes stay open — **vector
   text** through the same command stream as every other shape, with no GPU text
   backend. It selects a face from a `FontSet` per request, the same way
   `FontSetShaper` does, and advances the pen with the same metrics, kerning

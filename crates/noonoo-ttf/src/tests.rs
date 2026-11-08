@@ -410,7 +410,7 @@ fn reports_outline_capability_and_bounds() {
 }
 
 #[test]
-fn outline_glyphs_emit_polygons() {
+fn outline_glyphs_emit_glyph_contours() {
     use noonoo_paint::{Color, Command, CommandList, Glyphs};
 
     let font = Font::parse(&minimal_font()).unwrap();
@@ -430,10 +430,10 @@ fn outline_glyphs_emit_polygons() {
         .commands()
         .iter()
         .find_map(|command| match command {
-            Command::FillPolygon { points, .. } => Some(points.clone()),
+            Command::FillContours { contours, .. } => Some(contours[0].clone()),
             _ => None,
         })
-        .expect("a glyph polygon");
+        .expect("a glyph's contours");
     // The triangle maps to screen space (y down) with the baseline at y = 0.
     assert_eq!(
         points,
@@ -443,4 +443,83 @@ fn outline_glyphs_emit_polygons() {
             noonoo_geometry::Point::new(0.0, -700.0),
         ]
     );
+}
+
+/// Glyph 1 as a ring: a 700-unit square (clockwise, y up) with a 300-unit
+/// square hole (counter-clockwise), the way TrueType draws an `o`. Glyph 2
+/// is the same composite as in `glyf()`.
+fn ring_glyf_and_loca() -> (Vec<u8>, Vec<u8>) {
+    let mut ring = Vec::new();
+    push_i16(&mut ring, 2); // numberOfContours
+    for bound in [0i16, 0, 700, 700] {
+        push_i16(&mut ring, bound);
+    }
+    push_u16(&mut ring, 3); // endPtsOfContours: outer 0..=3
+    push_u16(&mut ring, 7); // inner 4..=7
+    push_u16(&mut ring, 0); // instructionLength
+    ring.extend_from_slice(&[0x01; 8]); // on-curve, long deltas
+    // Outer (0,0) (0,700) (700,700) (700,0); inner (200,200) (500,200)
+    // (500,500) (200,500).
+    for dx in [0i16, 0, 700, 0, -500, 300, 0, -300] {
+        push_i16(&mut ring, dx);
+    }
+    for dy in [0i16, 700, 0, -700, 200, 0, 300, 0] {
+        push_i16(&mut ring, dy);
+    }
+    assert_eq!(ring.len(), 56);
+
+    let composite = glyf()[30..].to_vec();
+    let composite_len = composite.len() as u16;
+    let mut glyf = ring;
+    glyf.extend_from_slice(&composite);
+
+    let mut loca = Vec::new();
+    for offset in [0u16, 0, 56, 56 + composite_len] {
+        push_u16(&mut loca, offset / 2);
+    }
+    (glyf, loca)
+}
+
+fn ring_font() -> Vec<u8> {
+    let (glyf, loca) = ring_glyf_and_loca();
+    build(&[
+        (*b"head", head(1000)),
+        (*b"maxp", maxp()),
+        (*b"hhea", hhea()),
+        (*b"hmtx", hmtx()),
+        (*b"cmap", cmap()),
+        (*b"glyf", glyf),
+        (*b"loca", loca),
+    ])
+}
+
+/// A glyph with a hole is one shape: its contours fill together, so the
+/// hole's opposite winding cuts it out. As separate polygons, the hole
+/// would be filled solid.
+#[test]
+fn outline_glyphs_fill_each_glyph_as_one_shape() {
+    use noonoo_paint::{Color, Command, CommandList, Glyphs};
+
+    let font = Font::parse(&ring_font()).unwrap();
+    assert_eq!(font.outline(1).unwrap().contours.len(), 2);
+    let mut set = FontSet::new();
+    set.add("Demo", 400, false, &font);
+    let mut list = CommandList::default();
+    OutlineGlyphs::new(&set).draw(
+        "A",
+        (0.0, 1000.0),
+        1000.0,
+        Color::BLACK,
+        FontRequest::any(),
+        &mut list,
+    );
+
+    let [Command::FillContours { contours, color }] = list.commands() else {
+        panic!("expected one FillContours, got {:?}", list.commands());
+    };
+    assert_eq!(*color, Color::BLACK);
+    assert_eq!(contours.len(), 2);
+    assert_eq!(contours[0].len(), 4);
+    // Screen space: y down, baseline at 1000.
+    assert_eq!(contours[1][0], noonoo_geometry::Point::new(200.0, 800.0));
 }

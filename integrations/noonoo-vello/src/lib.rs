@@ -15,6 +15,7 @@
 //! | `FillRect` | `Scene::fill` a `kurbo::Rect` (rounded corners become a path) |
 //! | `FillGradient` | `Scene::fill` a `kurbo::Rect` with a `peniko::Gradient` (elliptical radial gradients use a brush transform) |
 //! | `FillPolygon` | `Scene::fill` a closed `kurbo::BezPath` |
+//! | `FillContours` | one `Scene::fill` (non-zero) of a `BezPath` with a subpath per contour, so glyph holes stay open |
 //! | `PushLayer` / `PopLayer` | `Scene::push_layer` (alpha + clip) / `pop_layer` |
 //! | `DrawText` | *not drawn* — Noonoo renders text as glyph outlines (`noonoo-ttf`'s `OutlineGlyphs`), so a bare text run has no paths for Vello |
 //!
@@ -53,15 +54,12 @@ pub fn draw(scene: &mut Scene, commands: &CommandList) {
                 color,
                 radius,
             } => {
-                let shape = if radius.0 == 0.0
-                    && radius.1 == 0.0
-                    && radius.2 == 0.0
-                    && radius.3 == 0.0
-                {
-                    kurbo::Shape::into_path(kurbo_rect(*rect), 0.1)
-                } else {
-                    rounded_rect(*rect, *radius)
-                };
+                let shape =
+                    if radius.0 == 0.0 && radius.1 == 0.0 && radius.2 == 0.0 && radius.3 == 0.0 {
+                        kurbo::Shape::into_path(kurbo_rect(*rect), 0.1)
+                    } else {
+                        rounded_rect(*rect, *radius)
+                    };
                 scene.fill(Fill::NonZero, Affine::IDENTITY, brush(*color), None, &shape);
             }
             Command::FillGradient {
@@ -105,8 +103,19 @@ pub fn draw(scene: &mut Scene, commands: &CommandList) {
                     scene.fill(Fill::NonZero, Affine::IDENTITY, brush(*color), None, &path);
                 }
             }
+            Command::FillContours { contours, color } => {
+                // One path of several subpaths, one fill: the non-zero rule
+                // cuts the holes a glyph winds the other way.
+                let mut path = BezPath::new();
+                for contour in contours.iter().filter(|contour| contour.len() >= 3) {
+                    path.extend(bez_path(contour));
+                }
+                if !path.elements().is_empty() {
+                    scene.fill(Fill::NonZero, Affine::IDENTITY, brush(*color), None, &path);
+                }
+            }
             // A plain text run carries no outlines; use `OutlineGlyphs` so Vello
-            // receives filled glyph polygons instead.
+            // receives filled glyph contours instead.
             Command::DrawText { .. } => {}
             Command::PushLayer { clip, alpha } => {
                 // No clip: an effectively infinite shape (Vello wants a shape
@@ -114,14 +123,14 @@ pub fn draw(scene: &mut Scene, commands: &CommandList) {
                 let shape = match clip {
                     Some(rect) => kurbo::Shape::into_path(kurbo_rect(*rect), 0.1),
                     None => {
-    let mut shape = BezPath::new();
-    shape.move_to((-1.0e6, -1.0e6));
-    shape.line_to((2.0e6, -1.0e6));
-    shape.line_to((2.0e6, 2.0e6));
-    shape.line_to((-1.0e6, 2.0e6));
-    shape.close_path();
-    shape
-}
+                        let mut shape = BezPath::new();
+                        shape.move_to((-1.0e6, -1.0e6));
+                        shape.line_to((2.0e6, -1.0e6));
+                        shape.line_to((2.0e6, 2.0e6));
+                        shape.line_to((-1.0e6, 2.0e6));
+                        shape.close_path();
+                        shape
+                    }
                 };
                 scene.push_layer(
                     Fill::NonZero,
@@ -302,6 +311,26 @@ mod tests {
         }]);
         assert!(paths > 0);
         assert!(draws >= 1);
+    }
+
+    /// A glyph's contours are one fill (one draw), so the non-zero rule can
+    /// cut its holes; two draws would paint the hole solid.
+    #[test]
+    fn contours_fill_as_one_shape() {
+        let square = |x: f32, y: f32, size: f32| {
+            vec![
+                Point::new(x, y),
+                Point::new(x + size, y),
+                Point::new(x + size, y + size),
+                Point::new(x, y + size),
+            ]
+        };
+        let (paths, draws) = encodings(vec![Command::FillContours {
+            contours: vec![square(0.0, 0.0, 10.0), square(3.0, 3.0, 4.0)],
+            color: Color::BLACK,
+        }]);
+        assert!(paths > 0);
+        assert_eq!(draws, 1);
     }
 
     #[test]

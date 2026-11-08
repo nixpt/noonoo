@@ -1,8 +1,9 @@
 //! A [`Glyphs`] renderer that draws text as filled glyph outlines.
 //!
 //! Where the default `noonoo_paint::TextRuns` emits a backend text command, this
-//! emits one `FillPolygon` per glyph contour — so a real font renders through the
-//! same command stream as every other shape, with no GPU text backend.
+//! emits one `FillContours` per glyph (its contours filled together, so holes
+//! stay open) — so a real font renders through the same command stream as
+//! every other shape, with no GPU text backend.
 //!
 //! Each request selects a face from a [`FontSet`] (family list, weight, style),
 //! the same way [`crate::FontSetShaper`] does — so a document laid out with a
@@ -59,17 +60,24 @@ impl Glyphs for OutlineGlyphs<'_> {
                 pen += font.kern(left, glyph) as f32 * scale;
             }
             if let Some(outline) = font.outline(glyph) {
-                for contour in outline.flatten(self.steps) {
-                    let points: Vec<Point> = contour
-                        .into_iter()
-                        .map(|(px, py)| {
-                            // Font units (y up) → pixels (y down), baseline at `baseline`.
-                            Point::new(pen + px * scale, baseline - py * scale)
-                        })
-                        .collect();
-                    if points.len() >= 3 {
-                        out.0.push(Command::FillPolygon { points, color });
-                    }
+                // All of a glyph's contours fill as one shape, so a hole
+                // (wound the other way) stays open.
+                let contours: Vec<Vec<Point>> = outline
+                    .flatten(self.steps)
+                    .into_iter()
+                    .map(|contour| {
+                        contour
+                            .into_iter()
+                            .map(|(px, py)| {
+                                // Font units (y up) → pixels (y down), baseline at `baseline`.
+                                Point::new(pen + px * scale, baseline - py * scale)
+                            })
+                            .collect::<Vec<Point>>()
+                    })
+                    .filter(|points| points.len() >= 3)
+                    .collect();
+                if !contours.is_empty() {
+                    out.0.push(Command::FillContours { contours, color });
                 }
             }
             pen += font.advance(glyph) as f32 * scale;
