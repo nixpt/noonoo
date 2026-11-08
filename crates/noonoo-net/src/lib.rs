@@ -15,6 +15,12 @@
 
 use std::fmt;
 
+mod loader;
+mod url;
+
+pub use loader::{Completion, Completions, FileLoader, Loaded, Loader, Request, RequestId};
+pub use url::resolve;
+
 /// Why a load failed.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum LoadError {
@@ -79,7 +85,7 @@ fn load_data(rest: &str) -> Result<Vec<u8>, LoadError> {
     {
         base64_decode(data).map_err(LoadError::BadData)
     } else {
-        Ok(percent_decode(data).into_bytes())
+        Ok(percent_decode(data))
     }
 }
 
@@ -116,7 +122,7 @@ fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
-fn percent_decode(input: &str) -> String {
+fn percent_decode(input: &str) -> Vec<u8> {
     fn hex(byte: u8) -> Option<u8> {
         (byte as char).to_digit(16).map(|d| d as u8)
     }
@@ -135,7 +141,7 @@ fn percent_decode(input: &str) -> String {
         out.push(bytes[i]);
         i += 1;
     }
-    String::from_utf8_lossy(&out).into_owned()
+    out
 }
 
 /// The version of this crate, taken from the workspace.
