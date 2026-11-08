@@ -84,6 +84,18 @@ noonoo --paint page.html
 noonoo --paint page.html --font /path/to/Font.ttf
 ```
 
+## System fonts for GPU consumers
+
+Vello draws paths, so a GPU consumer needs real faces to draw text at all.
+`noonoo_vello::fonts::system()` finds them without fontconfig (Noto, then
+DejaVu, then Liberation, for sans-serif, serif and monospace, plus symbol
+fallbacks) and loads them once per process. `noonoo-winit` measures and draws
+every window with that set by default; any other scene builder can pass it to
+`FontSetShaper` and `OutlineGlyphs`. A bare `DrawText` run that still reaches
+`noonoo_vello::scene` (painted with the default `TextRuns`) draws one
+placeholder box per character, so missing fonts show instead of text
+silently vanishing.
+
 ## What is deliberately *not* here
 
 These are the borrowed, 100k+-LOC concerns — kept out on purpose:

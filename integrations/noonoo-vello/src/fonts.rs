@@ -1,7 +1,8 @@
-//! The system fonts a window draws with by default.
+//! The system fonts Vello consumers draw text with by default.
 //!
-//! A window's text must reach the GPU as glyph outlines, so the app needs real
-//! faces. Without fontconfig, it looks for well-known families by file name in
+//! Text must reach Vello as glyph outlines, so a consumer needs real faces:
+//! `noonoo-winit` uses this set for every window, and anything else building
+//! a scene (a compositor embedding Noonoo, say) can share it. Without fontconfig, it looks for well-known families by file name in
 //! the usual font folders: Noto, then DejaVu, then Liberation, for each of
 //! sans-serif, serif, and monospace, with regular, bold, italic, and
 //! bold-italic files where present. The sans-serif faces are also registered
@@ -180,7 +181,7 @@ pub fn font_files(dirs: &[PathBuf]) -> Vec<PathBuf> {
 /// `None` when nothing loads.
 ///
 /// The fonts and the set are leaked: the host's glyph renderer and the
-/// shaper both borrow them for the life of the window. [`system`] loads
+/// shaper both borrow them for as long as anything draws. [`system`] loads
 /// once per process.
 pub fn load(plan: &[FacePlan]) -> Option<&'static FontSet<'static>> {
     // Each file once, though it's registered under several names.
@@ -234,7 +235,7 @@ fn font_dirs() -> Vec<PathBuf> {
 
 /// The system font set, found and loaded once per process; `None` when no
 /// known family is installed (text then falls back to `DrawText` runs, which
-/// the GPU backend doesn't draw).
+/// [`crate::scene`] draws as placeholder boxes).
 pub fn system() -> Option<&'static FontSet<'static>> {
     static SYSTEM: OnceLock<Option<&'static FontSet<'static>>> = OnceLock::new();
     *SYSTEM.get_or_init(|| load(&plan(&font_files(&font_dirs()))))
@@ -379,7 +380,7 @@ mod tests {
     impl Scratch {
         fn new(name: &str) -> Self {
             let dir =
-                std::env::temp_dir().join(format!("noonoo-winit-{name}-{}", std::process::id()));
+                std::env::temp_dir().join(format!("noonoo-vello-{name}-{}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).unwrap();
             Self(dir)
@@ -458,5 +459,39 @@ mod tests {
         let selected = set.select_best(&["sans-serif".into()], 400, false).unwrap();
         assert!(selected.glyph_for_char('←').is_none(), "Noto Sans lacks it");
         assert!(set.face_for(selected, '←').glyph_for_char('←').is_some());
+    }
+}
+
+/// The system faces reach a Vello scene as glyph fills, not placeholders.
+#[cfg(test)]
+mod scene_tests {
+    use noonoo_paint::{Color, Command, CommandList, FontRequest, Glyphs};
+    use noonoo_ttf::OutlineGlyphs;
+
+    /// Skipped where no known font family is installed.
+    #[test]
+    fn system_fonts_draw_text_as_glyph_fills() {
+        let Some(set) = super::system() else {
+            return;
+        };
+        let mut commands = CommandList::default();
+        OutlineGlyphs::new(set).draw(
+            "ok",
+            (0.0, 16.0),
+            16.0,
+            Color::BLACK,
+            FontRequest::any(),
+            &mut commands,
+        );
+        assert_eq!(commands.commands().len(), 2);
+        assert!(
+            commands
+                .commands()
+                .iter()
+                .all(|c| matches!(c, Command::FillContours { .. }))
+        );
+        let scene = crate::scene(&commands);
+        // One fill per glyph: no placeholder strokes.
+        assert_eq!(scene.encoding().draw_tags.len(), 2);
     }
 }

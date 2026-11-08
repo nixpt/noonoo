@@ -11,4 +11,5 @@ description = "Opt-in: render a Noonoo command stream with Vello (GPU)."
 [dependencies]
 noonoo-paint = { path = "../../crates/noonoo-paint" }
 noonoo-geometry = { path = "../../crates/noonoo-geometry" }
+noonoo-ttf = { path = "../../crates/noonoo-ttf" }
 vello = { version = "0.7", default-features = false }

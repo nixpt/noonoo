@@ -88,7 +88,7 @@ impl View {
     /// Text is measured and drawn with the system fonts ([`fonts::system`]):
     /// a GPU window can only draw glyph outlines, so this is the default.
     /// Where no known font is installed, text falls back to the metric
-    /// shaper and isn't drawn.
+    /// shaper and draws as placeholder boxes.
     pub fn new(
         title: impl Into<String>,
         host: Host,

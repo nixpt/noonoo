@@ -240,11 +240,22 @@ name = "noonoo-text"
 version = "0.20.0"
 
 [[package]]
+name = "noonoo-ttf"
+version = "0.20.0"
+dependencies = [
+ "noonoo-geometry",
+ "noonoo-paint",
+ "noonoo-parse",
+ "noonoo-text",
+]
+
+[[package]]
 name = "noonoo-vello"
 version = "0.20.0"
 dependencies = [
  "noonoo-geometry",
  "noonoo-paint",
+ "noonoo-ttf",
  "vello",
 ]
 

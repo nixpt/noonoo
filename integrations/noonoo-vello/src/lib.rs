@@ -17,7 +17,27 @@
 //! | `FillPolygon` | `Scene::fill` a closed `kurbo::BezPath` |
 //! | `FillContours` | one `Scene::fill` (non-zero) of a `BezPath` with a subpath per contour, so glyph holes stay open |
 //! | `PushLayer` / `PopLayer` | `Scene::push_layer` (alpha + clip) / `pop_layer` |
-//! | `DrawText` | *not drawn* — Noonoo renders text as glyph outlines (`noonoo-ttf`'s `OutlineGlyphs`), so a bare text run has no paths for Vello |
+//! | `DrawText` | a placeholder box per character: text should arrive as glyph outlines (`noonoo-ttf`'s `OutlineGlyphs`, with the faces from [`fonts`]), so a bare run means it was painted without a font |
+//!
+//! ## Text
+//!
+//! Vello draws paths, so text has to arrive as glyph outlines. Paint with a
+//! font-backed shaper and glyph renderer over one font set, so text is drawn
+//! with the faces it was measured against. [`fonts::system`] finds the usual
+//! system faces:
+//!
+//! ```ignore
+//! let set = noonoo_vello::fonts::system().expect("a known font family");
+//! let commands = engine.paint_with(
+//!     viewport,
+//!     &noonoo_ttf::FontSetShaper::new(set),
+//!     &noonoo_ttf::OutlineGlyphs::new(set),
+//! );
+//! let scene = noonoo_vello::scene(&commands);
+//! ```
+//!
+//! `Engine::paint` uses the default `TextRuns`, which emits bare `DrawText`
+//! runs; those draw as placeholder boxes here.
 //!
 //! ```
 //! let commands = noonoo_paint::CommandList(vec![noonoo_paint::Command::FillRect {
@@ -31,6 +51,8 @@
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
+
+pub mod fonts;
 
 use noonoo_geometry::Point;
 use noonoo_paint::{Command, CommandList, GradientGeometry};
@@ -111,9 +133,17 @@ pub fn draw(scene: &mut Scene, commands: &CommandList) {
                     scene.fill(Fill::NonZero, transform, brush(*color), None, &path);
                 }
             }
-            // A plain text run carries no outlines; use `OutlineGlyphs` so Vello
-            // receives filled glyph contours instead.
-            Command::DrawText { .. } => {}
+            // A plain text run carries no outlines: text reaches Vello as glyph
+            // contours from `OutlineGlyphs` (see [`fonts`]). A run that gets
+            // here was painted without a font, so it draws placeholder boxes
+            // rather than vanish without a trace.
+            Command::DrawText {
+                text,
+                x,
+                y,
+                font_size,
+                color,
+            } => placeholder_boxes(scene, transform, text, (*x, *y), *font_size, *color),
             Command::PushLayer { clip, alpha } => {
                 // No clip: an effectively infinite shape (Vello wants a shape
                 // per layer), so the group covers the whole frame.
@@ -302,6 +332,35 @@ fn rounded_rect(rect: noonoo_geometry::Rect, radius: (f32, f32, f32, f32)) -> Be
 /// `bottom-left`) as a Bézier path; sharp corners are straight lines and each
 /// rounded corner is a cubic approximation of a quarter arc.
 /// Noonoo's 8-bit RGBA into a Vello/peniko colour.
+/// One outlined box per visible character of a run drawn without a font, in
+/// the run's colour, sitting on its baseline: the "missing glyph" box a
+/// browser draws, so text with no font is visible rather than gone.
+fn placeholder_boxes(
+    scene: &mut Scene,
+    transform: Affine,
+    text: &str,
+    (x, baseline): (f32, f32),
+    font_size: f32,
+    color: noonoo_paint::Color,
+) {
+    let em = f64::from(font_size.max(0.0));
+    if em == 0.0 {
+        return;
+    }
+    let stroke = kurbo::Stroke::new((em * 0.06).max(1.0));
+    let (advance, width, height) = (em * 0.6, em * 0.5, em * 0.7);
+    let baseline = f64::from(baseline);
+    let mut pen = f64::from(x);
+    for character in text.chars() {
+        if !character.is_whitespace() {
+            let left = pen + (advance - width) / 2.0;
+            let tofu = KRect::new(left, baseline - height, left + width, baseline);
+            scene.stroke(&stroke, transform, brush(color), None, &tofu);
+        }
+        pen += advance;
+    }
+}
+
 fn brush(color: noonoo_paint::Color) -> Color {
     Color::from_rgba8(color.r, color.g, color.b, color.a)
 }
@@ -493,16 +552,26 @@ mod tests {
         assert_eq!(draws, 1);
     }
 
-    #[test]
-    fn a_text_run_is_not_drawn() {
-        let (paths, draws) = encodings(vec![Command::DrawText {
-            text: "hi".into(),
+    fn text_run(text: &str) -> Command {
+        Command::DrawText {
+            text: text.into(),
             x: 0.0,
-            y: 0.0,
+            y: 16.0,
             font_size: 16.0,
             color: Color::BLACK,
-        }]);
-        assert_eq!((paths, draws), (0, 0));
+        }
+    }
+
+    /// A text run has no outlines for Vello. Rather than vanish, each visible
+    /// character draws a placeholder box, so a missing font shows on screen.
+    #[test]
+    fn a_text_run_draws_a_placeholder_box_per_character() {
+        let (_, draws) = encodings(vec![text_run("hi")]);
+        assert_eq!(draws, 2);
+        // Spaces take room but draw nothing.
+        let (_, draws) = encodings(vec![text_run("a b")]);
+        assert_eq!(draws, 2);
+        assert_eq!(encodings(vec![text_run("  ")]), (0, 0));
     }
 
     #[test]
