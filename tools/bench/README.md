@@ -37,14 +37,14 @@ Covered:
 `ui/*` and `nested/*` are the incremental-pipeline yardsticks (roadmap
 Phase 4). Their starting point, on the zorro box (release build):
 
-| Benchmark | Median |
-| --- | --- |
-| `ui/style` | 78.7 ms |
-| `ui/layout` | 6.1 ms |
-| `ui/paint` | 0.36 ms |
-| `ui/restyle-one` | 78.9 ms (a full restyle) |
-| `nested/flex-256` | 88.8 ms (32: 0.67 ms) |
-| `nested/grid-256` | 112.6 ms (32: 3.7 ms) |
+| Benchmark | Start | Now | What moved it |
+| --- | --- | --- | --- |
+| `ui/style` | 78.7 ms | 25.5 ms | rule index |
+| `ui/layout` | 6.1 ms | 6.4 ms | |
+| `ui/paint` | 0.36 ms | 0.36 ms | |
+| `ui/restyle-one` | 78.9 ms (a full restyle) | 27.5 ms | rule index |
+| `nested/flex-256` | 88.8 ms (32: 0.67 ms) | | |
+| `nested/grid-256` | 112.6 ms (32: 3.7 ms) | | |
 
 Numbers are medians of wall-clock samples after one warm-up. Treat them as
 relative signals, not a regression gate — CI only smoke-runs the binary so it

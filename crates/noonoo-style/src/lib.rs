@@ -55,6 +55,7 @@ mod edit;
 mod gradient;
 mod grid;
 mod media;
+mod rule_index;
 pub mod ua;
 mod vars;
 

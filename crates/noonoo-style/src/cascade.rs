@@ -20,6 +20,7 @@ use noonoo_selectors::{MatchContext, SelectorList};
 use crate::Viewport;
 use crate::apply::{apply, resolve_font_size};
 use crate::computed::*;
+use crate::rule_index::RuleIndex;
 use crate::ua::UA_STYLESHEET;
 use crate::vars::{self, CustomProperties};
 
@@ -176,6 +177,7 @@ fn pseudo_winners_for(
     doc: &Document,
     id: NodeId,
     rules: &[Rule],
+    index: &RuleIndex,
     interaction: Interaction,
     pseudo: PseudoElement,
 ) -> HashMap<Property, Candidate> {
@@ -184,7 +186,7 @@ fn pseudo_winners_for(
     };
     let ctx = match_context(id, interaction);
     let mut winners = HashMap::new();
-    for rule in rules {
+    for rule in index.pseudo().iter().map(|&i| &rules[i]) {
         let Some(specificity) =
             rule.selector
                 .pseudo_matching_specificity(&view, ctx, pseudo.name())
@@ -219,9 +221,11 @@ fn winners_for(
     doc: &Document,
     id: NodeId,
     rules: &[Rule],
+    index: &RuleIndex,
+    candidates: &mut Vec<usize>,
     interaction: Interaction,
 ) -> HashMap<Property, Candidate> {
-    let Some(view) = ElementRef::new(doc, id) else {
+    let (Some(view), Some(element)) = (ElementRef::new(doc, id), doc.element(id)) else {
         return HashMap::new(); // Not an element: no rule applies.
     };
     // Dynamic pseudo-classes describe *this* element: `:hover` matches only
@@ -229,7 +233,10 @@ fn winners_for(
     let ctx = match_context(id, interaction);
     let mut winners = HashMap::new();
 
-    for rule in rules {
+    // Only the rules filed under this element's id, classes or tag (or
+    // under no key) can match it.
+    index.candidates(element, candidates);
+    for rule in candidates.iter().map(|&i| &rules[i]) {
         let Some(specificity) = rule.selector.matching_specificity(&view, ctx) else {
             continue;
         };
@@ -237,7 +244,7 @@ fn winners_for(
     }
 
     // Inline `style` attributes win over author rules of equal importance.
-    if let Some(style) = doc.element(id).and_then(|element| element.attr("style")) {
+    if let Some(style) = element.attr("style") {
         let mut order = 0u32;
         for raw in parse_declarations(style) {
             let Ok(decls) = parse_declaration(&raw.name, &raw.value, raw.important) else {
@@ -274,6 +281,8 @@ pub(crate) fn compute(
     interaction: Interaction,
 ) -> (Vec<Option<ComputedStyle>>, Vec<Generated>) {
     let rules = collect_rules(stylesheets, &viewport);
+    let index = RuleIndex::new(rules.iter().map(|rule| &rule.selector));
+    let mut candidates = Vec::new();
     let mut out: Vec<Option<ComputedStyle>> = vec![None; doc.tree().len()];
     let mut custom: Vec<CustomProperties> = vec![CustomProperties::new(); doc.tree().len()];
     let mut line_heights: Vec<InheritedLineHeight> =
@@ -292,7 +301,7 @@ pub(crate) fn compute(
             .map(|p| line_heights[p.index()])
             .unwrap_or(InheritedLineHeight::Normal);
 
-        let winners = winners_for(doc, id, &rules, interaction);
+        let winners = winners_for(doc, id, &rules, &index, &mut candidates, interaction);
         let resolved = resolve(
             &winners,
             parent.as_ref(),
@@ -305,7 +314,7 @@ pub(crate) fn compute(
 
         if generates_content(doc, id) {
             for pseudo in [PseudoElement::Before, PseudoElement::After] {
-                let winners = pseudo_winners_for(doc, id, &rules, interaction, pseudo);
+                let winners = pseudo_winners_for(doc, id, &rules, &index, interaction, pseudo);
                 let Some(content) = winners
                     .get(&Property::Content)
                     .and_then(|c| computed_values(&Property::Content, &c.values, &resolved.custom))
