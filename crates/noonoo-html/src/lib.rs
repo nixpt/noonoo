@@ -71,8 +71,10 @@ fn is_void(name: &str) -> bool {
 /// closes, following the spec's table insertion modes:
 ///
 /// - a new cell (`td`/`th`) closes the open cell;
-/// - a new row (`tr`) or row group (`tbody`/`thead`/`tfoot`, also
-///   `caption`/`colgroup`) closes the open cell, and then the open row;
+/// - a new row (`tr`) closes the open cell and the open row, and stays in
+///   the open row group;
+/// - a new row group (`tbody`/`thead`/`tfoot`, also `caption`/`colgroup`)
+///   closes the open cell, row, and row group;
 /// - a new `table` closes the open row structure — but a nested table grows
 ///   inside its open cell, so the cell stays.
 ///
@@ -94,8 +96,9 @@ fn implied_table_close(stack: &mut Vec<noonoo_dom::NodeId>, doc: &Document, name
                 "td" | "th" | "tr" | "tbody" | "thead" | "tfoot" | "caption" | "colgroup",
                 "td" | "th",
             ) => {}
+            ("tr", "tr") => {}
             (
-                "tr" | "tbody" | "thead" | "tfoot" | "caption" | "colgroup" | "table",
+                "tbody" | "thead" | "tfoot" | "caption" | "colgroup" | "table",
                 "tr" | "tbody" | "thead" | "tfoot",
             ) => {}
             _ => return,
