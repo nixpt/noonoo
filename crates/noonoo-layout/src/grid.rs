@@ -264,9 +264,15 @@ pub(crate) fn layout_grid_children(
         }
     }
 
-    let column_x = |column: usize| -> f32 {
-        content_x + widths[..column].iter().sum::<f32>() + column_gap * column as f32
-    };
+    let mut column_starts = Vec::with_capacity(widths.len() + 1);
+    let mut sum = 0.0f32;
+    for width in &widths {
+        column_starts.push(sum);
+        sum += width;
+    }
+    column_starts.push(sum);
+    let column_x =
+        |column: usize| -> f32 { content_x + column_starts[column] + column_gap * column as f32 };
     let area_width = |column: usize, span: usize| -> f32 {
         widths[column..column + span].iter().sum::<f32>()
             + column_gap * (span.saturating_sub(1)) as f32
@@ -315,9 +321,16 @@ pub(crate) fn layout_grid_children(
     }
 
     let row_gap = style.row_gap;
-    let row_y = |row: usize| -> f32 {
-        content_y + row_heights[..row].iter().sum::<f32>() + row_gap * row as f32
-    };
+    // Each row's start, as a prefix sum: summing the rows before every item
+    // was quadratic when many items span many rows.
+    let mut row_starts = Vec::with_capacity(row_heights.len() + 1);
+    let mut sum = 0.0f32;
+    for height in &row_heights {
+        row_starts.push(sum);
+        sum += height;
+    }
+    row_starts.push(sum);
+    let row_y = |row: usize| -> f32 { content_y + row_starts[row] + row_gap * row as f32 };
 
     // --- placement -----------------------------------------------------------
     // Each item aligns within its area's height: `stretch` (the default)

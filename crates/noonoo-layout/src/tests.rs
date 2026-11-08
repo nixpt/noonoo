@@ -1451,3 +1451,38 @@ fn an_empty_text_input_is_one_line_tall() {
         "no empty text box"
     );
 }
+
+/// Each item's row position used to be a fresh sum over every row before
+/// it, so many items spanning many rows was quadratic in the row count.
+#[test]
+fn a_grid_with_many_spanning_items_lays_out_quickly() {
+    let (done, wait) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let html = format!("<div>{}</div>", "<p>x</p>".repeat(1500));
+        let (_, tree) = page(
+            &html,
+            "div { display: grid } p { margin: 0; grid-row: span 1000 }",
+            800.0,
+        );
+        let _ = done.send(tree.boxes.len());
+    });
+    let boxes = wait
+        .recv_timeout(std::time::Duration::from_secs(3))
+        .expect("1,500 items spanning 1,000 rows each did not lay out in 3 s");
+    assert!(boxes >= 1500);
+}
+
+/// Rows still stack in order with their gaps.
+#[test]
+fn grid_rows_start_after_the_rows_and_gaps_before_them() {
+    let (doc, tree) = page(
+        r#"<div><p id="a">x</p><p id="b">y</p><p id="c">z</p></div>"#,
+        "body { margin: 0 } div { display: grid; row-gap: 5px; grid-auto-rows: 20px }
+         p { margin: 0 } #b { grid-row: span 2 }",
+        800.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.y, 0.0);
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.y, 25.0);
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.height, 45.0);
+    assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.y, 75.0);
+}
