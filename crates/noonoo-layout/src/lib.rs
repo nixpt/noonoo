@@ -290,6 +290,40 @@ impl LayoutTree {
         }
     }
 
+    /// Where `node` is drawn (`getBoundingClientRect`): the rectangle around
+    /// every box it produced (a wrapped text node has one per line), moved
+    /// by the scroll offsets of the boxes it scrolls with. `None` if it
+    /// produced no box.
+    ///
+    /// The coordinates are layout space: a host that scrolls the whole page
+    /// itself subtracts that scroll.
+    pub fn bounding_client_rect(&self, node: NodeId) -> Option<Rect> {
+        let mut bounds: Option<Rect> = None;
+        let mut stack: Vec<(usize, Point)> =
+            self.roots.iter().map(|&root| (root, Point::ZERO)).collect();
+        while let Some((index, scroll)) = stack.pop() {
+            let box_ = &self.boxes[index];
+            if box_.node == Some(node) {
+                let rect = box_.rect.translate(-scroll.x, -scroll.y);
+                bounds = Some(match bounds {
+                    None => rect,
+                    Some(seen) => {
+                        let (x, y) = (seen.x.min(rect.x), seen.y.min(rect.y));
+                        Rect::new(
+                            x,
+                            y,
+                            seen.right().max(rect.right()) - x,
+                            seen.bottom().max(rect.bottom()) - y,
+                        )
+                    }
+                });
+            }
+            let inner = Point::new(scroll.x + box_.scroll_x, scroll.y + box_.scroll_y);
+            stack.extend(box_.children.iter().map(|&child| (child, inner)));
+        }
+        bounds
+    }
+
     /// The current vertical scroll offset of `node` (zero if it does not scroll).
     pub fn scroll_offset(&self, node: NodeId) -> f32 {
         self.index

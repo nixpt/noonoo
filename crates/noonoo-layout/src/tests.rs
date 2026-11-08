@@ -2020,3 +2020,32 @@ fn a_shrink_to_fit_box_holding_table_cells_is_as_wide_as_the_row() {
         "{float:?} holds {a:?} and {b:?}"
     );
 }
+
+#[test]
+fn a_bounding_client_rect_follows_scrolling_ancestors_and_spans_fragments() {
+    let (doc, mut tree) = page(
+        r#"<div id=s><div id=pad></div><p id=p>one two three four five six</p></div>"#,
+        "#s { height: 50px; overflow: scroll } #pad { height: 100px } p { margin: 0; width: 40px }",
+        400.0,
+    );
+    let p = id(&doc, "p");
+    let before = tree.bounding_client_rect(p).unwrap();
+    assert_eq!(
+        before,
+        tree.get(p).unwrap().rect,
+        "unscrolled: the border box"
+    );
+    let s = id(&doc, "s");
+    let scrolled = tree.scroll_by(s, 30.0);
+    let after = tree.bounding_client_rect(p).unwrap();
+    assert_eq!(after.y, before.y - scrolled);
+    assert_eq!((after.x, after.width), (before.x, before.width));
+    // A wrapped text node's fragments: one rect around them all.
+    let text = doc.tree().children(p)[0];
+    let text_rect = tree.bounding_client_rect(text).unwrap();
+    assert!(
+        text_rect.height > 19.2 * 2.0,
+        "{text_rect:?} spans the lines"
+    );
+    assert_eq!(tree.bounding_client_rect(doc.tree().upcoming_id(0)), None);
+}
