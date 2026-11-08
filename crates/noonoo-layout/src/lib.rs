@@ -755,9 +755,23 @@ impl Ctx<'_> {
             && !clips;
 
         // A new block formatting context isolates floats: clipping boxes,
-        // floats, flex containers, and out-of-flow boxes start fresh, and
-        // their own floats do not escape to their siblings.
+        // floats, out-of-flow boxes, flex/grid containers and their items,
+        // inline-blocks and table cells start fresh, and their own floats do
+        // not escape to their siblings. That also makes their height
+        // independent of where they're placed, which measuring relies on.
+        let in_flex_or_grid = self
+            .document
+            .tree()
+            .parent(node)
+            .and_then(|parent| self.styles.get(parent))
+            .is_some_and(|parent| {
+                matches!(
+                    parent.display,
+                    Display::Flex | Display::InlineFlex | Display::Grid | Display::InlineGrid
+                )
+            });
         let establishes_bfc = clips
+            || in_flex_or_grid
             || style.float != noonoo_style::Float::None
             || matches!(style.position, Position::Absolute | Position::Fixed)
             || matches!(
@@ -766,7 +780,9 @@ impl Ctx<'_> {
                     | Display::InlineFlex
                     | Display::Grid
                     | Display::InlineGrid
+                    | Display::InlineBlock
                     | Display::Table
+                    | Display::TableCell
             );
         if establishes_bfc {
             self.push_bfc();

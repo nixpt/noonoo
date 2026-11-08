@@ -1342,3 +1342,58 @@ fn nested_margins_still_collapse_through_their_parents() {
     assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.y, 30.0);
     assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.y, 30.0);
 }
+
+/// A flex item is its own block formatting context: a float inside one
+/// does not push the text of the next item aside.
+#[test]
+fn a_float_in_a_flex_item_stays_inside_it() {
+    let (doc, tree) = page(
+        r#"<div id="row"><div id="a"><div id="f"></div></div><div id="b">next</div></div>"#,
+        "body { margin: 0 } #row { display: flex }
+         #a { width: 100px } #f { float: left; width: 150px; height: 40px }
+         #b { width: 200px }",
+        800.0,
+    );
+    let b = tree.get(id(&doc, "b")).unwrap().rect;
+    let next = text_boxes(&doc, &tree, "next");
+    assert_eq!(next.len(), 1);
+    assert_eq!(next[0].x, b.x, "the float leaked into the next item");
+    // #a grows to hold its float, which overflows it to the right.
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.height, 40.0);
+}
+
+/// An inline-block is its own block formatting context: its floats stay
+/// inside it, even when they overflow its fixed height.
+#[test]
+fn an_inline_block_contains_its_floats() {
+    let (doc, tree) = page(
+        r#"<div><span id="ib"><div id="f"></div></span></div><p id="p">after</p>"#,
+        "body { margin: 0 } p { margin: 0 } div { line-height: 10px }
+         #ib { display: inline-block; width: 100px; height: 10px }
+         #f { float: left; width: 50px; height: 60px }",
+        800.0,
+    );
+    // Its own float doesn't push it aside (a trial measurement used to
+    // register the float outside), nor stretch the line's block.
+    assert_eq!(tree.get(id(&doc, "ib")).unwrap().rect.x, 0.0);
+    assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.x, 0.0);
+    let after = text_boxes(&doc, &tree, "after");
+    assert_eq!(after[0].y, 10.0, "the float escaped the inline-block");
+}
+
+/// A table cell is its own block formatting context too: a float that
+/// overflows a fixed-height table does not wrap the text after it.
+#[test]
+fn a_table_cell_contains_its_floats() {
+    let (doc, tree) = page(
+        r#"<table><tr><td><div id="f"></div></td></tr></table><p>after</p>"#,
+        "body { margin: 0 } p { margin: 0 } table { height: 10px }
+         td { height: 10px; padding: 0 } #f { float: left; width: 50px; height: 60px }",
+        800.0,
+    );
+    // The cell is measured before it's placed; that trial used to leave the
+    // float registered outside, so the real float landed below its ghost.
+    assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.y, 0.0);
+    let after = text_boxes(&doc, &tree, "after");
+    assert_eq!(after[0].x, 0.0, "the float escaped the table cell");
+}
