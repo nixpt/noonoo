@@ -24,6 +24,7 @@ dependencies = [
  "noonoo-json",
  "noonoo-layout",
  "noonoo-paint",
+ "noonoo-style",
  "noonoo-toml",
 ]
 

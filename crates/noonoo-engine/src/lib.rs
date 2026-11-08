@@ -21,12 +21,17 @@
 #![warn(missing_docs)]
 
 use noonoo_css::Stylesheet;
-use noonoo_dom::Document;
+use noonoo_dom::{Change, Changes, Document, NodeData, NodeId};
+use noonoo_style::{Cascade, Interaction, Styles, Viewport};
 
 /// A page: a DOM document, its stylesheets, and (later) its resolved layout.
 pub struct Engine {
     dom: Document,
     stylesheets: Vec<Stylesheet>,
+    /// The `<style>` elements the stylesheets came from, in order.
+    style_elements: Vec<NodeId>,
+    /// The stylesheets prepared for [`Engine::restyle`], once it has run.
+    cascade: Option<Cascade>,
 }
 
 impl Default for Engine {
@@ -41,14 +46,19 @@ impl Engine {
         Self {
             dom: Document::new(),
             stylesheets: Vec::new(),
+            style_elements: Vec::new(),
+            cascade: None,
         }
     }
 
     /// Parse `html` into a fresh engine, collecting its stylesheets.
     pub fn from_html(html: &str) -> Self {
-        let dom = noonoo_html::parse(html);
-        let stylesheets = collect_stylesheets(&dom);
-        Self { dom, stylesheets }
+        let mut engine = Self {
+            dom: noonoo_html::parse(html),
+            ..Self::new()
+        };
+        engine.refresh_stylesheets();
+        engine
     }
 
     /// Borrow the underlying DOM document.
@@ -68,7 +78,70 @@ impl Engine {
 
     /// Re-scan the document's `<style>` elements for stylesheets.
     pub fn refresh_stylesheets(&mut self) {
-        self.stylesheets = collect_stylesheets(&self.dom);
+        (self.style_elements, self.stylesheets) = collect_stylesheets(&self.dom);
+        self.cascade = None;
+    }
+
+    /// Bring `styles` up to date with the document, its stylesheets,
+    /// `viewport` and `interaction`, restyling only what changed since the
+    /// last call. Returns how many times an element was styled.
+    ///
+    /// Start from [`Styles::default`]: the first call computes everything.
+    /// After that, edits made through [`Document::mutate`] restyle only the
+    /// subtrees they can reach, and a hover, focus or press moving restyles
+    /// the nodes it moved between. An edit to a `<style>` element, a new
+    /// viewport, or raw writes through [`Document::tree_mut`] restyle
+    /// everything.
+    pub fn restyle(
+        &mut self,
+        styles: &mut Styles,
+        viewport: noonoo_geometry::Size,
+        interaction: Interaction,
+    ) -> usize {
+        let changes = self.dom.take_changes();
+        if self.touches_stylesheets(&changes) {
+            self.refresh_stylesheets();
+        }
+        let viewport = Viewport {
+            width: viewport.width,
+            height: viewport.height,
+        };
+        match &self.cascade {
+            Some(cascade) if cascade.viewport() == viewport => {
+                cascade.restyle(styles, &self.dom, interaction, &changes)
+            }
+            _ => {
+                let cascade = Cascade::new(&self.stylesheets, viewport);
+                *styles = cascade.compute(&self.dom, interaction);
+                self.cascade = Some(cascade);
+                self.dom.elements().len()
+            }
+        }
+    }
+
+    /// Whether `changes` may have changed what the `<style>` elements say:
+    /// text inside one changed, or one was added or removed.
+    fn touches_stylesheets(&self, changes: &Changes) -> bool {
+        if changes.overflowed() {
+            return true;
+        }
+        let in_style = |node: NodeId| {
+            std::iter::once(node)
+                .chain(self.dom.tree().ancestors(node))
+                .any(|id| is_style(&self.dom, id))
+        };
+        let mut moved = false;
+        for change in changes.iter() {
+            match *change {
+                // `collect_stylesheets` reads no attributes.
+                Change::Attributes(_) => {}
+                Change::Text(node) if in_style(node) => return true,
+                Change::Text(_) => {}
+                Change::Children(node) if in_style(node) => return true,
+                Change::Children(_) => moved = true,
+            }
+        }
+        moved && style_elements(&self.dom) != self.style_elements
     }
 
     /// The `@font-face` descriptors collected from the stylesheets, in source
@@ -162,10 +235,12 @@ impl Engine {
 ///
 /// A `<style>` whose text is empty or fails to parse is skipped; a page with a
 /// broken stylesheet still yields its DOM.
-fn collect_stylesheets(dom: &Document) -> Vec<Stylesheet> {
-    dom.get_elements_by_tag_name("style")
-        .into_iter()
-        .filter_map(|id| {
+/// The document's `<style>` elements, and the stylesheets parsed from them.
+fn collect_stylesheets(dom: &Document) -> (Vec<NodeId>, Vec<Stylesheet>) {
+    let elements = style_elements(dom);
+    let sheets = elements
+        .iter()
+        .filter_map(|&id| {
             let text = dom.text_content(id);
             if text.trim().is_empty() {
                 None
@@ -173,7 +248,16 @@ fn collect_stylesheets(dom: &Document) -> Vec<Stylesheet> {
                 Stylesheet::parse(&text).ok()
             }
         })
-        .collect()
+        .collect();
+    (elements, sheets)
+}
+
+fn style_elements(dom: &Document) -> Vec<NodeId> {
+    dom.get_elements_by_tag_name("style")
+}
+
+fn is_style(dom: &Document, id: NodeId) -> bool {
+    matches!(dom.node(id), Some(NodeData::Element(element)) if element.name == "style")
 }
 
 /// The version of this crate, taken from the workspace.

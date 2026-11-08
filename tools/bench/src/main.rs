@@ -169,6 +169,9 @@ fn ui_benches(iters: usize) {
 
     // One badge changes class; the styles are then brought up to date.
     let badge = engine.dom().get_elements_by_tag_name("span")[UI_CARDS / 2];
+    let interaction = noonoo_style::Interaction::default();
+    let mut styles = noonoo_style::Styles::default();
+    engine.restyle(&mut styles, viewport, interaction);
     let mut flip = false;
     report_items("ui/restyle-one", 1, iters, || {
         flip = !flip;
@@ -181,7 +184,7 @@ fn ui_benches(iters: usize) {
             .dom_mut()
             .mutate()
             .set_attribute(badge, "class", class);
-        engine.compute_styles_for(black_box(viewport))
+        engine.restyle(&mut styles, black_box(viewport), interaction)
     });
 }
 

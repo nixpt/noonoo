@@ -31,7 +31,7 @@ Covered:
 | `pipeline/paint` | full compute-styles → layout → paint command stream |
 | `a11y/build` | accessibility tree over a precomputed 64 KiB layout |
 | `ui/style`, `ui/layout`, `ui/paint` | each stage alone for 320 arniko cards (~4,200 elements) under the real arniko stylesheet |
-| `ui/restyle-one` | one element changes class, then the styles are brought up to date |
+| `ui/restyle-one` | one element changes class, then `Engine::restyle` brings the styles up to date |
 | `nested/<shape>-<depth>` | layout of one box nested `depth` deep as grid, flex, flex column, inline-block, float, table cell or absolute; `NESTED_DEPTHS=8,64` picks the depths |
 
 `ui/*` and `nested/*` are the incremental-pipeline yardsticks (roadmap
@@ -39,10 +39,10 @@ Phase 4). Their starting point, on the zorro box (release build):
 
 | Benchmark | Start | Now | What moved it |
 | --- | --- | --- | --- |
-| `ui/style` | 78.7 ms | 13.4 ms | rule index (25.5), shared custom properties |
-| `ui/layout` | 6.1 ms | 5.5 ms | |
+| `ui/style` | 78.7 ms | 13.2 ms | rule index (25.5), shared custom properties |
+| `ui/layout` | 6.1 ms | 5.4 ms | |
 | `ui/paint` | 0.36 ms | 0.36 ms | |
-| `ui/restyle-one` | 78.9 ms (a full restyle) | 13.5 ms | as `ui/style` |
+| `ui/restyle-one` | 78.9 ms (a full restyle) | 9.1 µs | `Engine::restyle`: only the badge's parent's subtree |
 | `nested/flex-256` | 88.8 ms (32: 0.67 ms) | | |
 | `nested/grid-256` | 112.6 ms (32: 3.7 ms) | | |
 
