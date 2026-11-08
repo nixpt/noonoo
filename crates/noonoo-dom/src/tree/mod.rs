@@ -43,7 +43,7 @@ impl fmt::Debug for NodeId {
 }
 
 /// A single node: a payload plus its structural neighbours.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Node<T> {
     /// The parent, or `None` for a detached node.
     pub parent: Option<NodeId>,
@@ -54,7 +54,7 @@ pub struct Node<T> {
 }
 
 /// A flat, index-based tree of `T`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Tree<T> {
     nodes: Vec<Option<Node<T>>>,
 }
@@ -88,6 +88,13 @@ impl<T> Tree<T> {
 
     fn slot_mut(&mut self, id: NodeId) -> Option<&mut Node<T>> {
         self.nodes.get_mut(id.index()).and_then(Option::as_mut)
+    }
+
+    /// The id the insert `offset` places from now will get (`0` is the
+    /// next one). Ids are dense and never reused, so this is exact for as
+    /// long as nothing else is inserted first.
+    pub fn upcoming_id(&self, offset: usize) -> NodeId {
+        NodeId((self.nodes.len() + offset) as u32)
     }
 
     /// Borrow the node behind `id`, if any.

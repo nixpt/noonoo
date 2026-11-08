@@ -165,3 +165,22 @@ fn create_element_with_attributes() {
     assert_eq!(attrs, [("href", "/y"), ("class", "k")]);
     assert!(matches!(doc.node(el), Some(NodeData::Element(_))));
 }
+
+#[test]
+fn upcoming_ids_are_the_ids_the_next_inserts_get() {
+    let (mut doc, _, _) = abc();
+    let first = doc.tree().upcoming_id(0);
+    let second = doc.tree().upcoming_id(1);
+    assert_eq!(doc.create_element("x"), first);
+    assert_eq!(doc.create_text("y"), second);
+}
+
+#[test]
+fn a_cloned_document_is_independent() {
+    let (doc, body, [a, b, c]) = abc();
+    let mut copy = doc.clone();
+    assert_eq!(copy.tree().children(body), &[a, b, c]);
+    copy.mutate().remove(b).unwrap();
+    assert_eq!(copy.tree().children(body), &[a, c]);
+    assert_eq!(doc.tree().children(body), &[a, b, c]);
+}

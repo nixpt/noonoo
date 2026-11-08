@@ -10,6 +10,7 @@ use crate::query::{Selector, SelectorError};
 use crate::tree::{NodeId, Tree};
 
 /// A DOM document: a tree plus its root node.
+#[derive(Clone)]
 pub struct Document {
     tree: Tree<NodeData>,
     root: NodeId,
