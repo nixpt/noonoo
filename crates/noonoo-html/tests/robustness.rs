@@ -132,3 +132,42 @@ fn an_attribute_after_an_ideographic_space_is_kept() {
     let html = noonoo_html::serialize::inner_html(&doc, doc.root());
     assert!(html.contains(r#"id="x""#), "{html}");
 }
+
+/// The tree is at most `MAX_TREE_DEPTH` deep, as in Chromium's parser:
+/// past it an element goes to the current node's parent, so nesting turns
+/// into siblings and nothing is lost. Recursive style, layout and paint can
+/// then never be driven past a fixed depth by markup.
+#[test]
+fn nesting_past_the_depth_limit_becomes_siblings() {
+    let n = 3000;
+    let doc = parse(&format!("{}x{}", "<div>".repeat(n), "</div>".repeat(n)));
+    let tree = doc.tree();
+    let mut deepest = 0;
+    let mut divs = 0;
+    let mut stack = vec![(doc.root(), 0usize)];
+    while let Some((node, depth)) = stack.pop() {
+        deepest = deepest.max(depth);
+        if doc.element(node).is_some_and(|e| e.name == "div") {
+            divs += 1;
+        }
+        for child in tree.children(node) {
+            stack.push((*child, depth + 1));
+        }
+    }
+    assert!(
+        deepest <= noonoo_html::MAX_TREE_DEPTH + 1,
+        "depth {deepest}"
+    );
+    assert_eq!(divs, n, "every element is kept");
+    assert!(noonoo_html::serialize::inner_html(&doc, doc.root()).contains('x'));
+}
+
+/// Under the limit, nesting is untouched.
+#[test]
+fn nesting_under_the_depth_limit_is_kept() {
+    let doc = parse("<div><div><p>x</p></div></div>");
+    assert_eq!(
+        noonoo_html::serialize::inner_html(&doc, doc.root()),
+        "<div><div><p>x</p></div></div>"
+    );
+}

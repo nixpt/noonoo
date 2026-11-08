@@ -406,6 +406,11 @@ pub fn insert_adjacent_html(
     Ok(inserted)
 }
 
+/// The deepest the parser nests elements, as in Chromium. Past it a node is
+/// attached to the current node's parent instead, so deeper nesting becomes
+/// siblings: markup can't drive recursive style, layout or paint deeper.
+pub const MAX_TREE_DEPTH: usize = 512;
+
 /// Build `tokens` as children of `base`, the bottom of the open-element
 /// stack, which an end tag or an implied close never pops.
 fn build(doc: &mut Document, base: NodeId, tokens: Vec<Token>) {
@@ -417,16 +422,16 @@ fn build(doc: &mut Document, base: NodeId, tokens: Vec<Token>) {
                 let node = doc
                     .tree_mut()
                     .insert_raw(noonoo_dom::NodeData::Doctype { name });
-                let parent = *stack.last().unwrap();
+                let parent = insertion_parent(doc, &stack);
                 let _ = doc.mutate().append_child(parent, node);
             }
             Token::Comment(text) => {
                 let node = doc.create_comment(text);
-                let parent = *stack.last().unwrap();
+                let parent = insertion_parent(doc, &stack);
                 let _ = doc.mutate().append_child(parent, node);
             }
             Token::Text(text) => {
-                let parent = *stack.last().unwrap();
+                let parent = insertion_parent(doc, &stack);
                 let node = doc.create_text(text);
                 let _ = doc.mutate().append_child(parent, node);
             }
@@ -443,7 +448,7 @@ fn build(doc: &mut Document, base: NodeId, tokens: Vec<Token>) {
                 // table handling without the full insertion-mode state machine.
                 implied_table_close(&mut stack, doc, &name);
 
-                let parent = *stack.last().unwrap();
+                let parent = insertion_parent(doc, &stack);
                 let node = doc.create_element(name.clone());
                 for (attr, value) in attrs {
                     let _ = doc.mutate().set_attribute(
@@ -469,6 +474,18 @@ fn build(doc: &mut Document, base: NodeId, tokens: Vec<Token>) {
                 }
             }
         }
+    }
+}
+
+/// Where the next node goes: the current node, or past [`MAX_TREE_DEPTH`]
+/// open elements, the current node's parent. `stack[0]` is the base, which
+/// is never popped, so the stack is never empty.
+fn insertion_parent(doc: &Document, stack: &[NodeId]) -> NodeId {
+    let current = stack[stack.len() - 1];
+    if stack.len() > MAX_TREE_DEPTH {
+        doc.tree().parent(current).unwrap_or(current)
+    } else {
+        current
     }
 }
 
