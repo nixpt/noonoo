@@ -523,7 +523,8 @@ mod tests {
     use std::rc::Rc;
 
     fn engine(html: &str, css: &str) -> Engine {
-        Engine::from_html(&format!("<style>{css}</style>{html}"))
+        // Without the UA's `body` margin, a snippet starts at the origin.
+        Engine::from_html(&format!("<style>body {{ margin: 0 }} {css}</style>{html}"))
     }
 
     fn host() -> Host {

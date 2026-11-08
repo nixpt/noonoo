@@ -8,8 +8,9 @@ fn page() -> noonoo_dom::Document {
     parse(r#"<main><div id="a"><p>x</p></div></main>"#)
 }
 
+/// The body's content: the page's own markup.
 fn html(doc: &noonoo_dom::Document) -> String {
-    inner_html(doc, doc.root())
+    inner_html(doc, doc.get_elements_by_tag_name("body")[0])
 }
 
 #[test]

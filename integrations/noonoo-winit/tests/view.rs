@@ -143,7 +143,8 @@ fn a_click_on_text_inside_a_flex_link_is_a_click() {
     let mut host = Host::new(Size::new(200.0, 100.0));
     host.add_chrome(
         Engine::from_html(
-            r#"<a id="go" href="shell://reload" style="display: flex"><span>Reload</span></a>"#,
+            // No UA body margin: the link starts at the origin.
+            r#"<style>body { margin: 0 }</style><a id="go" href="shell://reload" style="display: flex"><span>Reload</span></a>"#,
         ),
         Rect::new(0.0, 0.0, 200.0, 100.0),
     );

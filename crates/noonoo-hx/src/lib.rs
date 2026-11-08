@@ -362,7 +362,11 @@ fn swap_into(doc: &mut Document, target: NodeId, swap: Swap, html: &str) {
         _ => {}
     }
 
-    let source = noonoo_html::parse(html);
+    // A response is a fragment: parse it under a bare root, without the
+    // `html`/`head`/`body` skeleton a whole document gets.
+    let mut source = Document::new();
+    let root = source.root();
+    let _ = noonoo_html::set_inner_html(&mut source, root, html);
     let mut imported = Vec::new();
     for child in source.tree().children(source.root()).to_vec() {
         if let Some(node) = import_node(doc, &source, child) {

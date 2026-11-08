@@ -279,12 +279,13 @@ fn compose_offsets_renumbers_and_keeps_focus() {
     assert_eq!(window.find_by_id(focused).unwrap().name, "A");
     assert_eq!(window.find_by_id(focused).unwrap().layer, Some(0));
 
+    // Under the layer's html and body wrappers.
     let main = window
         .root
         .children
         .iter()
         .find(|child| child.layer == Some(1))
-        .and_then(|child| child.children.first())
+        .and_then(|child| find_role(child, Role::Main))
         .unwrap();
     assert_eq!(main.role, Role::Main);
     assert_eq!(main.layer, Some(1));

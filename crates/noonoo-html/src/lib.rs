@@ -17,7 +17,10 @@
 //! stack-based one — it handles nesting, void elements, and implicit closes by
 //! matching end tags, plus the implied end tags and table sections real
 //! markup leans on (an unclosed `<p>`, `<li>` or `<option>`, a `<tr>` with no
-//! `<tbody>`; see `implied`). It does **not** implement HTML5's full
+//! `<tbody>`; see `implied`). [`parse`] always gives a document its
+//! `html` > `head` + `body` skeleton, filling in whichever of those tags the
+//! source leaves out; fragments ([`set_inner_html`],
+//! [`insert_adjacent_html`]) get none. It does **not** implement HTML5's full
 //! insertion modes (foster parenting, active formatting elements). That is
 //! deliberate scope, not an oversight; see `docs/ROADMAP.md`.
 
@@ -309,8 +312,157 @@ fn read_raw_text(source: &str, pos: usize, name: &str) -> (String, usize) {
 pub fn parse(source: &str) -> Document {
     let mut doc = Document::new();
     let root = doc.root();
-    build(&mut doc, root, tokenize(source));
+    // The skeleton may wrap the content in `html` and `body` afterwards:
+    // leave room for them under the depth limit.
+    build(&mut doc, root, tokenize(source), MAX_TREE_DEPTH - 2);
+    skeleton(&mut doc);
     doc
+}
+
+/// Elements that belong in `<head>` (the spec's "in head" start tags).
+fn is_head_content(name: &str) -> bool {
+    matches!(
+        name,
+        "base"
+            | "basefont"
+            | "bgsound"
+            | "link"
+            | "meta"
+            | "noscript"
+            | "script"
+            | "style"
+            | "template"
+            | "title"
+    )
+}
+
+fn is_blank_text(doc: &Document, node: NodeId) -> bool {
+    matches!(doc.node(node), Some(noonoo_dom::NodeData::Text(text)) if text.trim().is_empty())
+}
+
+fn is_comment(doc: &Document, node: NodeId) -> bool {
+    matches!(doc.node(node), Some(noonoo_dom::NodeData::Comment(_)))
+}
+
+/// The first child of `parent` that is a `name` element.
+fn child_element(doc: &Document, parent: NodeId, name: &str) -> Option<NodeId> {
+    doc.tree()
+        .children(parent)
+        .iter()
+        .copied()
+        .find(|&child| doc.element(child).is_some_and(|e| e.name == name))
+}
+
+/// Give a parsed document the `html` > `head` + `body` skeleton every
+/// document has, whichever tags the source left out (HTML's "before html",
+/// "before head", "in head" and "after body" modes, after the fact).
+///
+/// The doctype and the comments before any content stay at the root; blank
+/// text there is dropped. Leading metadata (`meta`, `style`, `title`, ...)
+/// goes in a missing `head`; other content, wherever it sits around the
+/// `body`, goes in it. Blank text and comments between them stay put.
+fn skeleton(doc: &mut Document) {
+    let root = doc.root();
+    let html = match child_element(doc, root, "html") {
+        Some(html) => html,
+        None => {
+            let html = doc.create_element("html");
+            let _ = doc.mutate().append_child(root, html);
+            html
+        }
+    };
+    // Root strays: before the `html` element they go to its start, after
+    // it to its end; leading comments and the doctype stay.
+    let mut leading = true;
+    let mut before = Vec::new();
+    let mut after_html = false;
+    for child in doc.tree().children(root).to_vec() {
+        if child == html {
+            after_html = true;
+            continue;
+        }
+        match doc.node(child) {
+            Some(noonoo_dom::NodeData::Doctype { .. }) => continue,
+            Some(noonoo_dom::NodeData::Comment(_)) if leading && !after_html => continue,
+            _ if is_blank_text(doc, child) => {
+                let _ = doc.mutate().remove(child);
+                continue;
+            }
+            _ => {}
+        }
+        leading = false;
+        if after_html {
+            let _ = doc.mutate().append_child(html, child);
+        } else {
+            before.push(child);
+        }
+    }
+    let first = doc.tree().children(html).first().copied();
+    for child in before {
+        let _ = match first {
+            Some(first) => doc.mutate().insert_before(first, child),
+            None => doc.mutate().append_child(html, child),
+        };
+    }
+
+    let head = match child_element(doc, html, "head") {
+        Some(head) => head,
+        None => {
+            let head = doc.create_element("head");
+            let first = doc.tree().children(html).first().copied();
+            let _ = match first {
+                Some(first) => doc.mutate().insert_before(first, head),
+                None => doc.mutate().append_child(html, head),
+            };
+            // The leading run of metadata (and the blanks and comments in
+            // it) moves in; the first piece of content ends it.
+            let mut run = Vec::new();
+            for &child in &doc.tree().children(html)[1..] {
+                let metadata = doc.element(child).is_some_and(|e| is_head_content(&e.name));
+                if metadata || is_blank_text(doc, child) || is_comment(doc, child) {
+                    run.push(child);
+                } else {
+                    break;
+                }
+            }
+            for child in run {
+                let _ = doc.mutate().append_child(head, child);
+            }
+            head
+        }
+    };
+    let body = match child_element(doc, html, "body") {
+        Some(body) => body,
+        None => {
+            let body = doc.create_element("body");
+            let _ = doc.mutate().append_child(html, body);
+            body
+        }
+    };
+    // Content outside `head` and `body` joins the body, in order.
+    let mut before_body = Vec::new();
+    let mut seen_body = false;
+    for child in doc.tree().children(html).to_vec() {
+        if child == body {
+            seen_body = true;
+            continue;
+        }
+        if child == head || is_blank_text(doc, child) || is_comment(doc, child) {
+            continue;
+        }
+        if seen_body {
+            let _ = doc.mutate().append_child(body, child);
+        } else {
+            before_body.push(child);
+        }
+    }
+    let first = doc.tree().children(body).first().copied();
+    for child in before_body {
+        let _ = match first {
+            Some(first) => doc.mutate().insert_before(first, child),
+            None => doc.mutate().append_child(body, child),
+        };
+    }
 }
 
 /// Parse `html` into `node`, replacing its children: `innerHTML`.
@@ -330,7 +482,7 @@ pub fn set_inner_html(document: &mut Document, node: NodeId, html: &str) -> Resu
     }
     // Checks the target, then empties it: replacing, never appending.
     document.mutate().replace_children(node, &[])?;
-    build(document, node, tokenize(html));
+    build(document, node, tokenize(html), MAX_TREE_DEPTH);
     Ok(())
 }
 
@@ -398,7 +550,7 @@ pub fn insert_adjacent_html(
         let text = document.create_text(html);
         document.mutate().append_child(context, text)?;
     } else {
-        build(document, context, tokenize(html));
+        build(document, context, tokenize(html), MAX_TREE_DEPTH);
     }
     let inserted = document.tree().children(context)[start..].to_vec();
     if let Some(anchor) = anchor {
@@ -416,7 +568,7 @@ pub const MAX_TREE_DEPTH: usize = 512;
 
 /// Build `tokens` as children of `base`, the bottom of the open-element
 /// stack, which an end tag or an implied close never pops.
-fn build(doc: &mut Document, base: NodeId, tokens: Vec<Token>) {
+fn build(doc: &mut Document, base: NodeId, tokens: Vec<Token>, depth: usize) {
     let mut stack = vec![base];
 
     for token in tokens {
@@ -425,16 +577,19 @@ fn build(doc: &mut Document, base: NodeId, tokens: Vec<Token>) {
                 let node = doc
                     .tree_mut()
                     .insert_raw(noonoo_dom::NodeData::Doctype { name });
-                let parent = insertion_parent(doc, &stack);
+                let parent = insertion_parent(doc, &stack, depth);
                 let _ = doc.mutate().append_child(parent, node);
             }
             Token::Comment(text) => {
                 let node = doc.create_comment(text);
-                let parent = insertion_parent(doc, &stack);
+                let parent = insertion_parent(doc, &stack, depth);
                 let _ = doc.mutate().append_child(parent, node);
             }
             Token::Text(text) => {
-                let parent = insertion_parent(doc, &stack);
+                if !text.trim().is_empty() {
+                    close_head(doc, &mut stack);
+                }
+                let parent = insertion_parent(doc, &stack, depth);
                 let node = doc.create_text(text);
                 let _ = doc.mutate().append_child(parent, node);
             }
@@ -449,6 +604,9 @@ fn build(doc: &mut Document, base: NodeId, tokens: Vec<Token>) {
                 // `<tbody>`/`<td>` closing). The stack builder normally relies on
                 // explicit end tags; these rules keep a subset of HTML5's
                 // table handling without the full insertion-mode state machine.
+                if !is_head_content(&name) && name != "head" && name != "html" {
+                    close_head(doc, &mut stack);
+                }
                 implied_table_close(&mut stack, doc, &name);
                 implied::Open {
                     stack: &mut stack,
@@ -462,13 +620,13 @@ fn build(doc: &mut Document, base: NodeId, tokens: Vec<Token>) {
                 })
                 .implied_section(&name)
                 {
-                    let parent = insertion_parent(doc, &stack);
+                    let parent = insertion_parent(doc, &stack, depth);
                     let node = doc.create_element(section);
                     let _ = doc.mutate().append_child(parent, node);
                     stack.push(node);
                 }
 
-                let parent = insertion_parent(doc, &stack);
+                let parent = insertion_parent(doc, &stack, depth);
                 let node = doc.create_element(name.clone());
                 for (attr, value) in attrs {
                     let _ = doc.mutate().set_attribute(
@@ -491,7 +649,7 @@ fn build(doc: &mut Document, base: NodeId, tokens: Vec<Token>) {
                 }
                 .end_p();
                 if !closed {
-                    let parent = insertion_parent(doc, &stack);
+                    let parent = insertion_parent(doc, &stack, depth);
                     let node = doc.create_element("p");
                     let _ = doc.mutate().append_child(parent, node);
                 }
@@ -509,12 +667,21 @@ fn build(doc: &mut Document, base: NodeId, tokens: Vec<Token>) {
     }
 }
 
-/// Where the next node goes: the current node, or past [`MAX_TREE_DEPTH`]
-/// open elements, the current node's parent. `stack[0]` is the base, which
-/// is never popped, so the stack is never empty.
-fn insertion_parent(doc: &Document, stack: &[NodeId]) -> NodeId {
+/// Content can't sit in `<head>`: when the head is the current node (not
+/// the base), it closes. Inside a `<title>` or `<noscript>` it stays open.
+fn close_head(doc: &Document, stack: &mut Vec<NodeId>) {
     let current = stack[stack.len() - 1];
-    if stack.len() > MAX_TREE_DEPTH {
+    if stack.len() > 1 && doc.element(current).is_some_and(|e| e.name == "head") {
+        stack.pop();
+    }
+}
+
+/// Where the next node goes: the current node, or past `depth` open
+/// elements (at most [`MAX_TREE_DEPTH`]), the current node's parent. `stack[0]` is the base, which
+/// is never popped, so the stack is never empty.
+fn insertion_parent(doc: &Document, stack: &[NodeId], depth: usize) -> NodeId {
+    let current = stack[stack.len() - 1];
+    if stack.len() > depth {
         doc.tree().parent(current).unwrap_or(current)
     } else {
         current

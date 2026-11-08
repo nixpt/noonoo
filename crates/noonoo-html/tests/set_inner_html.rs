@@ -4,6 +4,11 @@ use noonoo_dom::MutError;
 use noonoo_html::serialize::{inner_html, outer_html};
 use noonoo_html::{parse, set_inner_html};
 
+/// The `<body>` every parsed document has.
+fn body(doc: &noonoo_dom::Document) -> noonoo_dom::NodeId {
+    doc.get_elements_by_tag_name("body")[0]
+}
+
 #[test]
 fn it_replaces_the_children_rather_than_appending() {
     let mut doc = parse(r#"<div id="t"><p>old</p></div>"#);
@@ -23,7 +28,7 @@ fn the_fragment_cannot_escape_its_target() {
     set_inner_html(&mut doc, t, "a</div></main><span>b").unwrap();
     assert_eq!(inner_html(&doc, t), "a<span>b</span>");
     assert_eq!(
-        inner_html(&doc, doc.root()),
+        inner_html(&doc, body(&doc)),
         r#"<main><div id="t">a<span>b</span></div><p id="after">after</p></main>"#
     );
 }
@@ -62,7 +67,7 @@ fn a_target_that_cannot_hold_children_is_refused_unchanged() {
         set_inner_html(&mut doc, text, "<b>x</b>"),
         Err(MutError::CannotHaveChildren(text))
     );
-    assert_eq!(inner_html(&doc, doc.root()), "<p>hi</p>");
+    assert_eq!(inner_html(&doc, body(&doc)), "<p>hi</p>");
 }
 
 #[test]

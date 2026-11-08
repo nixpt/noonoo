@@ -9,8 +9,11 @@ use noonoo_style::Interaction;
 
 const VIEWPORT: Size = Size::new(800.0, 600.0);
 
+/// Drops the UA's `body` margin, so a snippet's boxes start at the origin.
+const NO_BODY_MARGIN: &str = "<style>body { margin: 0 }</style>";
+
 fn layout(html: &str) -> (Engine, LayoutTree) {
-    let engine = Engine::from_html(html);
+    let engine = Engine::from_html(&format!("{NO_BODY_MARGIN}{html}"));
     let styles = engine.compute_styles_in(VIEWPORT, Interaction::default());
     let layout = noonoo_layout::layout(engine.dom(), &styles, VIEWPORT, &MetricShaper);
     (engine, layout)
@@ -100,10 +103,10 @@ fn a_shrink_to_fit_flex_container_uses_its_items_max_width() {
 /// half the extra leading above it.
 #[test]
 fn text_in_a_tall_line_gets_half_the_leading_above_it() {
-    let engine = Engine::from_html(
-        r#"<div style="font-size: 13px; line-height: 32px">EXOSPHERE</div>
-           <div style="font-size: 10px">normal</div>"#,
-    );
+    let engine = Engine::from_html(&format!(
+        r#"{NO_BODY_MARGIN}<div style="font-size: 13px; line-height: 32px">EXOSPHERE</div>
+           <div style="font-size: 10px">normal</div>"#
+    ));
     let styles = engine.compute_styles_in(VIEWPORT, Interaction::default());
     let layout = noonoo_layout::layout(engine.dom(), &styles, VIEWPORT, &MetricShaper);
     let paint = noonoo_paint::paint(&styles, &layout);

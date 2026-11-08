@@ -85,7 +85,8 @@ fn deep_but_bounded_nesting_stays_finite() {
     let open = "<div style=\"x\">".repeat(NESTED_DEPTH);
     let close = "</div>".repeat(NESTED_DEPTH);
     let doc = parse(&format!("{open}{close}"));
-    assert_eq!(doc.elements().len(), NESTED_DEPTH);
+    // Plus the html, head and body every document has.
+    assert_eq!(doc.elements().len(), NESTED_DEPTH + 3);
 }
 
 // --- the deterministic generator -------------------------------------------
@@ -167,7 +168,7 @@ fn nesting_past_the_depth_limit_becomes_siblings() {
 fn nesting_under_the_depth_limit_is_kept() {
     let doc = parse("<div><div><p>x</p></div></div>");
     assert_eq!(
-        noonoo_html::serialize::inner_html(&doc, doc.root()),
+        noonoo_html::serialize::inner_html(&doc, doc.get_elements_by_tag_name("body")[0]),
         "<div><div><p>x</p></div></div>"
     );
 }

@@ -1053,9 +1053,15 @@ mod tests {
     use noonoo_geometry::Size;
     use noonoo_layout::MetricShaper;
 
+    /// `css` after a reset of the UA's `body` margin: the parser gives every
+    /// snippet a `<body>`, and a test's boxes should start at the origin.
+    fn test_sheet(css: &str) -> Result<noonoo_css::Stylesheet, impl std::fmt::Debug> {
+        noonoo_css::Stylesheet::parse(&format!("body {{ margin: 0 }} {css}"))
+    }
+
     fn render(html: &str, css: &str) -> CommandList {
         let doc = noonoo_html::parse(html);
-        let sheet = noonoo_css::Stylesheet::parse(css).unwrap();
+        let sheet = test_sheet(css).unwrap();
         let styles = noonoo_style::compute(&doc, &[sheet]);
         let layout = noonoo_layout::layout(&doc, &styles, Size::new(400.0, 300.0), &MetricShaper);
         paint(&styles, &layout)
@@ -1075,7 +1081,7 @@ mod tests {
     #[test]
     fn a_loaded_image_draws_over_its_content_box() {
         let doc = noonoo_html::parse(r#"<img id="a" src="a.png"><img src="missing.png" alt="x">"#);
-        let sheet = noonoo_css::Stylesheet::parse(
+        let sheet = test_sheet(
             "img { padding: 2px; border: 1px solid #000; background-color: #ff0000; \
              margin: 0 }",
         )
@@ -1117,7 +1123,7 @@ mod tests {
     #[test]
     fn a_scrolled_image_moves_with_its_container() {
         let doc = noonoo_html::parse(r#"<div id="s"><img src="a.png"><div id="tall"></div></div>"#);
-        let sheet = noonoo_css::Stylesheet::parse(
+        let sheet = test_sheet(
             "#s { height: 50px; overflow: auto } #tall { height: 200px } img { display: block }",
         )
         .unwrap();
@@ -1211,7 +1217,7 @@ mod tests {
     #[test]
     fn text_is_drawn_with_its_letter_spacing() {
         let doc = noonoo_html::parse(r#"<div id="a">hi</div>"#);
-        let sheet = noonoo_css::Stylesheet::parse("#a { letter-spacing: 3px }").unwrap();
+        let sheet = test_sheet("#a { letter-spacing: 3px }").unwrap();
         let styles = noonoo_style::compute(&doc, &[sheet]);
         let layout = noonoo_layout::layout(&doc, &styles, Size::new(400.0, 300.0), &MetricShaper);
         let glyphs = Spacing(Default::default());
@@ -1812,7 +1818,7 @@ mod tests {
     #[test]
     fn scrolling_shifts_the_content_in_the_command_stream() {
         let doc = noonoo_html::parse(r#"<div id="list"><div id="row"></div></div>"#);
-        let sheet = noonoo_css::Stylesheet::parse(
+        let sheet = test_sheet(
             "#list { width: 100px; height: 50px; overflow-y: auto } \
              #row { height: 200px; background-color: #ff0000 }",
         )
@@ -1843,7 +1849,7 @@ mod tests {
     #[test]
     fn horizontal_scroll_shifts_content_in_the_command_stream() {
         let doc = noonoo_html::parse(r#"<div id="strip"><div id="wide"></div></div>"#);
-        let sheet = noonoo_css::Stylesheet::parse(
+        let sheet = test_sheet(
             "#strip { width: 50px; height: 20px; overflow-x: auto } \
              #wide { width: 200px; height: 10px; background-color: #ff0000 }",
         )

@@ -3,9 +3,16 @@
 use noonoo_html::parse;
 use noonoo_html::serialize::{inner_html, outer_html};
 
+/// The whole document, serialized.
 fn round_trip(source: &str) -> String {
     let doc = parse(source);
     inner_html(&doc, doc.root())
+}
+
+/// The body's content, serialized: a snippet's own markup.
+fn body_round_trip(source: &str) -> String {
+    let doc = parse(source);
+    inner_html(&doc, doc.get_elements_by_tag_name("body")[0])
 }
 
 #[test]
@@ -28,7 +35,7 @@ fn text_and_attribute_values_are_escaped_for_their_context() {
 #[test]
 fn void_elements_take_no_end_tag_and_bare_attributes_get_an_empty_value() {
     assert_eq!(
-        round_trip(r#"<p>a<br>b<img src="x.png" alt><input disabled></p>"#),
+        body_round_trip(r#"<p>a<br>b<img src="x.png" alt><input disabled></p>"#),
         r#"<p>a<br>b<img src="x.png" alt=""><input disabled=""></p>"#
     );
 }
@@ -36,12 +43,19 @@ fn void_elements_take_no_end_tag_and_bare_attributes_get_an_empty_value() {
 #[test]
 fn raw_text_content_is_emitted_verbatim() {
     let source = "<script>if (a < b && c > d) { x = \"&amp;\"; }</script><style>p > a { color: red }</style>";
-    assert_eq!(round_trip(source), source);
+    // Leading scripts and styles are metadata: they parse into the head.
+    assert_eq!(
+        round_trip(source),
+        format!("<html><head>{source}</head><body></body></html>")
+    );
 }
 
 #[test]
 fn a_doctype_is_dropped() {
-    assert_eq!(round_trip("<!doctype html><p>x</p>"), "<p>x</p>");
+    assert_eq!(
+        round_trip("<!doctype html><p>x</p>"),
+        "<html><head></head><body><p>x</p></body></html>"
+    );
 }
 
 #[test]
@@ -55,7 +69,10 @@ fn inner_html_is_the_children_and_outer_html_adds_the_node() {
 #[test]
 fn the_document_node_serializes_as_its_children() {
     let doc = parse("<p>a</p><p>b</p>");
-    assert_eq!(outer_html(&doc, doc.root()), "<p>a</p><p>b</p>");
+    assert_eq!(
+        outer_html(&doc, doc.root()),
+        "<html><head></head><body><p>a</p><p>b</p></body></html>"
+    );
 }
 
 #[test]

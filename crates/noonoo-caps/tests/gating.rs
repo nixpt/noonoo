@@ -358,10 +358,8 @@ fn insert_after_and_replace_with_are_gated() {
     ));
     writer.insert_after(public, fresh).unwrap();
     writer.replace_with(fresh, other).unwrap();
-    assert_eq!(
-        document.tree().children(document.root()),
-        &[public, other, secret]
-    );
+    let body = document.get_elements_by_tag_name("body")[0];
+    assert_eq!(document.tree().children(body), &[public, other, secret]);
 }
 
 #[test]

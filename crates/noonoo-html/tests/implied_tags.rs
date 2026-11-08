@@ -6,8 +6,8 @@ use noonoo_dom::{Document, NodeData, NodeId};
 /// `p(#a) div(#b)`, children in brackets, text as `"..."`.
 fn shape(html: &str) -> String {
     let doc = noonoo_html::parse(html);
-    let root = doc.root();
-    children(&doc, root)
+    let body = doc.get_elements_by_tag_name("body")[0];
+    children(&doc, body)
 }
 
 fn children(doc: &Document, node: NodeId) -> String {

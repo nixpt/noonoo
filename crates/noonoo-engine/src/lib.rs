@@ -332,7 +332,9 @@ mod tests {
 
     #[test]
     fn lays_out_a_page() {
-        let engine = Engine::from_html("<style>#a { height: 40px }</style><div id=\"a\"></div>");
+        let engine = Engine::from_html(
+            "<style>body { margin: 0 } #a { height: 40px }</style><div id=\"a\"></div>",
+        );
         let tree = engine.layout(
             noonoo_geometry::Size::new(300.0, 200.0),
             &noonoo_layout::MetricShaper,

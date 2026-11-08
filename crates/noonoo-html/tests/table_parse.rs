@@ -6,7 +6,7 @@ use noonoo_html::serialize::inner_html;
 
 fn round_trip(source: &str) -> String {
     let doc = parse(source);
-    inner_html(&doc, doc.root())
+    inner_html(&doc, doc.get_elements_by_tag_name("body")[0])
 }
 
 #[test]

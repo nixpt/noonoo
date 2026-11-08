@@ -7,10 +7,28 @@ fn page(html: &str, css: &str, width: f32) -> (Document, LayoutTree) {
 
 fn page_at(html: &str, css: &str, viewport: Size) -> (Document, LayoutTree) {
     let doc = noonoo_html::parse(html);
-    let sheet = noonoo_css::Stylesheet::parse(css).unwrap();
+    // The parser gives every snippet a `<body>`: drop its UA margin, so a
+    // test's boxes start at the origin. A test's own `body` rule wins.
+    let sheet = noonoo_css::Stylesheet::parse(&format!("body {{ margin: 0 }} {css}")).unwrap();
     let styles = noonoo_style::compute_with(
         &doc,
         &[sheet],
+        noonoo_style::Viewport {
+            width: viewport.width,
+            height: viewport.height,
+        },
+    );
+    let tree = layout(&doc, &styles, viewport, &MetricShaper);
+    (doc, tree)
+}
+
+/// [`page`] without the test reset: the UA sheet's `body` margin applies.
+fn page_with_ua_body(html: &str, width: f32) -> (Document, LayoutTree) {
+    let doc = noonoo_html::parse(html);
+    let viewport = Size::new(width, 600.0);
+    let styles = noonoo_style::compute_with(
+        &doc,
+        &[],
         noonoo_style::Viewport {
             width: viewport.width,
             height: viewport.height,
@@ -948,8 +966,12 @@ fn overflow_hidden_clips_hit_testing() {
         tree.hit_test(Point::new(50.0, 10.0)),
         Some(id(&doc, "clip"))
     );
-    // Outside the clip box, the overflowing inner box is clipped away.
-    assert_eq!(tree.hit_test(Point::new(210.0, 10.0)), None);
+    // Outside the clip box, the overflowing inner box is clipped away: the
+    // body beneath it is hit.
+    assert_eq!(
+        tree.hit_test(Point::new(210.0, 10.0)),
+        Some(doc.get_elements_by_tag_name("body")[0])
+    );
 }
 
 #[test]
@@ -2175,7 +2197,7 @@ fn an_auto_width_leaves_room_for_the_margins() {
 
 #[test]
 fn the_body_margin_keeps_the_page_inside_the_viewport() {
-    let (doc, tree) = page(r#"<body id="body"><p id="p">x</p></body>"#, "", 400.0);
+    let (doc, tree) = page_with_ua_body(r#"<body id="body"><p id="p">x</p></body>"#, 400.0);
     let body = tree.get(id(&doc, "body")).unwrap().rect;
     assert_eq!((body.x, body.width), (8.0, 384.0));
 }
