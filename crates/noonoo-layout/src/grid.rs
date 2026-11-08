@@ -379,11 +379,12 @@ pub(crate) fn layout_grid_children(
             ),
             AlignItems::End => (row_y(placed.row) + area_height - heights[index], None),
         };
+        let available = crate::block::flow_width(ctx, placed.node, area);
         ctx.layout_element(
             placed.node,
             column_x(placed.column) + margins.left,
             y + margins.top,
-            area,
+            available,
             definite,
         );
         if let Some(index) = ctx.tree_index(placed.node) {

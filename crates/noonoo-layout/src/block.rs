@@ -151,7 +151,8 @@ pub(crate) fn layout_block_children(
                 Some(previous) => margin::collapse(previous, margin.top),
                 None => margin.top,
             });
-            ctx.layout_element(child, content_x + margin.left, cursor, content_width, None);
+            let available = flow_width(ctx, child, content_width);
+            ctx.layout_element(child, content_x + margin.left, cursor, available, None);
             if let Some(index) = ctx.tree_index(child) {
                 indices.push(index);
             }
@@ -170,8 +171,8 @@ pub(crate) fn layout_block_children(
             cursor += gap;
         }
 
-        let height =
-            ctx.layout_element(child, content_x + margin.left, cursor, content_width, None);
+        let available = flow_width(ctx, child, content_width);
+        let height = ctx.layout_element(child, content_x + margin.left, cursor, available, None);
         if let Some(index) = ctx.tree_index(child) {
             indices.push(index);
         }
@@ -489,6 +490,19 @@ fn layout_anonymous_table(
         crate::table::layout_table_children(ctx, &anonymous, &run, x, y, width);
     indices.append(&mut placed);
     height
+}
+
+/// The width to hand [`Ctx::layout_element`] for an in-flow box in a
+/// `container_width` container: an auto width fills it less the box's
+/// horizontal margins; a specified one resolves against the container.
+pub(crate) fn flow_width(ctx: &Ctx<'_>, node: NodeId, container_width: f32) -> f32 {
+    let style = ctx.style(node);
+    if matches!(style.width, noonoo_style::Dimension::Auto) {
+        let margin = crate::resolve::margins(&style.margin, container_width);
+        (container_width - margin.left - margin.right).max(0.0)
+    } else {
+        container_width
+    }
 }
 
 /// Whether `node` is a table part (a cell, row or row group), which needs a

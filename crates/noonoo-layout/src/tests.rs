@@ -2157,3 +2157,47 @@ fn sticky_boxes_measured_by_a_flex_container_are_moved_once() {
         assert_eq!(b.rect.y, expected, "{node:?}");
     }
 }
+
+/// An auto width fills the containing block less the margins (bliss-diff:
+/// `body { margin: 8px }` was as wide as the viewport and overflowed it).
+#[test]
+fn an_auto_width_leaves_room_for_the_margins() {
+    let (doc, tree) = page(
+        r#"<div id="a"></div><div id="b"><div id="c"></div></div>"#,
+        "#a { margin: 10px; height: 5px } #b { margin: 0 30px } #c { height: 5px }",
+        400.0,
+    );
+    let a = tree.get(id(&doc, "a")).unwrap().rect;
+    assert_eq!((a.x, a.width), (10.0, 380.0));
+    let c = tree.get(id(&doc, "c")).unwrap().rect;
+    assert_eq!((c.x, c.width), (30.0, 340.0));
+}
+
+#[test]
+fn the_body_margin_keeps_the_page_inside_the_viewport() {
+    let (doc, tree) = page(r#"<body id="body"><p id="p">x</p></body>"#, "", 400.0);
+    let body = tree.get(id(&doc, "body")).unwrap().rect;
+    assert_eq!((body.x, body.width), (8.0, 384.0));
+}
+
+#[test]
+fn a_percentage_width_still_resolves_against_the_container() {
+    let (doc, tree) = page(
+        r#"<div id="a"></div>"#,
+        "#a { width: 50%; margin: 0 20px; height: 5px }",
+        400.0,
+    );
+    let a = tree.get(id(&doc, "a")).unwrap().rect;
+    assert_eq!((a.x, a.width), (20.0, 200.0));
+}
+
+#[test]
+fn a_grid_item_with_margins_fills_its_area_less_them() {
+    let (doc, tree) = page(
+        r#"<div id="g"><div id="a"></div></div>"#,
+        "#g { display: grid; grid-template-columns: 200px } #a { margin: 0 10px; height: 5px }",
+        400.0,
+    );
+    let a = tree.get(id(&doc, "a")).unwrap().rect;
+    assert_eq!((a.x, a.width), (10.0, 180.0));
+}
