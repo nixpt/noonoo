@@ -15,7 +15,10 @@
 //! - **Positioning** — `position: relative` (offsets its subtree without moving
 //!   siblings) and `position: absolute` / `fixed` (out of flow, placed against
 //!   the nearest positioned ancestor's padding box — the viewport for `fixed`).
-//!   `sticky` is treated as `relative`.
+//!   `sticky` stays in flow and is moved by scrolling to keep its insets in
+//!   its nearest scrolling ancestor's scrollport, or the viewport at the
+//!   host's page scroll ([`LayoutTree::set_page_scroll`]), within its
+//!   containing block.
 //! - **Floats** — `float: left`/`right` shapes its block formatting context:
 //!   line boxes wrap around floats (including floats declared in sibling
 //!   blocks), floats stack beside each other and drop below when a band is too
@@ -197,6 +200,23 @@ pub struct LayoutTree {
     /// Generated (`::before`/`::after`) element and text ids → the element
     /// they belong to.
     generated: HashMap<NodeId, NodeId>,
+    /// The `position: sticky` boxes, in creation order.
+    sticky: Vec<StickyBox>,
+    /// The viewport laid out for: a sticky box with no scrolling ancestor
+    /// sticks to it.
+    viewport: Size,
+    /// How far the host has scrolled the page (see
+    /// [`LayoutTree::set_page_scroll`]).
+    page_scroll: Point,
+}
+
+/// A `position: sticky` box and how far it's currently shifted from its
+/// place in flow.
+#[derive(Clone, Debug)]
+struct StickyBox {
+    index: usize,
+    inset: noonoo_style::Edges<Dimension>,
+    offset: Point,
 }
 
 impl LayoutTree {
@@ -366,6 +386,7 @@ impl LayoutTree {
         let before = self.boxes[i].scroll_y;
         let after = (before + dy).clamp(0.0, max);
         self.boxes[i].scroll_y = after;
+        self.update_sticky();
         after - before
     }
 
@@ -378,6 +399,7 @@ impl LayoutTree {
         let before = self.boxes[i].scroll_x;
         let after = (before + dx).clamp(0.0, max);
         self.boxes[i].scroll_x = after;
+        self.update_sticky();
         after - before
     }
 
@@ -451,6 +473,143 @@ impl LayoutTree {
                 self.boxes[i].scroll_y = previous.boxes[j].scroll_y.clamp(0.0, max_y);
             }
         }
+        self.page_scroll = previous.page_scroll;
+        self.update_sticky();
+    }
+
+    /// Tell the tree how far the host has scrolled the page, for hosts that
+    /// scroll by moving the painted output: sticky boxes with no scrolling
+    /// ancestor stick to the viewport at that scroll.
+    pub fn set_page_scroll(&mut self, scroll: Point) {
+        self.page_scroll = scroll;
+        self.update_sticky();
+    }
+
+    /// Move each sticky box (and its subtree) to where the current scroll
+    /// offsets put it (CSS Positioned Layout §3.4): as little as keeps its
+    /// insets inside its nearest scrolling ancestor's scrollport — or the
+    /// viewport — but never out of its containing block, and back to its
+    /// place in flow when nothing pushes it.
+    fn update_sticky(&mut self) {
+        if self.sticky.is_empty() {
+            return;
+        }
+        // Each box's nearest scrolling ancestor and parent, parents first.
+        let mut order = Vec::new();
+        let mut context: HashMap<usize, (Option<usize>, Option<usize>)> = HashMap::new();
+        let mut stack: Vec<(usize, Option<usize>, Option<usize>)> = self
+            .roots
+            .iter()
+            .rev()
+            .map(|&root| (root, None, None))
+            .collect();
+        while let Some((index, scroller, parent)) = stack.pop() {
+            order.push(index);
+            context.insert(index, (scroller, parent));
+            let inner = if self.boxes[index].clips {
+                Some(index)
+            } else {
+                scroller
+            };
+            for &child in self.boxes[index].children.iter().rev() {
+                stack.push((child, inner, Some(index)));
+            }
+        }
+        let rank: HashMap<usize, usize> = order.iter().enumerate().map(|(k, &i)| (i, k)).collect();
+        let mut sticky = std::mem::take(&mut self.sticky);
+        sticky.sort_by_key(|item| rank.get(&item.index).copied().unwrap_or(usize::MAX));
+        for item in &mut sticky {
+            let Some(&(scroller, parent)) = context.get(&item.index) else {
+                continue;
+            };
+            // The visible window onto the scroller's content, in layout space.
+            let port = match scroller {
+                Some(s) => {
+                    let s = &self.boxes[s];
+                    s.padding_box().translate(s.scroll_x, s.scroll_y)
+                }
+                None => Rect::new(
+                    self.page_scroll.x,
+                    self.page_scroll.y,
+                    self.viewport.width,
+                    self.viewport.height,
+                ),
+            };
+            let limit = parent.map(|p| {
+                let p = &self.boxes[p];
+                p.padding_box().inset(
+                    p.padding.top,
+                    p.padding.right,
+                    p.padding.bottom,
+                    p.padding.left,
+                )
+            });
+            // Where flow put it: its rect less the shift already applied.
+            let rect = self.boxes[item.index]
+                .rect
+                .translate(-item.offset.x, -item.offset.y);
+            let inset = crate::resolve::insets(&item.inset, port.width, port.height);
+            let place = |start: f32,
+                         size: f32,
+                         port_start: f32,
+                         port_end: f32,
+                         near: Option<f32>,
+                         far: Option<f32>,
+                         limit: Option<(f32, f32)>| {
+                let mut at = start;
+                if let Some(far) = far {
+                    at = at.min(port_end - far - size);
+                }
+                if let Some(near) = near {
+                    at = at.max(port_start + near);
+                }
+                if let Some((low, high)) = limit {
+                    // Pushed down (or right) it stops at the block's end;
+                    // pulled up (or left), at its start.
+                    if at > start {
+                        at = at.min((high - size).max(start));
+                    } else {
+                        at = at.max(low.min(start));
+                    }
+                }
+                at
+            };
+            let y = place(
+                rect.y,
+                rect.height,
+                port.y,
+                port.bottom(),
+                inset.top,
+                inset.bottom,
+                limit.map(|l| (l.y, l.bottom())),
+            );
+            let x = place(
+                rect.x,
+                rect.width,
+                port.x,
+                port.right(),
+                inset.left,
+                inset.right,
+                limit.map(|l| (l.x, l.right())),
+            );
+            let offset = Point::new(x - rect.x, y - rect.y);
+            let (dx, dy) = (offset.x - item.offset.x, offset.y - item.offset.y);
+            if dx != 0.0 || dy != 0.0 {
+                self.shift(item.index, dx, dy);
+            }
+            item.offset = offset;
+        }
+        self.sticky = sticky;
+    }
+
+    /// Move box `index` and every box under it by `(dx, dy)`.
+    fn shift(&mut self, index: usize, dx: f32, dy: f32) {
+        let mut stack = vec![index];
+        while let Some(i) = stack.pop() {
+            let b = &mut self.boxes[i];
+            b.rect = b.rect.translate(dx, dy);
+            stack.extend(b.children.iter().copied());
+        }
     }
 }
 
@@ -523,6 +682,8 @@ pub fn layout(
             .insert(generated.element, generated.owner);
         ctx.tree.generated.insert(generated.text, generated.owner);
     }
+    ctx.tree.viewport = viewport;
+    ctx.tree.update_sticky();
     ctx.tree
 }
 
@@ -998,10 +1159,11 @@ impl Ctx<'_> {
 
         let (mut border_x, mut border_y) = (border_x, border_y);
 
-        // `relative` (and `sticky`, unsupported as such) shifts the box and its
-        // whole subtree, but leaves the box's flow position — and thus its
-        // siblings — untouched.
-        if matches!(style.position, Position::Relative | Position::Sticky) {
+        // `relative` shifts the box and its whole subtree, but leaves the
+        // box's flow position — and thus its siblings — untouched. (A
+        // `sticky` box stays in flow; scrolling moves it, see
+        // `LayoutTree::update_sticky`.)
+        if style.position == Position::Relative {
             // The containing block's height isn't known in flow; keep
             // resolving vertical percentages against the width, as before.
             let inset = resolve::insets(&style.inset, available_width, available_width);
@@ -1162,7 +1324,13 @@ impl Ctx<'_> {
             z_index,
             children: child_indices,
         });
-        let _ = index;
+        if style.position == Position::Sticky {
+            self.tree.sticky.push(StickyBox {
+                index,
+                inset: style.inset.clone(),
+                offset: Point::ZERO,
+            });
+        }
 
         border_box_height
     }
@@ -1191,6 +1359,7 @@ impl Ctx<'_> {
         self.measuring -= 1;
         self.tree.boxes.truncate(base);
         self.tree.index.retain(|_, &mut index| index < base);
+        self.tree.sticky.retain(|item| item.index < base);
         height
     }
 

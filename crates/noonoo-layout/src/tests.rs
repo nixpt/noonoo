@@ -2049,3 +2049,111 @@ fn a_bounding_client_rect_follows_scrolling_ancestors_and_spans_fragments() {
     );
     assert_eq!(tree.bounding_client_rect(doc.tree().upcoming_id(0)), None);
 }
+
+const STICKY_CSS: &str = "#s { height: 100px; overflow: scroll } #pad { height: 50px } \
+     #sec { height: 150px } #h { position: sticky; top: 10px; height: 20px } \
+     #rest { height: 300px } p { margin: 0 }";
+const STICKY_HTML: &str = "<div id=s><div id=pad></div><div id=sec><div id=h><p id=t>head</p></div></div><div id=rest></div></div>";
+
+#[test]
+fn a_sticky_box_stays_in_flow_until_scrolling_would_carry_it_past_its_inset() {
+    let (doc, mut tree) = page(STICKY_HTML, STICKY_CSS, 400.0);
+    let (h, s, t) = (id(&doc, "h"), id(&doc, "s"), id(&doc, "t"));
+    // At rest it sits where flow put it: unlike `relative`, `top` alone
+    // doesn't move it.
+    assert_eq!(tree.get(h).unwrap().rect.y, 50.0);
+    // Scrolled 30px it's still below the inset; at 80px it sticks 10px
+    // below the scrollport's top.
+    tree.scroll_by(s, 30.0);
+    assert_eq!(tree.bounding_client_rect(h).unwrap().y, 20.0);
+    tree.scroll_by(s, 50.0);
+    assert_eq!(tree.bounding_client_rect(h).unwrap().y, 10.0);
+    assert_eq!(tree.get(h).unwrap().rect.y, 90.0, "in content space");
+    // Its contents move with it.
+    assert_eq!(tree.get(t).unwrap().rect.y, 90.0);
+    // It never leaves its containing block (#sec ends at 200px).
+    tree.scroll_by(s, 100.0);
+    assert_eq!(tree.get(h).unwrap().rect.y, 180.0);
+    // Scrolling back returns it to flow.
+    tree.scroll_by(s, -1000.0);
+    assert_eq!(tree.get(h).unwrap().rect.y, 50.0);
+    assert_eq!(tree.get(t).unwrap().rect.y, 50.0);
+}
+
+#[test]
+fn a_bottom_sticky_box_waits_at_the_bottom_of_the_scrollport() {
+    let (doc, mut tree) = page(
+        "<div id=s><div id=pad></div><div id=f></div></div>",
+        "#s { height: 100px; overflow: scroll } #pad { height: 300px } \
+         #f { position: sticky; bottom: 0; height: 20px }",
+        400.0,
+    );
+    let (f, s) = (id(&doc, "f"), id(&doc, "s"));
+    assert_eq!(tree.get(f).unwrap().rect.y, 80.0, "pulled up into view");
+    tree.scroll_by(s, 100.0);
+    assert_eq!(tree.get(f).unwrap().rect.y, 180.0);
+    tree.scroll_by(s, 1000.0);
+    assert_eq!(
+        tree.get(f).unwrap().rect.y,
+        300.0,
+        "back in flow at the end"
+    );
+}
+
+#[test]
+fn without_a_scrolling_ancestor_a_sticky_box_sticks_to_the_page() {
+    let (doc, mut tree) = page(
+        "<div id=pad></div><div id=h></div><div id=rest></div>",
+        "#pad { height: 50px } #h { position: sticky; top: 0; height: 20px } #rest { height: 2000px }",
+        400.0,
+    );
+    let h = id(&doc, "h");
+    assert_eq!(tree.get(h).unwrap().rect.y, 50.0);
+    tree.set_page_scroll(Point::new(0.0, 500.0));
+    assert_eq!(tree.get(h).unwrap().rect.y, 500.0);
+    tree.set_page_scroll(Point::ZERO);
+    assert_eq!(tree.get(h).unwrap().rect.y, 50.0);
+}
+
+#[test]
+fn a_sticky_box_never_moves_against_its_containing_block() {
+    // Taller than what's left of its block: pushing it would pull it up.
+    let (doc, mut tree) = page(
+        "<div id=s><div id=sec><div id=h></div></div><div id=rest></div></div>",
+        "#s { height: 100px; overflow: scroll } #sec { height: 10px } \
+         #h { position: sticky; top: 0; height: 20px } #rest { height: 300px }",
+        400.0,
+    );
+    tree.scroll_by(id(&doc, "s"), 50.0);
+    assert_eq!(tree.get(id(&doc, "h")).unwrap().rect.y, 0.0);
+    // Above its block's start (a negative margin), pulling it up toward the
+    // scrollport's bottom would push it down.
+    let (doc, tree) = page(
+        "<div id=s><div id=pad></div><div id=b><div id=f></div></div></div>",
+        "#s { height: 100px; overflow: scroll } #pad { height: 200px } \
+         #b { height: 50px; padding-top: 1px } \
+         #f { position: sticky; bottom: 0; height: 20px; margin-top: -10px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.y, 191.0);
+}
+
+#[test]
+fn sticky_boxes_measured_by_a_flex_container_are_moved_once() {
+    let (doc, mut tree) = page(
+        // The sticky item second: its measured boxes' indices are the
+        // first item's in the real layout.
+        "<div class=f><div id=o><p id=ot>o</p></div><div id=h><p id=ht>h</p></div></div>",
+        ".f { display: flex; height: 2000px; align-items: flex-start } \
+         #h { position: sticky; top: 0 } p { margin: 0 }",
+        400.0,
+    );
+    let before: Vec<_> = tree.boxes().iter().map(|b| (b.node, b.rect)).collect();
+    tree.set_page_scroll(Point::new(0.0, 500.0));
+    for (b, (node, rect)) in tree.boxes().iter().zip(&before) {
+        let h = id(&doc, "h");
+        let moved = node.is_some_and(|node| doc.tree().is_ancestor_of(h, node));
+        let expected = if moved { rect.y + 500.0 } else { rect.y };
+        assert_eq!(b.rect.y, expected, "{node:?}");
+    }
+}
