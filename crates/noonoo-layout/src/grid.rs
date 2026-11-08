@@ -34,6 +34,10 @@ use crate::Ctx;
 use crate::float;
 use crate::resolve;
 
+/// The most tracks a grid has on each axis, as in Firefox (10,000 lines).
+/// Placement clamps to it, so markup can't make a grid of millions of rows.
+pub(crate) const MAX_TRACKS: usize = 10_000;
+
 /// One item's resolved placement in the grid (0-based, half-open spans).
 struct Placed {
     /// The element, or the first text node of an anonymous run.
@@ -96,12 +100,14 @@ pub(crate) fn layout_grid_children(
         return (Vec::new(), 0.0);
     }
 
-    let column_tracks = if style.grid_template_columns.is_empty() {
+    let mut column_tracks = if style.grid_template_columns.is_empty() {
         vec![Track::Auto]
     } else {
         style.grid_template_columns.clone()
     };
-    let row_tracks_template = style.grid_template_rows.clone();
+    let mut row_tracks_template = style.grid_template_rows.clone();
+    column_tracks.truncate(MAX_TRACKS);
+    row_tracks_template.truncate(MAX_TRACKS);
     let auto_columns = if style.grid_auto_columns.is_empty() {
         vec![Track::Auto]
     } else {
@@ -134,6 +140,7 @@ pub(crate) fn layout_grid_children(
             }
         };
 
+        let (column_span, row_span) = (column_span.min(MAX_TRACKS), row_span.min(MAX_TRACKS));
         let (column, row) = match (column, row) {
             (Some(column), Some(row)) => {
                 // Both axes explicit: placed as asked, overlap permitted.
@@ -179,6 +186,9 @@ pub(crate) fn layout_grid_children(
                 (column, row)
             }
         };
+        // Past the limit, an item moves back so its span ends at the last line.
+        let column = column.min(MAX_TRACKS - column_span);
+        let row = row.min(MAX_TRACKS - row_span);
         for c in column..column + column_span {
             for r in row..row + row_span {
                 occupied.insert((c, r));

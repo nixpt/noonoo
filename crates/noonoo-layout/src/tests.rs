@@ -1486,3 +1486,23 @@ fn grid_rows_start_after_the_rows_and_gaps_before_them() {
     assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.height, 45.0);
     assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.y, 75.0);
 }
+
+/// The grid is clamped to `grid::MAX_TRACKS` per axis, as Firefox does:
+/// an item past the limit is placed in the last tracks (the spec lets an
+/// implementation clamp the grid's size).
+#[test]
+fn the_implicit_grid_is_clamped() {
+    let (doc, tree) = page(
+        r#"<div id="g"><p id="a">x</p><p id="b">y</p></div>"#,
+        "body { margin: 0 } div { display: grid; grid-auto-rows: 1px }
+         p { margin: 0; grid-row: span 9000 }",
+        800.0,
+    );
+    let g = tree.get(id(&doc, "g")).unwrap().rect;
+    assert_eq!(g.height, grid::MAX_TRACKS as f32);
+    // #b would start at row 9,000 and end past the limit: it moves back so
+    // its span ends at the last line.
+    let b = tree.get(id(&doc, "b")).unwrap().rect;
+    assert_eq!(b.y, (grid::MAX_TRACKS - 9000) as f32);
+    assert_eq!(b.height, 9000.0);
+}
