@@ -51,6 +51,7 @@ mod apply;
 mod calc;
 mod cascade;
 pub mod computed;
+mod edit;
 mod gradient;
 mod grid;
 mod media;
@@ -67,6 +68,7 @@ pub use computed::{
     LengthOrAuto, LinearDirection, Overflow, Position, RadialShape, RadialSize, TextAlign,
     TextDecoration, Track, Visibility, WhiteSpace, ZIndex,
 };
+pub use edit::{StyleEditError, remove_style_property, set_style_property};
 
 /// Computed styles for a document, indexed by node.
 #[derive(Clone, Debug, Default)]

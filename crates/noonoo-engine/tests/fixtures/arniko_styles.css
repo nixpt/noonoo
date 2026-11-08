@@ -1,0 +1,1119 @@
+/* ═══════════════════════════════════════
+   Arniko Design Tokens (Dark Theme Defaults)
+   ═══════════════════════════════════════
+   Override these by applying .theme-light
+   to a parent element (e.g. <body class="theme-light">)
+   or by redefining --arniko-* in your own :root block.
+   ═══════════════════════════════════════ */
+
+:root {
+  /* ── Backgrounds ── */
+  --arniko-bg-surface: #18181b;
+  --arniko-bg-elevated: #18181b;
+  --arniko-bg-input: #18181b;
+  --arniko-bg-subtle: #27272a;
+  --arniko-bg-shimmer: #3f3f46;
+  --arniko-bg-hover: rgba(255, 255, 255, 0.05);
+
+  /* ── Text ── */
+  --arniko-text-primary: #f5f5f5;
+  --arniko-text-body: #e4e4e7;
+  --arniko-text-secondary: #a1a1aa;
+  --arniko-text-muted: #71717a;
+  --arniko-text-subtle: #52525b;
+
+  /* ── Borders ── */
+  --arniko-border: #27272a;
+  --arniko-border-light: rgba(0, 242, 255, 0.06);
+  --arniko-border-accent: rgba(0, 242, 255, 0.15);
+
+  /* ── Accent / Primary Action ── */
+  --arniko-accent: #6366f1;
+  --arniko-accent-glow: rgba(99, 102, 241, 0.3);
+
+  /* ── Brand / UI Colors ── */
+  --arniko-cyan: #00f2ff;
+  --arniko-purple: #a855f7;
+  --arniko-white: #ffffff;
+
+  /* ── Button Variants ── */
+  --arniko-btn-default: #2563eb;
+  --arniko-btn-destructive: #dc2626;
+  --arniko-btn-outline-border: #374151;
+  --arniko-btn-secondary-bg: #374151;
+  --arniko-btn-accent-bg: #7c3aed;
+
+  /* ── Semantic: Success ── */
+  --arniko-success: #22c55e;
+  --arniko-success-bg: #052e16;
+  --arniko-success-border: #166534;
+
+  /* ── Semantic: Error ── */
+  --arniko-error: #ef4444;
+  --arniko-error-bg: #450a0a;
+  --arniko-error-border: #991b1b;
+
+  /* ── Semantic: Warning ── */
+  --arniko-warning: #f59e0b;
+  --arniko-warning-bg: #422006;
+  --arniko-warning-border: #854d0e;
+
+  /* ── Semantic: Info ── */
+  --arniko-info: #60a5fa;
+  --arniko-info-bg: #172554;
+  --arniko-info-border: #1e3a8a;
+
+  /* ── Splash Screen ── */
+  --arniko-splash-bg: #06090e;
+
+  /* ── Shadows ── */
+  --arniko-shadow-overlay: rgba(0, 0, 0, 0.3);
+
+  /* ── Focus / Keyboard Navigation ── */
+  --arniko-focus-ring: 0 0 0 2px var(--arniko-bg-surface), 0 0 0 4px var(--arniko-accent);
+}
+/* ═══════════════════════════════════════
+   Arniko Dark Theme Overrides
+   ═══════════════════════════════════════
+   Apply class="theme-dark" to <html> or <body>.
+   The :root block in variables.css already provides
+   dark defaults; this class is here for explicit mode
+   switching and parity with the other theme classes.
+   ═══════════════════════════════════════ */
+
+.theme-dark {
+  --arniko-bg-surface: #18181b;
+  --arniko-bg-elevated: #18181b;
+  --arniko-bg-input: #18181b;
+  --arniko-bg-subtle: #27272a;
+  --arniko-bg-shimmer: #3f3f46;
+  --arniko-bg-hover: rgba(255, 255, 255, 0.05);
+
+  --arniko-text-primary: #f5f5f5;
+  --arniko-text-body: #e4e4e7;
+  --arniko-text-secondary: #a1a1aa;
+  --arniko-text-muted: #71717a;
+  --arniko-text-subtle: #52525b;
+
+  --arniko-border: #27272a;
+  --arniko-border-light: rgba(0, 242, 255, 0.06);
+  --arniko-border-accent: rgba(0, 242, 255, 0.15);
+
+  --arniko-accent: #6366f1;
+  --arniko-accent-glow: rgba(99, 102, 241, 0.3);
+
+  --arniko-cyan: #00f2ff;
+  --arniko-purple: #a855f7;
+  --arniko-white: #ffffff;
+
+  --arniko-btn-default: #2563eb;
+  --arniko-btn-destructive: #dc2626;
+  --arniko-btn-outline-border: #374151;
+  --arniko-btn-secondary-bg: #374151;
+  --arniko-btn-accent-bg: #7c3aed;
+
+  --arniko-success: #22c55e;
+  --arniko-success-bg: #052e16;
+  --arniko-success-border: #166534;
+
+  --arniko-error: #ef4444;
+  --arniko-error-bg: #450a0a;
+  --arniko-error-border: #991b1b;
+
+  --arniko-warning: #f59e0b;
+  --arniko-warning-bg: #422006;
+  --arniko-warning-border: #854d0e;
+
+  --arniko-info: #60a5fa;
+  --arniko-info-bg: #172554;
+  --arniko-info-border: #1e3a8a;
+
+  --arniko-splash-bg: #06090e;
+}
+/* ═══════════════════════════════════════
+   Arniko Light Theme Overrides
+   ═══════════════════════════════════════
+   Apply class="theme-light" to <html> or <body>
+   to switch to the light color palette.
+   ═══════════════════════════════════════ */
+
+.theme-light {
+  --arniko-bg-surface: #ffffff;
+  --arniko-bg-elevated: #fafafa;
+  --arniko-bg-input: #ffffff;
+  --arniko-bg-subtle: #e4e4e7;
+  --arniko-bg-shimmer: #d4d4d8;
+  --arniko-bg-hover: rgba(0, 0, 0, 0.04);
+
+  --arniko-text-primary: #18181b;
+  --arniko-text-body: #3f3f46;
+  --arniko-text-secondary: #71717a;
+  --arniko-text-muted: #a1a1aa;
+  --arniko-text-subtle: #d4d4d8;
+
+  --arniko-border: #e4e4e7;
+  --arniko-border-light: rgba(0, 0, 0, 0.06);
+  --arniko-border-accent: rgba(99, 102, 241, 0.2);
+
+  --arniko-accent: #6366f1;
+  --arniko-accent-glow: rgba(99, 102, 241, 0.15);
+
+  --arniko-cyan: #0891b2;
+  --arniko-purple: #7c3aed;
+  --arniko-white: #ffffff;
+
+  --arniko-btn-default: #2563eb;
+  --arniko-btn-destructive: #dc2626;
+  --arniko-btn-outline-border: #d4d4d8;
+  --arniko-btn-secondary-bg: #f4f4f5;
+  --arniko-btn-accent-bg: #7c3aed;
+
+  --arniko-success: #16a34a;
+  --arniko-success-bg: #f0fdf4;
+  --arniko-success-border: #bbf7d0;
+
+  --arniko-error: #dc2626;
+  --arniko-error-bg: #fef2f2;
+  --arniko-error-border: #fecaca;
+
+  --arniko-warning: #d97706;
+  --arniko-warning-bg: #fffbf0;
+  --arniko-warning-border: #fde68a;
+
+  --arniko-info: #2563eb;
+  --arniko-info-bg: #f0f6ff;
+  --arniko-info-border: #bfdbfe;
+
+  --arniko-splash-bg: #f8f8f8;
+
+  --arniko-shadow-overlay: rgba(0, 0, 0, 0.15);
+}
+/* ═══════════════════════════════════════
+   Arniko Frosted Theme Overrides
+   ═══════════════════════════════════════
+   Clean white/gray glass with subtle blue accent.
+   Apply class="theme-frosted" to <html> or <body>.
+   ═══════════════════════════════════════ */
+
+.theme-frosted {
+  --arniko-bg-surface: #f8fafc;
+  --arniko-bg-elevated: #ffffff;
+  --arniko-bg-input: #ffffff;
+  --arniko-bg-subtle: #e2e8f0;
+  --arniko-bg-shimmer: #cbd5e1;
+  --arniko-bg-hover: rgba(148, 163, 184, 0.15);
+
+  --arniko-text-primary: #0f172a;
+  --arniko-text-body: #334155;
+  --arniko-text-secondary: #475569;
+  --arniko-text-muted: #64748b;
+  --arniko-text-subtle: #94a3b8;
+
+  --arniko-border: #cbd5e1;
+  --arniko-border-light: rgba(0, 0, 0, 0.06);
+  --arniko-border-accent: rgba(59, 130, 246, 0.2);
+
+  --arniko-accent: #3b82f6;
+  --arniko-accent-glow: rgba(59, 130, 246, 0.2);
+
+  --arniko-cyan: #08a3b2;
+  --arniko-purple: #8b5cf6;
+  --arniko-white: #ffffff;
+
+  --arniko-btn-default: #2563eb;
+  --arniko-btn-destructive: #dc2626;
+  --arniko-btn-outline-border: #cbd5e1;
+  --arniko-btn-secondary-bg: #f1f5f9;
+  --arniko-btn-accent-bg: #3b82f6;
+
+  --arniko-success: #16a34a;
+  --arniko-success-bg: #f0fdf4;
+  --arniko-success-border: #bbf7d0;
+
+  --arniko-error: #dc2626;
+  --arniko-error-bg: #fef2f2;
+  --arniko-error-border: #fecaca;
+
+  --arniko-warning: #d97706;
+  --arniko-warning-bg: #fffbf0;
+  --arniko-warning-border: #fde68a;
+
+  --arniko-info: #2563eb;
+  --arniko-info-bg: #f0f6ff;
+  --arniko-info-border: #bfdbfe;
+
+  --arniko-splash-bg: #f8fafc;
+}
+/* ═══════════════════════════════════════
+   Arniko Cyberpunk Theme Overrides
+   ═══════════════════════════════════════
+   Dark theme with neon green/cyan accents.
+   Apply class="theme-cyberpunk" to <html> or <body>.
+   ═══════════════════════════════════════ */
+
+.theme-cyberpunk {
+  --arniko-bg-surface: #05050a;
+  --arniko-bg-elevated: #0a0a14;
+  --arniko-bg-input: #0a0a14;
+  --arniko-bg-subtle: #151525;
+  --arniko-bg-shimmer: #1e1e30;
+  --arniko-bg-hover: rgba(16, 185, 129, 0.12);
+
+  --arniko-text-primary: #ecfdf5;
+  --arniko-text-body: #d1fae5;
+  --arniko-text-secondary: #a7f3d0;
+  --arniko-text-muted: #6ee7b7;
+  --arniko-text-subtle: #34d399;
+
+  --arniko-border: rgba(16, 185, 129, 0.2);
+  --arniko-border-light: rgba(16, 185, 129, 0.08);
+  --arniko-border-accent: rgba(34, 211, 238, 0.25);
+
+  --arniko-accent: #22d3ee;
+  --arniko-accent-glow: rgba(34, 211, 238, 0.3);
+
+  --arniko-cyan: #22d3ee;
+  --arniko-purple: #a855f7;
+  --arniko-white: #ffffff;
+
+  --arniko-btn-default: #10b981;
+  --arniko-btn-destructive: #dc2626;
+  --arniko-btn-outline-border: rgba(16, 185, 129, 0.3);
+  --arniko-btn-secondary-bg: #151525;
+  --arniko-btn-accent-bg: #14b8a6;
+
+  --arniko-success: #34d399;
+  --arniko-success-bg: rgba(16, 185, 129, 0.12);
+  --arniko-success-border: rgba(52, 211, 153, 0.2);
+
+  --arniko-error: #f87171;
+  --arniko-error-bg: rgba(239, 68, 68, 0.12);
+  --arniko-error-border: rgba(248, 113, 113, 0.2);
+
+  --arniko-warning: #fbbf24;
+  --arniko-warning-bg: rgba(245, 158, 11, 0.12);
+  --arniko-warning-border: rgba(251, 191, 36, 0.2);
+
+  --arniko-info: #60a5fa;
+  --arniko-info-bg: rgba(96, 165, 250, 0.12);
+  --arniko-info-border: rgba(96, 165, 250, 0.2);
+
+  --arniko-splash-bg: #05050a;
+}
+/* ═══════════════════════════════════════
+   Arniko Aurora Theme Overrides
+   ═══════════════════════════════════════
+   Light pastel theme with pink/purple accents.
+   Apply class="theme-aurora" to <html> or <body>.
+   ═══════════════════════════════════════ */
+
+.theme-aurora {
+  --arniko-bg-surface: #f5f3ff;
+  --arniko-bg-elevated: #ffffff;
+  --arniko-bg-input: #ffffff;
+  --arniko-bg-subtle: #ede9fe;
+  --arniko-bg-shimmer: #ddd6fe;
+  --arniko-bg-hover: rgba(147, 51, 234, 0.08);
+
+  --arniko-text-primary: #1f2937;
+  --arniko-text-body: #374151;
+  --arniko-text-secondary: #4b5563;
+  --arniko-text-muted: #9ca3af;
+  --arniko-text-subtle: #d1d5db;
+
+  --arniko-border: rgba(147, 51, 234, 0.15);
+  --arniko-border-light: rgba(147, 51, 234, 0.06);
+  --arniko-border-accent: rgba(236, 72, 153, 0.2);
+
+  --arniko-accent: #ec4899;
+  --arniko-accent-glow: rgba(236, 72, 153, 0.2);
+
+  --arniko-cyan: #22d3ee;
+  --arniko-purple: #a855f7;
+  --arniko-white: #ffffff;
+
+  --arniko-btn-default: #ec4899;
+  --arniko-btn-destructive: #dc2626;
+  --arniko-btn-outline-border: rgba(147, 51, 234, 0.25);
+  --arniko-btn-secondary-bg: #f5f3ff;
+  --arniko-btn-accent-bg: #a855f7;
+
+  --arniko-success: #16a34a;
+  --arniko-success-bg: #f0fdf4;
+  --arniko-success-border: #bbf7d0;
+
+  --arniko-error: #dc2626;
+  --arniko-error-bg: #fef2f2;
+  --arniko-error-border: #fecaca;
+
+  --arniko-warning: #d97706;
+  --arniko-warning-bg: #fffbf0;
+  --arniko-warning-border: #fde68a;
+
+  --arniko-info: #2563eb;
+  --arniko-info-bg: #f0f6ff;
+  --arniko-info-border: #bfdbfe;
+
+  --arniko-splash-bg: #f5f3ff;
+}
+.arniko-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 8px; white-space: nowrap; border-radius: 8px; font-size: 14px;
+  font-weight: 500; cursor: pointer; border: none;
+  text-decoration: none;
+  transition: all 0.2s; padding: 8px 16px; height: 36px;
+}
+.arniko-btn:disabled { opacity: 0.5; pointer-events: none; cursor: not-allowed; }
+.arniko-btn:focus-visible { outline: none; box-shadow: var(--arniko-focus-ring); }
+.arniko-btn-default { background: var(--arniko-btn-default); color: var(--arniko-white); }
+.arniko-btn-default:hover { filter: brightness(1.1); }
+.arniko-btn-destructive { background: var(--arniko-btn-destructive); color: var(--arniko-white); }
+.arniko-btn-outline { background: transparent; border: 1px solid var(--arniko-btn-outline-border); color: var(--arniko-text-body); }
+.arniko-btn-outline:hover { background: var(--arniko-bg-hover); }
+.arniko-btn-secondary { background: var(--arniko-btn-secondary-bg); color: var(--arniko-text-primary); }
+.arniko-btn-ghost { background: transparent; color: var(--arniko-text-body); }
+.arniko-btn-ghost:hover { background: var(--arniko-bg-hover); }
+.arniko-btn-accent { background: var(--arniko-btn-accent-bg); color: var(--arniko-white); }
+.arniko-btn-sm { height: 32px; padding: 4px 12px; font-size: 12px; }
+.arniko-btn-lg { height: 40px; padding: 8px 24px; font-size: 16px; }
+.arniko-btn-icon { height: 36px; width: 36px; padding: 0; }
+.arniko-card {
+  background: var(--arniko-bg-surface); border: 1px solid var(--arniko-border); border-radius: 8px; padding: 20px;
+}
+.arniko-card-title {
+  font-size: 13px; color: var(--arniko-text-muted); text-transform: uppercase;
+  letter-spacing: 0.5px; margin-bottom: 8px;
+}
+.arniko-card-body { font-size: 16px; color: var(--arniko-text-body); }
+.arniko-glass {
+  background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+}
+.arniko-input {
+  background: var(--arniko-bg-input); border: 1px solid var(--arniko-border); border-radius: 6px;
+  padding: 8px 12px; color: var(--arniko-text-body); font-size: 14px; width: 100%;
+}
+.arniko-input:focus { outline: none; border-color: var(--arniko-accent); }
+.arniko-input:focus-visible { outline: none; box-shadow: var(--arniko-focus-ring); border-color: var(--arniko-accent); }
+.arniko-input:disabled { opacity: 0.5; cursor: not-allowed; }
+.arniko-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 4px;
+  font-size: 12px; font-weight: 500;
+}
+.arniko-badge-default { background: var(--arniko-bg-subtle); color: var(--arniko-text-secondary); }
+.arniko-badge-success { background: var(--arniko-success-bg); color: var(--arniko-success); }
+.arniko-badge-warning { background: var(--arniko-warning-bg); color: var(--arniko-warning); }
+.arniko-badge-error { background: var(--arniko-error-bg); color: var(--arniko-error); }
+.arniko-badge-info { background: var(--arniko-info-bg); color: var(--arniko-info); }
+.arniko-badge-purple { background: #2e1065; color: #c4b5fd; }
+.arniko-separator { border: none; border-top: 1px solid var(--arniko-border); margin: 16px 0; }
+.arniko-spinner {
+  display: inline-block; width: 20px; height: 20px;
+  border: 2px solid var(--arniko-bg-subtle); border-top-color: var(--arniko-accent);
+  border-radius: 50%; animation: arniko-spin 0.6s linear infinite;
+}
+@keyframes arniko-spin { to { transform: rotate(360deg); } }
+.arniko-kbd {
+  background: var(--arniko-bg-subtle); padding: 2px 6px; border-radius: 3px;
+  font-size: 12px; font-family: monospace; color: var(--arniko-text-secondary);
+}
+.arniko-metric-card {
+  background: var(--arniko-bg-surface); border: 1px solid var(--arniko-border); border-radius: 12px;
+  padding: 20px; transition: all 0.2s ease;
+}
+.arniko-metric-card:hover { border-color: rgba(168, 85, 247, 0.3); }
+.arniko-metric-header { display: flex; justify-content: space-between; align-items: flex-start; }
+.arniko-metric-info { flex: 1; }
+.arniko-metric-title { font-size: 12px; color: var(--arniko-text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+.arniko-metric-value { font-size: 28px; font-weight: 700; color: var(--arniko-text-primary); }
+.arniko-metric-subtitle { font-size: 12px; color: var(--arniko-text-subtle); margin-top: 4px; }
+.arniko-metric-icon {
+  width: 48px; height: 48px; border-radius: 10px; display: flex;
+  align-items: center; justify-content: center; font-size: 20px;
+}
+.arniko-metric-blue { background: linear-gradient(135deg, #3b82f6, #06b6d4); }
+.arniko-metric-green { background: linear-gradient(135deg, #22c55e, #10b981); }
+.arniko-metric-purple { background: linear-gradient(135deg, #a855f7, #ec4899); }
+.arniko-metric-orange { background: linear-gradient(135deg, #f97316, #ef4444); }
+.arniko-metric-red { background: linear-gradient(135deg, #ef4444, #dc2626); }
+.arniko-metric-cyan { background: linear-gradient(135deg, #06b6d4, #0ea5e9); }
+.arniko-metric-footer { margin-top: 16px; font-size: 12px; color: var(--arniko-text-subtle); }
+.arniko-metric-trend { margin-right: 4px; }
+.arniko-trend-up { color: var(--arniko-success); }
+.arniko-trend-down { color: var(--arniko-error); }
+.arniko-trend-stable { color: var(--arniko-warning); }
+.arniko-progress { margin-bottom: 16px; }
+.arniko-progress-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+.arniko-progress-label { font-size: 13px; color: var(--arniko-text-secondary); }
+.arniko-progress-pct { font-size: 13px; color: var(--arniko-text-muted); }
+.arniko-progress-track { background: var(--arniko-bg-subtle); border-radius: 999px; height: 8px; overflow: hidden; }
+.arniko-progress-bar { height: 100%; transition: width 0.3s ease; border-radius: 999px; }
+.arniko-progress-accent { background: linear-gradient(90deg, #a855f7, #ec4899); }
+.arniko-progress-blue { background: linear-gradient(90deg, #3b82f6, #06b6d4); }
+.arniko-progress-green { background: linear-gradient(90deg, #22c55e, #10b981); }
+.arniko-progress-purple { background: linear-gradient(90deg, #a855f7, #8b5cf6); }
+.arniko-progress-orange { background: linear-gradient(90deg, #f97316, #eab308); }
+.arniko-progress-red { background: linear-gradient(90deg, #ef4444, #f97316); }
+.arniko-status-grid { display: grid; gap: 12px; }
+.arniko-status-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px; background: rgba(0,0,0,0.3); border-radius: 8px;
+}
+.arniko-status-label { font-size: 13px; color: var(--arniko-text-secondary); }
+.arniko-status-value { display: flex; align-items: center; gap: 8px; }
+.arniko-status-dot { width: 8px; height: 8px; border-radius: 50%; }
+.arniko-status-text { font-size: 12px; font-weight: 500; }
+.arniko-status-pulse { animation: arniko-pulse 2s ease-in-out infinite; }
+@keyframes arniko-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+.arniko-status-active { background: var(--arniko-success); color: var(--arniko-success); }
+.arniko-status-warning { background: var(--arniko-warning); color: var(--arniko-warning); }
+.arniko-status-error { background: var(--arniko-error); color: var(--arniko-error); }
+.arniko-status-idle { background: var(--arniko-accent); color: var(--arniko-accent); }
+.arniko-status-offline { background: var(--arniko-text-subtle); color: var(--arniko-text-subtle); }
+.arniko-status-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 10px; border-radius: 9999px; font-size: 0.75rem; font-weight: 500;
+  background: var(--arniko-bg-subtle); color: var(--arniko-text-secondary);
+}
+.arniko-status-badge::before {
+  content: ""; display: inline-block; width: 6px; height: 6px;
+  border-radius: 50%; background: currentColor;
+}
+.arniko-status-badge.arniko-status-active { color: var(--arniko-accent); }
+.arniko-status-badge.arniko-status-success { color: var(--arniko-success); }
+.arniko-status-badge.arniko-status-warning { color: var(--arniko-warning); }
+.arniko-status-badge.arniko-status-error { color: var(--arniko-error); }
+.arniko-status-badge.arniko-status-info { color: var(--arniko-info); }
+.arniko-status-badge.arniko-status-offline { color: var(--arniko-text-muted); }
+.arniko-status-badge.arniko-status-pulse::before {
+  animation: arniko-pulse 1.5s ease-in-out infinite;
+}
+@keyframes arniko-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.arniko-tooltip {
+  position: relative; cursor: help;
+}
+.arniko-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute; padding: 6px 10px; border-radius: 6px;
+  background: var(--arniko-bg-subtle); color: var(--arniko-text-body); font-size: 12px;
+  white-space: nowrap; opacity: 0; pointer-events: none;
+  transition: opacity 0.2s; z-index: 1000;
+}
+.arniko-tooltip:hover::after { opacity: 1; }
+.arniko-tooltip:focus-visible::after { opacity: 1; }
+.arniko-tooltip:focus-visible {
+  outline: none; box-shadow: var(--arniko-focus-ring); border-radius: 2px;
+}
+.arniko-tooltip[data-tooltip-position="top"]::after { bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 6px; }
+.arniko-tooltip[data-tooltip-position="bottom"]::after { top: 100%; left: 50%; transform: translateX(-50%); margin-top: 6px; }
+.arniko-tooltip[data-tooltip-position="left"]::after { right: 100%; top: 50%; transform: translateY(-50%); margin-right: 6px; }
+.arniko-tooltip[data-tooltip-position="right"]::after { left: 100%; top: 50%; transform: translateY(-50%); margin-left: 6px; }
+.arniko-skeleton {
+  background: linear-gradient(90deg, var(--arniko-bg-subtle) 25%, var(--arniko-bg-shimmer) 50%, var(--arniko-bg-subtle) 75%);
+  background-size: 200% 100%;
+  animation: arniko-shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+@keyframes arniko-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.arniko-skeleton-card {
+  background: var(--arniko-bg-surface); border: 1px solid var(--arniko-border); border-radius: 8px; padding: 20px;
+}
+.arniko-alert {
+  display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+  border-radius: 8px; font-size: 14px;
+}
+.arniko-alert-icon { font-size: 16px; flex-shrink: 0; }
+.arniko-alert-message { flex: 1; }
+.arniko-alert-info { background: var(--arniko-info-bg); border: 1px solid var(--arniko-info-border); color: var(--arniko-info); }
+.arniko-alert-success { background: var(--arniko-success-bg); border: 1px solid var(--arniko-success-border); color: var(--arniko-success); }
+.arniko-alert-warning { background: var(--arniko-warning-bg); border: 1px solid var(--arniko-warning-border); color: var(--arniko-warning); }
+.arniko-alert-error { background: var(--arniko-error-bg); border: 1px solid var(--arniko-error-border); color: var(--arniko-error); }
+.arniko-alertpanel {
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 11px;
+}
+.arniko-alertpanel-header {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 12px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--arniko-border-light);
+}
+.arniko-alertpanel-header-icon { font-size: 14px; }
+.arniko-alertpanel-header-title {
+  font-size: 11px; font-weight: 700; color: #5d8aa8;
+  text-transform: uppercase; letter-spacing: 1.5px;
+}
+.arniko-alertpanel-list {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.arniko-alertpanel-allclear {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px;
+  background: rgba(16,185,129,0.06);
+  border: 1px solid rgba(16,185,129,0.15);
+  border-radius: 8px;
+}
+.arniko-alertpanel-allclear-icon { font-size: 16px; }
+.arniko-alertpanel-allclear-text {
+  color: var(--arniko-success); font-weight: 600; font-size: 12px;
+}
+.arniko-alertpanel-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 12px; border-radius: 6px;
+  border: 1px solid; font-size: 11px;
+  transition: background 0.2s ease;
+}
+.arniko-alertpanel-critical {
+  background: var(--arniko-error-bg);
+  border-color: var(--arniko-error-border);
+}
+.arniko-alertpanel-warning {
+  background: var(--arniko-warning-bg);
+  border-color: var(--arniko-warning-border);
+}
+.arniko-alertpanel-info {
+  background: rgba(0,242,255,0.04);
+  border-color: rgba(0,242,255,0.15);
+}
+.arniko-alertpanel-icon { font-size: 14px; margin-top: 1px; }
+.arniko-alertpanel-content {
+  flex: 1; display: flex; flex-direction: column; gap: 2px;
+}
+.arniko-alertpanel-title {
+  font-weight: 700; color: var(--arniko-text-primary); font-size: 11px;
+}
+.arniko-alertpanel-message { color: #8ba3b8; font-size: 10px; }
+.arniko-alertpanel-time {
+  font-size: 9px; color: #3a5068;
+  font-family: 'JetBrains Mono', monospace;
+  min-width: 56px; text-align: right;
+}
+.arniko-toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  z-index: 9999; padding: 10px 20px; border-radius: 6px;
+  font-size: 13px; font-weight: 600;
+  box-shadow: 0 4px 12px var(--arniko-shadow-overlay); white-space: nowrap;
+}
+.arniko-toast-info { background: var(--arniko-info); color: var(--arniko-white); }
+.arniko-toast-success { background: var(--arniko-success); color: var(--arniko-white); }
+.arniko-toast-warning { background: var(--arniko-warning); color: var(--arniko-white); }
+.arniko-toast-error { background: var(--arniko-error); color: var(--arniko-white); }
+.arniko-progress-ring {
+  display: inline-flex; align-items: center; justify-content: center;
+  position: relative;
+}
+.arniko-ring-svg {
+  transform: rotate(-90deg);
+  filter: drop-shadow(0 0 8px var(--arniko-accent-glow));
+}
+.arniko-ring-bg {
+  fill: none;
+}
+.arniko-ring-value {
+  fill: none;
+  transition: stroke-dashoffset 0.8s ease-out;
+}
+.arniko-ring-text {
+  position: absolute; display: flex; flex-direction: column;
+  align-items: center; gap: 2px;
+}
+.arniko-ring-percent {
+  font-size: 32px; font-weight: 900; color: var(--arniko-text-primary); letter-spacing: -1px;
+}
+.arniko-ring-value {
+  font-size: 24px; font-weight: 900; color: var(--arniko-text-primary);
+}
+.arniko-ring-label {
+  font-size: 10px; color: var(--arniko-text-muted); letter-spacing: 1.5px;
+  text-transform: uppercase; font-weight: 700;
+}
+.arniko-bar-chart {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.arniko-bar-chart-empty {
+  font-size: 11px; color: var(--arniko-text-muted); padding: 16px 0;
+  font-family: monospace; text-align: center;
+}
+.arniko-bar-chart-row {
+  display: flex; align-items: center; gap: 10px; font-size: 11px;
+  font-family: monospace;
+}
+.arniko-bar-chart-label {
+  min-width: 64px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--arniko-text-secondary);
+}
+.arniko-bar-chart-track {
+  flex: 1; height: 8px; background: rgba(255,255,255,0.06);
+  border-radius: 4px; overflow: hidden; min-width: 80px;
+}
+.arniko-bar-chart-fill {
+  height: 100%; border-radius: 4px; transition: width 0.5s ease-out;
+}
+.arniko-bar-chart-value {
+  min-width: 40px; text-align: right; font-weight: 700; font-size: 11px;
+}
+.arniko-shortcut-overlay {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(6,9,14,0.85); display: flex;
+  justify-content: center; align-items: center;
+  z-index: 9500; backdrop-filter: blur(4px);
+}
+.arniko-shortcut-modal {
+  background: rgba(12,18,28,0.95);
+  border: 1px solid rgba(0,242,255,0.2); border-radius: 12px;
+  padding: 24px; min-width: 420px; max-width: 560px;
+  box-shadow: 0 8px 48px rgba(0,0,0,0.5);
+}
+.arniko-shortcut-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 16px; padding-bottom: 12px;
+  border-bottom: 1px solid var(--arniko-border-light);
+}
+.arniko-shortcut-title {
+  font-size: 14px; font-weight: 700; color: var(--arniko-text-primary); letter-spacing: 1px;
+}
+.arniko-shortcut-close {
+  font-size: 14px; color: var(--arniko-text-muted); cursor: pointer;
+  padding: 4px 8px; border-radius: 4px; transition: color 0.2s ease;
+}
+.arniko-shortcut-close:hover { color: var(--arniko-error); }
+.arniko-shortcut-close:focus-visible {
+  outline: none; box-shadow: var(--arniko-focus-ring); border-radius: 4px;
+}
+.arniko-shortcut-body {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.arniko-shortcut-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 12px; background: rgba(8,14,24,0.6); border-radius: 6px;
+  font-size: 12px; transition: background 0.2s ease;
+}
+.arniko-shortcut-row:hover { background: rgba(0,242,255,0.04); }
+.arniko-shortcut-keys {
+  font-family: monospace; font-weight: 700; color: var(--arniko-cyan);
+  background: rgba(0,242,255,0.08); padding: 2px 8px;
+  border-radius: 4px; font-size: 11px;
+  border: 1px solid var(--arniko-border-accent);
+}
+.arniko-shortcut-action { color: var(--arniko-text-secondary); font-size: 12px; }
+.arniko-shortcut-footer {
+  font-size: 10px; color: var(--arniko-text-muted); text-align: center;
+  margin-top: 16px; padding-top: 12px;
+  border-top: 1px solid var(--arniko-border-light);
+}
+.arniko-theme-toggle {
+  font-size: 10px; font-weight: 700; font-family: monospace;
+  cursor: pointer; padding: 5px 10px; border-radius: 5px;
+  background: rgba(0,242,255,0.06);
+  border: 1px solid var(--arniko-border-accent); color: var(--arniko-cyan);
+  transition: background 0.2s ease, transform 0.2s ease;
+  user-select: none; letter-spacing: 0.5px;
+}
+.arniko-theme-toggle:hover {
+  background: rgba(0,242,255,0.12); transform: scale(1.05);
+}
+.arniko-theme-toggle:focus-visible {
+  outline: none; box-shadow: var(--arniko-focus-ring);
+}
+.arniko-splash-overlay {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  background: var(--arniko-splash-bg); display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
+  z-index: 10000; transition: opacity 0.8s cubic-bezier(0.4,0,0.2,1);
+  font-family: 'Inter', sans-serif;
+}
+.arniko-splash-container {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center; width: 100%; max-width: 480px; padding: 32px;
+}
+.arniko-splash-logo-box {
+  position: relative; width: 120px; height: 120px;
+  margin-bottom: 28px; display: flex;
+  justify-content: center; align-items: center;
+}
+.arniko-splash-pulse-ring {
+  position: absolute; width: 110px; height: 110px;
+  border-radius: 50%; border: 2px solid rgba(0,242,255,0.4);
+  animation: arniko-ring-pulse 2s cubic-bezier(0.16,1,0.3,1) infinite;
+}
+@keyframes arniko-ring-pulse {
+  0% { transform: scale(0.85); opacity: 0.8; }
+  100% { transform: scale(1.3); opacity: 0; }
+}
+.arniko-splash-title {
+  font-size: 26px; font-weight: 900; letter-spacing: 4px;
+  color: var(--arniko-white); margin-bottom: 8px;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+.arniko-splash-title span {
+  color: var(--arniko-cyan); text-shadow: 0 0 10px rgba(0,242,255,0.3);
+}
+.arniko-splash-subtitle {
+  font-size: 11px; font-weight: 500; letter-spacing: 2px;
+  color: var(--arniko-text-muted); text-transform: uppercase; margin-bottom: 36px;
+}
+.arniko-splash-progress-wrapper {
+  width: 100%; display: flex; flex-direction: column;
+  align-items: center; gap: 8px; margin-bottom: 24px;
+}
+.arniko-splash-progress-track {
+  width: 100%; height: 4px; background: rgba(255,255,255,0.05);
+  border-radius: 2px; overflow: hidden;
+}
+.arniko-splash-progress-fill {
+  height: 100%; background: linear-gradient(90deg, #00b4d8, var(--arniko-cyan));
+  border-radius: 2px; box-shadow: 0 0 8px rgba(0,242,255,0.5);
+  transition: width 0.3s ease;
+}
+.arniko-splash-progress-pct {
+  font-family: monospace; font-size: 12px; color: var(--arniko-cyan);
+  font-weight: 700; letter-spacing: 1px;
+}
+.arniko-splash-status {
+  font-size: 12px; color: var(--arniko-text-secondary); min-height: 18px;
+  font-family: monospace; letter-spacing: 0.5px;
+}
+.arniko-svgbar-chart {
+  background: var(--arniko-bg-surface); border: 1px solid var(--arniko-border); border-radius: 8px;
+  padding: 20px;
+}
+.arniko-svgbar-header {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 12px;
+}
+.arniko-svgbar-icon {
+  font-size: 14px;
+}
+.arniko-svgbar-title {
+  font-size: 13px; color: var(--arniko-text-muted); text-transform: uppercase;
+  letter-spacing: 0.5px; font-weight: 500;
+}
+.arniko-svgbar-svg {
+  width: 100%;
+}
+.arniko-svgbar-label {
+  font-size: 12px; font-family: monospace;
+}
+.arniko-svgbar-value {
+  font-size: 11px; font-family: monospace; font-weight: 700;
+}
+.arniko-svgbar-empty {
+  font-size: 11px; color: var(--arniko-text-muted); padding: 16px 0;
+  font-family: monospace; text-align: center;
+}
+.arniko-linechart {
+  background: var(--arniko-bg-surface); border: 1px solid var(--arniko-border); border-radius: 8px;
+  padding: 20px;
+}
+.arniko-linechart-header {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 12px;
+}
+.arniko-linechart-icon {
+  font-size: 14px;
+}
+.arniko-linechart-title {
+  font-size: 13px; color: var(--arniko-text-muted); text-transform: uppercase;
+  letter-spacing: 0.5px; font-weight: 500;
+}
+.arniko-linechart-svg {
+  width: 100%;
+}
+.arniko-linechart-empty {
+  font-size: 11px; color: var(--arniko-text-muted); padding: 16px 0;
+  font-family: monospace; text-align: center;
+}
+.arniko-sparkline {
+  display: block;
+}
+.arniko-feed {
+  background: var(--arniko-bg-surface);
+  border: 1px solid var(--arniko-border);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 200px;
+  max-height: 300px;
+}
+.arniko-feed-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--arniko-border-light);
+}
+.arniko-feed-header-icon {
+  font-size: 14px;
+}
+.arniko-feed-header-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--arniko-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+.arniko-feed-body {
+  flex: 1;
+  overflow-y: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  margin-top: 10px;
+}
+.arniko-feed-item {
+  margin-bottom: 8px;
+  border-left: 2px solid;
+  padding-left: 8px;
+  line-height: 1.4;
+  transition: background 0.2s ease;
+  border-radius: 0 4px 4px 0;
+}
+.arniko-feed-item:hover {
+  background: var(--arniko-bg-hover);
+}
+.arniko-feed-item.critical { border-left-color: var(--arniko-error); }
+.arniko-feed-item.warning { border-left-color: var(--arniko-warning); }
+.arniko-feed-item.fixed { border-left-color: var(--arniko-success); }
+.arniko-feed-item.info { border-left-color: var(--arniko-cyan); }
+.arniko-feed-timestamp {
+  color: var(--arniko-text-muted);
+  margin-right: 6px;
+  font-size: 10px;
+}
+.arniko-feed-level {
+  font-weight: 700;
+  margin-right: 6px;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.arniko-feed-level.critical { color: var(--arniko-error); background: var(--arniko-error-bg); }
+.arniko-feed-level.warning { color: var(--arniko-warning); background: var(--arniko-warning-bg); }
+.arniko-feed-level.fixed { color: var(--arniko-success); background: var(--arniko-success-bg); }
+.arniko-feed-level.info { color: var(--arniko-cyan); background: rgba(0,242,255,0.1); }
+.arniko-feed-text {
+  color: var(--arniko-text-secondary);
+}
+.arniko-feed-empty {
+  font-size: 11px;
+  color: var(--arniko-text-muted);
+  padding: 12px 0;
+  font-family: 'JetBrains Mono', monospace;
+}
+.arniko-filetree {
+  background: var(--arniko-bg-surface);
+  border: 1px solid var(--arniko-border);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+.arniko-filetree-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--arniko-border-light);
+}
+.arniko-filetree-header-icon {
+  font-size: 14px;
+}
+.arniko-filetree-header-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--arniko-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+.arniko-filetree-root {
+  font-size: 9px;
+  color: var(--arniko-text-subtle);
+  font-family: 'JetBrains Mono', monospace;
+  margin-left: auto;
+}
+.arniko-filetree-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+.arniko-filetree-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.arniko-filetree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  font-size: 11px;
+}
+.arniko-filetree-row:hover {
+  background: var(--arniko-bg-hover);
+}
+.arniko-filetree-row.arniko-filetree-selected {
+  background: rgba(0, 242, 255, 0.08);
+  border: 1px solid var(--arniko-border-accent);
+}
+.arniko-filetree-dir {
+  color: var(--arniko-text-muted);
+  font-weight: 700;
+}
+.arniko-filetree-file {
+  color: var(--arniko-text-secondary);
+}
+.arniko-filetree-test {
+  color: var(--arniko-success);
+}
+.arniko-filetree-test .arniko-filetree-name {
+  font-weight: 600;
+}
+.arniko-filetree-indent {
+  white-space: pre;
+  color: var(--arniko-text-subtle);
+}
+.arniko-filetree-icon {
+  font-size: 12px;
+}
+.arniko-filetree-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.arniko-filetree-preview {
+  background: var(--arniko-bg-surface);
+  border: 1px solid var(--arniko-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.arniko-filetree-preview-header {
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--arniko-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--arniko-border);
+}
+.arniko-filetree-preview-body {
+  padding: 8px 10px;
+  font-size: 10px;
+  color: var(--arniko-text-secondary);
+  line-height: 1.5;
+  max-height: 160px;
+  overflow-y: auto;
+  margin: 0;
+}
+.arniko-filetree-empty {
+  font-size: 11px;
+  color: var(--arniko-text-muted);
+  padding: 16px 0;
+  font-family: 'JetBrains Mono', monospace;
+  text-align: center;
+}
+.arniko-empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 48px 24px; text-align: center; color: var(--arniko-text-secondary);
+}
+.arniko-empty-icon { font-size: 3rem; margin-bottom: 16px; opacity: 0.5; }
+.arniko-empty-title {
+  font-size: 1.125rem; font-weight: 600; color: var(--arniko-text-primary);
+  margin-bottom: 8px;
+}
+.arniko-empty-desc { font-size: 0.875rem; color: var(--arniko-text-muted); margin-bottom: 16px; max-width: 320px; }
+.arniko-empty-action { margin-top: 8px; }
+.arniko-panel {
+  border: 1px solid var(--arniko-border); border-radius: 0.75rem; overflow: hidden;
+  background: var(--arniko-bg-surface);
+}
+.arniko-panel-header {
+  display: flex; align-items: center; gap: 8px; padding: 12px 16px;
+  border-bottom: 1px solid var(--arniko-border); font-weight: 600;
+  font-size: 0.875rem; color: var(--arniko-text-primary);
+}
+.arniko-panel-icon { font-size: 1rem; }
+.arniko-panel-title { flex: 1; }
+.arniko-panel-close {
+  background: none; border: none; font-size: 1.25rem; cursor: pointer;
+  color: var(--arniko-text-muted); padding: 0 4px; line-height: 1;
+}
+.arniko-panel-close:hover { color: var(--arniko-text-primary); }
+.arniko-panel-close:focus-visible {
+  outline: none; box-shadow: var(--arniko-focus-ring); border-radius: 2px;
+}
+.arniko-panel-body { padding: 16px; font-size: 0.875rem; color: var(--arniko-text-body); }
+.arniko-table-wrap { overflow-x: auto; width: 100%; }
+.arniko-table {
+  width: 100%; border-collapse: collapse;
+  font-size: 13px; color: var(--arniko-text-body);
+}
+.arniko-table th {
+  text-align: left; padding: 8px 12px;
+  background: var(--arniko-bg-subtle);
+  color: var(--arniko-text-secondary);
+  font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--arniko-border);
+  white-space: nowrap;
+}
+.arniko-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--arniko-border);
+  color: var(--arniko-text-body);
+}
+.arniko-table-striped tbody tr:nth-child(even) td { background: var(--arniko-bg-subtle); }
+.arniko-table-compact th, .arniko-table-compact td { padding: 4px 8px; }
+.arniko-table tbody tr:hover td { background: var(--arniko-bg-hover); }
+.arniko-table-empty { padding: 24px; text-align: center; color: var(--arniko-text-muted); font-size: 13px; }
+.arniko-tabs {}
+.arniko-tabs-bar {
+  display: flex; border-bottom: 1px solid var(--arniko-border);
+  gap: 0; overflow-x: auto;
+}
+.arniko-tab-btn {
+  padding: 8px 16px; background: none; border: none; outline: none;
+  color: var(--arniko-text-muted); cursor: pointer;
+  font-size: 13px; font-weight: 500; white-space: nowrap;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.arniko-tab-btn:hover { color: var(--arniko-text-body); }
+.arniko-tab-btn[aria-selected="true"] {
+  color: var(--arniko-accent); border-bottom-color: var(--arniko-accent);
+}
+.arniko-tab-panel { padding: 12px 0; }
+.arniko-tag {
+  display: inline-flex; align-items: center;
+  padding: 2px 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 500; white-space: nowrap;
+}
+.arniko-tag-default { background: var(--arniko-bg-subtle); color: var(--arniko-text-secondary); border: 1px solid var(--arniko-border); }
+.arniko-tag-success { background: var(--arniko-success-bg); color: var(--arniko-success); border: 1px solid var(--arniko-success-border); }
+.arniko-tag-warning { background: var(--arniko-warning-bg); color: var(--arniko-warning); border: 1px solid var(--arniko-warning-border); }
+.arniko-tag-error   { background: var(--arniko-error-bg);   color: var(--arniko-error);   border: 1px solid var(--arniko-error-border); }
+.arniko-tag-info    { background: var(--arniko-info-bg);    color: var(--arniko-info);    border: 1px solid var(--arniko-info-border); }
+/* ── Reduced Motion ──────────────────────────
+   Disables all CSS animations, transitions, and smooth scrolling
+   when the user has prefers-reduced-motion: reduce enabled.
+   Uses 0.01ms (not 0s) so transitionend/animationend events still fire. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
