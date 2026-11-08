@@ -74,13 +74,60 @@ pub use edit::{StyleEditError, remove_style_property, set_style_property};
 #[derive(Clone, Debug, Default)]
 pub struct Styles {
     entries: Vec<Option<ComputedStyle>>,
+    generated: Vec<Generated>,
 }
 
 impl Styles {
-    /// The computed style of `id`, if it is an element.
+    /// The computed style of `id`, if it is an element — or a generated
+    /// [`Generated::element`].
     pub fn get(&self, id: NodeId) -> Option<&ComputedStyle> {
         self.entries.get(id.index()).and_then(Option::as_ref)
     }
+
+    /// The `::before`/`::after` boxes with `content`, in document order
+    /// (each element's `::before` before its `::after`).
+    pub fn generated(&self) -> &[Generated] {
+        &self.generated
+    }
+}
+
+/// Which pseudo-element a [`Generated`] box is.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PseudoElement {
+    /// `::before`: the element's first child.
+    Before,
+    /// `::after`: the element's last child.
+    After,
+}
+
+impl PseudoElement {
+    /// The name selectors use, without colons.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Before => "before",
+            Self::After => "after",
+        }
+    }
+}
+
+/// A `::before`/`::after` box that is not in the DOM.
+///
+/// Layout inserts it into a copy of the document as an element holding one
+/// text node. Its ids are reserved: they are the ids that copy will hand
+/// out (see [`noonoo_dom::Tree::upcoming_id`]), so [`Styles::get`] finds
+/// the element's style.
+#[derive(Clone, PartialEq, Debug)]
+pub struct Generated {
+    /// The element the pseudo-element belongs to.
+    pub owner: NodeId,
+    /// `::before` or `::after`.
+    pub pseudo: PseudoElement,
+    /// The reserved id of the generated element.
+    pub element: NodeId,
+    /// The reserved id of its text node.
+    pub text: NodeId,
+    /// The `content` text (strings and `attr()` values).
+    pub content: String,
 }
 
 /// The viewport that viewport-relative units (`vw`, `vh`, `vmin`, `vmax`)
@@ -144,9 +191,8 @@ pub fn compute_interactive(
     viewport: Viewport,
     interaction: Interaction,
 ) -> Styles {
-    Styles {
-        entries: cascade::compute(document, stylesheets, viewport, interaction),
-    }
+    let (entries, generated) = cascade::compute(document, stylesheets, viewport, interaction);
+    Styles { entries, generated }
 }
 
 /// The version of this crate, taken from the workspace.
@@ -271,6 +317,101 @@ mod tests {
         assert!(get("c").box_shadow.is_empty());
         // One length is not a shadow: the declaration is dropped.
         assert!(get("d").box_shadow.is_empty());
+    }
+
+    fn generated(html: &str, css: &str, interaction: Interaction) -> (Document, Styles) {
+        let doc = noonoo_html::parse(html);
+        let sheet = Stylesheet::parse(css).unwrap();
+        let styles = compute_interactive(&doc, &[sheet], Viewport::DEFAULT, interaction);
+        (doc, styles)
+    }
+
+    #[test]
+    fn before_and_after_get_content_and_a_style_inherited_from_their_element() {
+        let (doc, styles) = generated(
+            r#"<p id="p" data-x="X">mid</p><div id="d"></div>"#,
+            r#"p { font-size: 20px; color: blue }
+               p::before { content: "a" attr(data-x) "b" attr(missing); color: red }
+               p::after { content: "!"; --c: lime; background: var(--c) }
+               div::before { color: red }"#,
+            Interaction::default(),
+        );
+        let p = doc.get_element_by_id("p").unwrap();
+        let generated = styles.generated();
+        assert_eq!(generated.len(), 2, "{generated:?}");
+        let (before, after) = (&generated[0], &generated[1]);
+        assert_eq!((before.owner, before.pseudo), (p, PseudoElement::Before));
+        assert_eq!((after.owner, after.pseudo), (p, PseudoElement::After));
+        assert_eq!(before.content, "aXb");
+        assert_eq!(after.content, "!");
+        let before_style = styles.get(before.element).unwrap();
+        assert_eq!(before_style.color, Color::rgb(255, 0, 0));
+        assert_eq!(before_style.font_size, 20.0);
+        assert_eq!(before_style.display, Display::Inline);
+        let after_style = styles.get(after.element).unwrap();
+        assert_eq!(after_style.color, Color::rgb(0, 0, 255));
+        assert_eq!(after_style.background_color, Color::rgb(0, 255, 0));
+        // The ids are the next ones the document would hand out.
+        assert_eq!(before.element, doc.tree().upcoming_id(0));
+        assert_eq!(before.text, doc.tree().upcoming_id(1));
+        assert_eq!(after.element, doc.tree().upcoming_id(2));
+        // The element itself is unchanged.
+        assert_eq!(styles.get(p).unwrap().color, Color::rgb(0, 0, 255));
+    }
+
+    #[test]
+    fn no_content_means_no_pseudo_element() {
+        let (_, styles) = generated(
+            r#"<p>a</p><img alt="x"><p class="n">b</p>"#,
+            r#"p::before { color: red } img::before { content: "x" }
+               .n::after { content: "x" } .n::after { content: none }
+               p { content: "not on elements" }"#,
+            Interaction::default(),
+        );
+        assert!(styles.generated().is_empty(), "{:?}", styles.generated());
+    }
+
+    #[test]
+    fn hover_reaches_a_pseudo_element_through_its_element() {
+        let html = r#"<a id="a" data-tip="hi">x</a>"#;
+        let css = r#"a::after { content: attr(data-tip); opacity: 0 }
+                     a:hover::after { opacity: 1 }"#;
+        let (doc, styles) = generated(html, css, Interaction::default());
+        assert_eq!(
+            styles.get(styles.generated()[0].element).unwrap().opacity,
+            0.0
+        );
+        let a = doc.get_element_by_id("a").unwrap();
+        let (_, styles) = generated(
+            html,
+            css,
+            Interaction {
+                hovered: Some(a),
+                ..Interaction::default()
+            },
+        );
+        assert_eq!(
+            styles.get(styles.generated()[0].element).unwrap().opacity,
+            1.0
+        );
+    }
+
+    #[test]
+    fn current_color_is_the_elements_color_in_any_property() {
+        let (doc, styles) = styled(
+            r#"<div id="a"></div><div id="b"><p id="c"></p></div>"#,
+            "#a { background: currentColor; border: 1px solid currentcolor;
+                  box-shadow: 0 0 1px currentColor; color: red }
+             #b { color: blue } #c { color: currentColor; background-color: currentColor }",
+        );
+        let get = |id: &str| styles.get(doc.get_element_by_id(id).unwrap()).unwrap();
+        let red = Color::rgb(255, 0, 0);
+        assert_eq!(get("a").background_color, red);
+        assert_eq!(get("a").border_color.top, red);
+        assert_eq!(get("a").box_shadow[0].color, Some(red));
+        // On `color` itself, currentColor is the inherited colour.
+        assert_eq!(get("c").color, Color::rgb(0, 0, 255));
+        assert_eq!(get("c").background_color, Color::rgb(0, 0, 255));
     }
 
     #[test]

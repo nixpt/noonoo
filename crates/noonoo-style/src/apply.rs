@@ -166,6 +166,33 @@ fn border_width_px(values: &[Value], font_size: f32, viewport: Viewport) -> Opti
 
 // --- applying a property ---------------------------------------------------
 
+fn has_current_color(value: &Value) -> bool {
+    match value {
+        Value::Keyword(k) => k.eq_ignore_ascii_case("currentcolor"),
+        Value::Function { args, .. } | Value::Group(args) => args.iter().any(has_current_color),
+        _ => false,
+    }
+}
+
+fn with_current_color(value: &Value, color: noonoo_css::Color) -> Value {
+    match value {
+        Value::Keyword(k) if k.eq_ignore_ascii_case("currentcolor") => Value::Color(color),
+        Value::Function { name, args } => Value::Function {
+            name: name.clone(),
+            args: args
+                .iter()
+                .map(|arg| with_current_color(arg, color))
+                .collect(),
+        },
+        Value::Group(args) => Value::Group(
+            args.iter()
+                .map(|arg| with_current_color(arg, color))
+                .collect(),
+        ),
+        other => other.clone(),
+    }
+}
+
 pub(crate) fn apply(
     style: &mut ComputedStyle,
     property: &Property,
@@ -175,6 +202,18 @@ pub(crate) fn apply(
     viewport: Viewport,
     parent: Option<&ComputedStyle>,
 ) {
+    // `currentColor` is this element's `color` (applied first by the
+    // cascade); on `color` itself that is the inherited colour.
+    let substituted;
+    let values = if values.iter().any(has_current_color) {
+        substituted = values
+            .iter()
+            .map(|value| with_current_color(value, style.color))
+            .collect::<Vec<_>>();
+        &substituted[..]
+    } else {
+        values
+    };
     // Global CSS-wide keywords: `inherit` / `initial` / `unset`.
     if let [Value::Keyword(keyword)] = values {
         match keyword.to_ascii_lowercase().as_str() {

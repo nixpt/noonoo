@@ -155,6 +155,8 @@ pub enum Property {
     Transform,
     /// `box-shadow`.
     BoxShadow,
+    /// `content` (meaningful on `::before`/`::after`).
+    Content,
     /// `opacity`.
     Opacity,
     /// `overflow-x`.
@@ -253,6 +255,7 @@ impl Property {
             "text-transform" => Self::TextTransform,
             "transform" => Self::Transform,
             "box-shadow" => Self::BoxShadow,
+            "content" => Self::Content,
             "opacity" => Self::Opacity,
             "overflow-x" => Self::OverflowX,
             "overflow-y" => Self::OverflowY,
@@ -346,6 +349,7 @@ impl Property {
             Self::TextTransform => "text-transform",
             Self::Transform => "transform",
             Self::BoxShadow => "box-shadow",
+            Self::Content => "content",
             Self::Opacity => "opacity",
             Self::OverflowX => "overflow-x",
             Self::OverflowY => "overflow-y",
@@ -675,6 +679,14 @@ fn expand_flex(values: Vec<Value>, important: bool) -> Vec<Declaration> {
     }
 }
 
+/// A keyword that names a colour: `transparent`, `currentColor`, or a
+/// named colour.
+fn is_color_keyword(name: &str) -> bool {
+    name.eq_ignore_ascii_case("transparent")
+        || name.eq_ignore_ascii_case("currentcolor")
+        || Color::named(name).is_some()
+}
+
 /// Classify the `<width> <style> <color>` tokens of a border shorthand.
 fn classify_border(values: Vec<Value>) -> (Option<Value>, Option<Value>, Option<Value>) {
     let mut width = None;
@@ -684,7 +696,7 @@ fn classify_border(values: Vec<Value>) -> (Option<Value>, Option<Value>, Option<
         if value.as_length().is_some() || value.is_calc() {
             width = Some(value);
         } else if let Some(name) = value.as_keyword() {
-            if Color::named(name).is_some() {
+            if is_color_keyword(name) {
                 color = Some(value);
             } else if is_border_style(name) {
                 style = Some(value);
@@ -790,10 +802,9 @@ fn expand_background(values: Vec<Value>, important: bool) -> Vec<Declaration> {
             if value.as_color().is_some() {
                 Some(value.clone())
             } else {
-                value.as_keyword().and_then(|name| {
-                    (name.eq_ignore_ascii_case("transparent") || Color::named(name).is_some())
-                        .then(|| value.clone())
-                })
+                value
+                    .as_keyword()
+                    .and_then(|name| is_color_keyword(name).then(|| value.clone()))
             }
         })
         .unwrap_or_else(|| Value::Keyword("transparent".into()));
