@@ -166,6 +166,20 @@ impl LayoutBox {
 /// line like a word but is a box of its own, with its own width, height,
 /// padding, border, and interior layout (`inline-block`, `inline-flex`,
 /// `inline-grid`, and through the UA sheet, form controls and images).
+/// Whether `element` is a single-line text field: an `<input>` whose type
+/// takes typed text (the default type is `text`).
+fn is_text_field(element: &noonoo_dom::ElementData) -> bool {
+    element.name == "input"
+        && matches!(
+            element
+                .attr("type")
+                .map(str::to_ascii_lowercase)
+                .as_deref()
+                .unwrap_or("text"),
+            "text" | "search" | "email" | "url" | "tel" | "password" | "number"
+        )
+}
+
 pub(crate) fn is_atomic_inline(display: Display) -> bool {
     matches!(
         display,
@@ -521,9 +535,12 @@ impl Ctx<'_> {
     /// (`<img alt>`, `<input value>`), if any.
     pub(crate) fn placeholder(&self, node: NodeId) -> Option<String> {
         let element = self.document.element(node)?;
+        if !self.document.tree().children(node).is_empty() {
+            return None;
+        }
         let text = element.placeholder_text();
-        (!text.is_empty() && self.document.tree().children(node).is_empty())
-            .then(|| text.to_owned())
+        // A text field is a line tall even when it's empty.
+        (!text.is_empty() || is_text_field(element)).then(|| text.to_owned())
     }
 
     /// Lay out a replaced element's placeholder as its content: one line of
@@ -543,6 +560,9 @@ impl Ctx<'_> {
         } else {
             self.shaper.line_height(request, style.font_size)
         };
+        if text.is_empty() {
+            return (Vec::new(), height);
+        }
         let width = self.shaper.advance(text, request, style.font_size);
         let index = self.push(LayoutBox {
             node: None,

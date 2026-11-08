@@ -1431,3 +1431,23 @@ fn text_between_table_parts_is_skipped() {
     assert_eq!(text_boxes(&doc, &tree, "a").len(), 1);
     assert_eq!(text_boxes(&doc, &tree, "b").len(), 1);
 }
+
+/// An empty text input is still one line tall, as in a browser; a
+/// checkbox isn't a text field and gets no line.
+#[test]
+fn an_empty_text_input_is_one_line_tall() {
+    let (doc, tree) = page(
+        r#"<p><input id="i"><input id="e" type="email" value=""><input id="c" type="checkbox"></p>"#,
+        "input { padding: 8px 12px; border: 1px solid black; line-height: 20px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "i")).unwrap().rect.height, 38.0);
+    assert_eq!(tree.get(id(&doc, "e")).unwrap().rect.height, 38.0);
+    assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.height, 18.0);
+    assert!(
+        tree.boxes()
+            .iter()
+            .all(|b| b.kind != BoxKind::Text || b.text.as_deref() != Some("")),
+        "no empty text box"
+    );
+}
