@@ -39,10 +39,10 @@ Phase 4). Their starting point, on the zorro box (release build):
 
 | Benchmark | Start | Now | What moved it |
 | --- | --- | --- | --- |
-| `ui/style` | 78.7 ms | 25.5 ms | rule index |
-| `ui/layout` | 6.1 ms | 6.4 ms | |
+| `ui/style` | 78.7 ms | 13.4 ms | rule index (25.5), shared custom properties |
+| `ui/layout` | 6.1 ms | 5.5 ms | |
 | `ui/paint` | 0.36 ms | 0.36 ms | |
-| `ui/restyle-one` | 78.9 ms (a full restyle) | 27.5 ms | rule index |
+| `ui/restyle-one` | 78.9 ms (a full restyle) | 13.5 ms | as `ui/style` |
 | `nested/flex-256` | 88.8 ms (32: 0.67 ms) | | |
 | `nested/grid-256` | 112.6 ms (32: 3.7 ms) | | |
 

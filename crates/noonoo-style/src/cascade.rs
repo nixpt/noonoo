@@ -6,6 +6,7 @@
 //! applies inheritance and initial values into a [`ComputedStyle`].
 
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::{Generated, Interaction, PseudoElement};
 use noonoo_css::value::Value;
@@ -268,7 +269,8 @@ fn winners_for(
 /// The per-element results a child inherits from.
 struct Resolved {
     style: ComputedStyle,
-    custom: CustomProperties,
+    /// Shared with the parent unless this element sets one.
+    custom: Rc<CustomProperties>,
     line_height: InheritedLineHeight,
 }
 
@@ -284,7 +286,7 @@ pub(crate) fn compute(
     let index = RuleIndex::new(rules.iter().map(|rule| &rule.selector));
     let mut candidates = Vec::new();
     let mut out: Vec<Option<ComputedStyle>> = vec![None; doc.tree().len()];
-    let mut custom: Vec<CustomProperties> = vec![CustomProperties::new(); doc.tree().len()];
+    let mut custom: Vec<Rc<CustomProperties>> = vec![Rc::default(); doc.tree().len()];
     let mut line_heights: Vec<InheritedLineHeight> =
         vec![InheritedLineHeight::Normal; doc.tree().len()];
     let mut root_font_size = 16.0_f32;
@@ -367,7 +369,7 @@ pub(crate) fn compute(
 fn resolve(
     winners: &HashMap<Property, Candidate>,
     parent: Option<&ComputedStyle>,
-    parent_custom: CustomProperties,
+    parent_custom: Rc<CustomProperties>,
     inherited_line: InheritedLineHeight,
     root_font_size: &mut f32,
     first_element: &mut bool,
@@ -378,10 +380,11 @@ fn resolve(
     // Custom properties inherit, then this element's winners override them.
     // Build the full map *before* substituting, so declaration order within
     // an element does not matter (`color: var(--x); --x: red` works).
+    // The parent's map is shared until this element sets its own.
     let mut props = parent_custom;
     for (property, candidate) in winners {
         if let Property::Custom(name) = property {
-            props.insert(name.clone(), candidate.values.clone());
+            Rc::make_mut(&mut props).insert(name.clone(), candidate.values.clone());
         }
     }
 
