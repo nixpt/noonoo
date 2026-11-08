@@ -192,11 +192,11 @@ fn collect_rows(ctx: &Ctx<'_>, children: &[NodeId]) -> Vec<Row> {
         if ctx.is_hidden(child) || ctx.is_out_of_flow(child) {
             continue;
         }
-        match ctx.style(child).display {
-            Display::TableRow => rows.push(row_of(ctx, child)),
-            Display::TableRowGroup => {
+        match display_of(ctx, child) {
+            Some(Display::TableRow) => rows.push(row_of(ctx, child)),
+            Some(Display::TableRowGroup) => {
                 for grandchild in crate::child_nodes(ctx.document, child) {
-                    if ctx.style(grandchild).display == Display::TableRow {
+                    if display_of(ctx, grandchild) == Some(Display::TableRow) {
                         rows.push(row_of(ctx, grandchild));
                     }
                 }
@@ -212,7 +212,7 @@ fn collect_rows(ctx: &Ctx<'_>, children: &[NodeId]) -> Vec<Row> {
         if ctx.is_hidden(child) || ctx.is_out_of_flow(child) {
             continue;
         }
-        if ctx.style(child).display == Display::TableCell {
+        if display_of(ctx, child) == Some(Display::TableCell) {
             let row = anonymous.get_or_insert_with(Row::default);
             let column = row.cells.iter().map(|cell| cell.span).sum::<usize>();
             row.cells.push(cell_of(ctx, child, column));
@@ -224,11 +224,17 @@ fn collect_rows(ctx: &Ctx<'_>, children: &[NodeId]) -> Vec<Row> {
     rows
 }
 
+/// A node's `display`, or `None` for text, which has no computed style:
+/// whitespace between table parts is text and takes no part in the table.
+fn display_of(ctx: &Ctx<'_>, node: NodeId) -> Option<Display> {
+    ctx.styles.get(node).map(|style| style.display)
+}
+
 fn row_of(ctx: &Ctx<'_>, node: NodeId) -> Row {
     let mut cells = Vec::new();
     let mut column = 0;
     for child in crate::child_nodes(ctx.document, node) {
-        if ctx.is_hidden(child) || ctx.style(child).display != Display::TableCell {
+        if ctx.is_hidden(child) || display_of(ctx, child) != Some(Display::TableCell) {
             continue;
         }
         let cell = cell_of(ctx, child, column);

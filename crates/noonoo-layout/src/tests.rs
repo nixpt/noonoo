@@ -1417,3 +1417,17 @@ fn nested_measured_boxes_lay_out_in_polynomial_time() {
         assert!(boxes >= 60);
     }
 }
+
+/// Indented markup puts whitespace text between table parts. Text has no
+/// computed style, and looking one up used to panic.
+#[test]
+fn text_between_table_parts_is_skipped() {
+    let (doc, tree) = page(
+        "<table>\n  <tbody>\n    <tr>\n      <td>a</td>\n    </tr>\n  </tbody>\n</table>\
+         <table> stray <tr> <td>b</td> </tr> </table>",
+        "",
+        800.0,
+    );
+    assert_eq!(text_boxes(&doc, &tree, "a").len(), 1);
+    assert_eq!(text_boxes(&doc, &tree, "b").len(), 1);
+}
