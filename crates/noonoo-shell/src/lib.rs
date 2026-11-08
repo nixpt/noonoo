@@ -104,6 +104,12 @@ impl Layer {
         &self.engine
     }
 
+    /// The document, to change in place. The change shows after the next
+    /// [`Host::layout`].
+    pub fn engine_mut(&mut self) -> &mut Engine {
+        &mut self.engine
+    }
+
     /// The computed styles (populated by [`Host::layout`]).
     pub fn styles(&self) -> &Styles {
         &self.styles
@@ -522,6 +528,22 @@ mod tests {
         );
         host.layout(&MetricShaper);
         host
+    }
+
+    /// An embedder patches a layer's document (super-surfer's address bar,
+    /// tabs, progress) and the next layout paints the change.
+    #[test]
+    fn a_layers_document_can_be_changed_in_place() {
+        let mut host = host();
+        let engine = host.layers_mut()[0].engine_mut();
+        let bar = engine.dom().get_element_by_id("bar").unwrap();
+        let text = engine.dom().tree().children(bar)[0];
+        engine.dom_mut().mutate().set_text(text, "patched").unwrap();
+        host.layout(&MetricShaper);
+        let painted = host.layers()[0].commands().commands().iter().any(|command| {
+            matches!(command, noonoo_paint::Command::DrawText { text, .. } if text == "patched")
+        });
+        assert!(painted);
     }
 
     #[test]
