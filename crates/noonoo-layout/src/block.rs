@@ -203,7 +203,10 @@ pub(crate) fn layout_block_children(
 
 /// A word or atomic inline box, ready to be wrapped onto a line.
 struct Item {
-    node: NodeId,
+    /// The node its box reports: a text run's text node, an atomic inline,
+    /// or `None` for a replaced element's placeholder text (its element's
+    /// fragment carries the node).
+    node: Option<NodeId>,
     style_node: NodeId,
     kind: BoxKind,
     text: String,
@@ -216,6 +219,158 @@ struct Item {
     spaced: bool,
     /// Whether it sticks to the item before: no line break between them.
     glued: bool,
+    /// The inline elements it sits in, outermost first.
+    chain: Vec<NodeId>,
+    /// How many of the innermost of `chain` start with it, and end with it.
+    opens: usize,
+    closes: usize,
+    /// The start edges (margin, border, padding) of the elements it opens,
+    /// and the end edges of those it closes: room taken on the line.
+    lead: f32,
+    trail: f32,
+}
+
+impl Item {
+    /// The room it takes on the line, its elements' edges included.
+    fn advance(&self) -> f32 {
+        self.lead + self.width + self.trail
+    }
+}
+
+/// An inline element's margin, border and padding, resolved against the
+/// containing block's `width`.
+struct InlineEdges {
+    margin: Edges<f32>,
+    border: Edges<f32>,
+    padding: Edges<f32>,
+}
+
+impl InlineEdges {
+    fn of(ctx: &Ctx<'_>, node: NodeId, width: f32) -> Self {
+        let style = ctx.style(node);
+        Self {
+            margin: crate::resolve::margins(&style.margin, width),
+            border: crate::resolve::borders(style),
+            padding: crate::resolve::paddings(&style.padding, width),
+        }
+    }
+
+    fn start(&self) -> f32 {
+        self.margin.left + self.border.left + self.padding.left
+    }
+
+    fn end(&self) -> f32 {
+        self.margin.right + self.border.right + self.padding.right
+    }
+}
+
+/// One inline element's stretch of a line: the items it holds there.
+struct Fragment {
+    element: NodeId,
+    /// Its place in its items' element chains.
+    depth: usize,
+    first: usize,
+    last: usize,
+}
+
+/// The fragments of `line`'s inline elements, outermost first among those
+/// starting at the same item.
+fn line_fragments(line: &[Item]) -> Vec<Fragment> {
+    let mut fragments: Vec<Fragment> = Vec::new();
+    for (position, item) in line.iter().enumerate() {
+        for (depth, &element) in item.chain.iter().enumerate() {
+            match fragments
+                .iter_mut()
+                .rev()
+                .find(|fragment| fragment.element == element)
+            {
+                Some(fragment) => fragment.last = position,
+                None => fragments.push(Fragment {
+                    element,
+                    depth,
+                    first: position,
+                    last: position,
+                }),
+            }
+        }
+    }
+    fragments
+}
+
+/// One step of the inline walk: a node to visit, or the end of an inline
+/// element's content.
+enum Step {
+    Visit(NodeId),
+    Exit(NodeId),
+}
+
+/// The state of the inline walk between items.
+#[derive(Default)]
+struct InlineWalk {
+    /// Whether white space came since the last item: a space goes before
+    /// the next one, and the line may break there.
+    spaced: bool,
+    /// CSS Text: a line may break on either side of an atomic inline,
+    /// white space or not. Set after one, for the item that follows.
+    after_atomic: bool,
+    /// The open inline elements, outermost first, each with the number of
+    /// items placed when it opened.
+    chain: Vec<NodeId>,
+    entered_at: Vec<usize>,
+    /// How many of the innermost open elements no item has opened yet.
+    opening: usize,
+    /// Items placed so far, and where the last one is.
+    count: usize,
+    last: Option<(usize, usize)>,
+}
+
+impl InlineWalk {
+    fn enter(&mut self, element: NodeId) {
+        self.chain.push(element);
+        self.entered_at.push(self.count);
+        self.opening += 1;
+    }
+
+    /// Close `element`: the last item inside it ends it, taking its end
+    /// edges; an element with no items never opened.
+    fn exit(&mut self, ctx: &Ctx<'_>, element: NodeId, width: f32, groups: &mut [Vec<Item>]) {
+        self.chain.pop();
+        let entered = self.entered_at.pop().unwrap_or(0);
+        if self.count == entered {
+            self.opening = self.opening.saturating_sub(1);
+            return;
+        }
+        if let Some((group, index)) = self.last
+            && let Some(item) = groups.get_mut(group).and_then(|group| group.get_mut(index))
+        {
+            item.closes += 1;
+            item.trail += InlineEdges::of(ctx, element, width).end();
+        }
+    }
+
+    /// Add `item` inside the open elements, opening those that wait.
+    fn push(
+        &mut self,
+        ctx: &Ctx<'_>,
+        width: f32,
+        groups: &mut [Vec<Item>],
+        mut item: Item,
+        atomic: bool,
+    ) {
+        item.chain = self.chain.clone();
+        item.opens = self.opening;
+        item.lead = self.chain[self.chain.len() - self.opening..]
+            .iter()
+            .map(|&element| InlineEdges::of(ctx, element, width).start())
+            .sum();
+        self.opening = 0;
+        self.spaced = false;
+        self.after_atomic = atomic;
+        let group = groups.len() - 1;
+        groups[group].push(item);
+        self.last = Some((group, groups[group].len() - 1));
+        self.count += 1;
+    }
 }
 
 /// How many of `items` fit on the first line of `width`: greedy breaking at
@@ -229,9 +384,9 @@ fn first_line_len(items: &[Item], space: f32, width: f32) -> usize {
         match clusters.last_mut() {
             Some((count, used)) if index > 0 && item.glued => {
                 *count += 1;
-                *used += gap + item.width;
+                *used += gap + item.advance();
             }
-            _ => clusters.push((1, item.width)),
+            _ => clusters.push((1, item.advance())),
         }
     }
     // Clusters after the first are separated by the space a break replaces
@@ -303,18 +458,19 @@ pub(crate) fn layout_inline_run(
     // fresh line, and an empty group is the blank line between two breaks.
     let mut groups: Vec<Vec<Item>> = vec![Vec::new()];
     let mut had_break = false;
-    // Whether white space came since the last item: a space goes before
-    // the next one, and the line may break there.
-    let mut spaced = false;
-    // CSS Text: a line may break on either side of an atomic inline, white
-    // space or not. Set after one, for the item that follows.
-    let mut after_atomic = false;
-    // The inline content in document order, each node with the inline
-    // element it sits in (`None` at the top). A worklist, not recursion:
-    // deep inline nesting mustn't cost stack per level.
-    let mut stack: Vec<(NodeId, Option<NodeId>)> =
-        nodes.iter().rev().map(|&node| (node, None)).collect();
-    while let Some((node, owner)) = stack.pop() {
+    let mut walk = InlineWalk::default();
+    // The inline content in document order. A worklist, not recursion:
+    // deep inline nesting mustn't cost stack per level. An element's `Exit`
+    // follows its content, closing it on the last item it holds.
+    let mut stack: Vec<Step> = nodes.iter().rev().map(|&node| Step::Visit(node)).collect();
+    while let Some(step) = stack.pop() {
+        let node = match step {
+            Step::Visit(node) => node,
+            Step::Exit(element) => {
+                walk.exit(ctx, element, width, &mut groups);
+                continue;
+            }
+        };
         if is_display_none(ctx, node) {
             continue;
         }
@@ -322,17 +478,18 @@ pub(crate) fn layout_inline_run(
             float::place(ctx, node, x, width, y);
             continue;
         }
-        if owner.is_some() && ctx.is_out_of_flow(node) {
+        if !walk.chain.is_empty() && ctx.is_out_of_flow(node) {
             ctx.pending.push(node);
             continue;
         }
         match ctx.document.node(node) {
             Some(NodeData::Text(text)) => {
-                // Text in an inline element is that element's: its style,
-                // its box. Loose text is the container's.
-                let (style, item_node, kind) = match owner {
-                    None => (parent_style, node, BoxKind::Text),
-                    Some(element) => (ctx.style(element), element, BoxKind::Inline),
+                // Text in an inline element takes that element's style;
+                // loose text is the container's.
+                let owner = walk.chain.last().copied();
+                let style = match owner {
+                    None => parent_style,
+                    Some(element) => ctx.style(element),
                 };
                 let style_node = owner.unwrap_or(parent_node);
                 let height = match owner {
@@ -350,36 +507,39 @@ pub(crate) fn layout_inline_run(
                     if piece > 0 {
                         had_break = true;
                         groups.push(Vec::new());
-                        spaced = false;
+                        walk.spaced = false;
                     }
                     if line.starts_with(char::is_whitespace) {
-                        spaced = true;
+                        walk.spaced = true;
                     }
                     for (index, word) in line.split_whitespace().enumerate() {
                         let first = index == 0;
-                        groups
-                            .last_mut()
-                            .expect("the first group always exists")
-                            .push(Item {
-                                node: item_node,
-                                style_node,
-                                kind,
-                                text: word.to_owned(),
-                                width: ctx.advance(word, style),
-                                height,
-                                atomic: None,
-                                spaced: !first || spaced,
-                                glued: if first {
-                                    !spaced && !after_atomic
-                                } else {
-                                    unbreakable
-                                },
-                            });
-                        spaced = false;
-                        after_atomic = false;
+                        let spaced = !first || walk.spaced;
+                        let glued = if first {
+                            !walk.spaced && !walk.after_atomic
+                        } else {
+                            unbreakable
+                        };
+                        let item = Item {
+                            node: Some(node),
+                            style_node,
+                            kind: BoxKind::Text,
+                            text: word.to_owned(),
+                            width: ctx.advance(word, style),
+                            height,
+                            atomic: None,
+                            spaced,
+                            glued,
+                            chain: Vec::new(),
+                            opens: 0,
+                            closes: 0,
+                            lead: 0.0,
+                            trail: 0.0,
+                        };
+                        walk.push(ctx, width, &mut groups, item, false);
                     }
                     if line.ends_with(char::is_whitespace) {
-                        spaced = true;
+                        walk.spaced = true;
                     }
                 }
             }
@@ -387,7 +547,7 @@ pub(crate) fn layout_inline_run(
                 if element.name == "br" {
                     had_break = true;
                     groups.push(Vec::new());
-                    spaced = false;
+                    walk.spaced = false;
                     continue;
                 }
                 let style = ctx.style(node).clone();
@@ -399,28 +559,32 @@ pub(crate) fn layout_inline_run(
                     let (available, border_box_width) =
                         float::shrink_wrapped_width(ctx, node, &style, width);
                     let height = ctx.measure_height(node, 0.0, 0.0, available, None);
-                    groups
-                        .last_mut()
-                        .expect("the first group always exists")
-                        .push(Item {
-                            node,
-                            style_node: node,
-                            kind: BoxKind::Inline,
-                            text: String::new(),
-                            width: margin.left + border_box_width + margin.right,
-                            height: margin.top + height + margin.bottom,
-                            atomic: Some(Atomic {
-                                available,
-                                margin_left: margin.left,
-                                margin_top: margin.top,
-                            }),
-                            spaced,
-                            glued: false,
-                        });
-                    spaced = false;
-                    after_atomic = true;
+                    let item = Item {
+                        node: Some(node),
+                        style_node: node,
+                        kind: BoxKind::Inline,
+                        text: String::new(),
+                        width: margin.left + border_box_width + margin.right,
+                        height: margin.top + height + margin.bottom,
+                        atomic: Some(Atomic {
+                            available,
+                            margin_left: margin.left,
+                            margin_top: margin.top,
+                        }),
+                        spaced: walk.spaced,
+                        glued: false,
+                        chain: Vec::new(),
+                        opens: 0,
+                        closes: 0,
+                        lead: 0.0,
+                        trail: 0.0,
+                    };
+                    walk.push(ctx, width, &mut groups, item, true);
                     continue;
                 }
+                // An inline element: its content joins the line inside it.
+                walk.enter(node);
+                stack.push(Step::Exit(node));
                 let children = ctx.document.tree().children(node);
                 if children.is_empty() {
                     // Replaced content (`<img alt>`, `<input value>`) shows
@@ -428,26 +592,26 @@ pub(crate) fn layout_inline_run(
                     // is missing.
                     let text = element.placeholder_text();
                     if !text.is_empty() {
-                        groups
-                            .last_mut()
-                            .expect("the first group always exists")
-                            .push(Item {
-                                node,
-                                style_node: node,
-                                kind: BoxKind::Inline,
-                                text: text.to_owned(),
-                                width: ctx.advance(text, &style),
-                                height: ctx.line_height_of(&style),
-                                atomic: None,
-                                spaced,
-                                glued: !spaced && !after_atomic,
-                            });
-                        spaced = false;
-                        after_atomic = false;
+                        let item = Item {
+                            node: None,
+                            style_node: node,
+                            kind: BoxKind::Text,
+                            text: text.to_owned(),
+                            width: ctx.advance(text, &style),
+                            height: ctx.line_height_of(&style),
+                            atomic: None,
+                            spaced: walk.spaced,
+                            glued: !walk.spaced && !walk.after_atomic,
+                            chain: Vec::new(),
+                            opens: 0,
+                            closes: 0,
+                            lead: 0.0,
+                            trail: 0.0,
+                        };
+                        walk.push(ctx, width, &mut groups, item, false);
                     }
-                    continue;
                 }
-                stack.extend(children.iter().rev().map(|&child| (child, Some(node))));
+                stack.extend(children.iter().rev().map(|&child| Step::Visit(child)));
             }
             _ => {}
         }
@@ -492,46 +656,139 @@ pub(crate) fn layout_inline_run(
                 WhiteSpace::NoWrap | WhiteSpace::Pre => rest.len(),
                 _ => first_line_len(rest, space, band_width),
             };
-            let line: Vec<usize> = (0..line_len).collect();
+            let line = &rest[..line_len];
 
-            let spaces = rest[1..line_len].iter().filter(|item| item.spaced).count();
-            let used: f32 =
-                rest[..line_len].iter().map(|item| item.width).sum::<f32>() + space * spaces as f32;
+            let spaces = line[1..].iter().filter(|item| item.spaced).count();
+            let used: f32 = line.iter().map(Item::advance).sum::<f32>() + space * spaces as f32;
             let free = (band_width - used).max(0.0);
             let offset = noonoo_text::align(alignment, free, spaces + 1);
 
+            // Where each item's own box starts, inside its elements' edges.
             let mut cursor_x = band_left + offset.start;
             let mut line_h = line_height;
-            // The element run just placed on this line, which the element's
-            // next word extends.
-            let mut open_run: Option<(NodeId, usize)> = None;
-            for (position, &i) in line.iter().enumerate() {
-                let item = &items[start + i];
+            let mut at = Vec::with_capacity(line.len());
+            for (position, item) in line.iter().enumerate() {
                 if position > 0 && item.spaced {
                     cursor_x += space + offset.gap;
                 }
+                cursor_x += item.lead;
+                at.push(cursor_x);
+                cursor_x += item.width + item.trail;
                 line_h = line_h.max(item.height);
+            }
+
+            // Each inline element's fragment on this line, outermost first so
+            // it paints under what it holds, spanning its items and the edges
+            // that start or end here.
+            for fragment in line_fragments(line) {
+                let element = fragment.element;
+                let edges = InlineEdges::of(ctx, element, width);
+                let (first, last) = (&line[fragment.first], &line[fragment.last]);
+                let opens = fragment.depth >= first.chain.len() - first.opens;
+                let closes = fragment.depth >= last.chain.len() - last.closes;
+                // The edges of deeper elements opening (closing) at the same
+                // item sit inside this fragment.
+                let inner_start: f32 = first.chain[fragment.depth + 1..]
+                    .iter()
+                    .enumerate()
+                    .filter(|(k, _)| fragment.depth + 1 + k >= first.chain.len() - first.opens)
+                    .map(|(_, &inner)| InlineEdges::of(ctx, inner, width).start())
+                    .sum();
+                let inner_end: f32 = last.chain[fragment.depth + 1..]
+                    .iter()
+                    .enumerate()
+                    .filter(|(k, _)| fragment.depth + 1 + k >= last.chain.len() - last.closes)
+                    .map(|(_, &inner)| InlineEdges::of(ctx, inner, width).end())
+                    .sum();
+                let left = at[fragment.first]
+                    - inner_start
+                    - if opens {
+                        edges.border.left + edges.padding.left
+                    } else {
+                        0.0
+                    };
+                let right = at[fragment.last]
+                    + last.width
+                    + inner_end
+                    + if closes {
+                        edges.padding.right + edges.border.right
+                    } else {
+                        0.0
+                    };
+                let style = ctx.style(element);
+                let content_height = ctx.line_height_of(style);
+                let padding = Edges {
+                    top: edges.padding.top,
+                    bottom: edges.padding.bottom,
+                    left: if opens { edges.padding.left } else { 0.0 },
+                    right: if closes { edges.padding.right } else { 0.0 },
+                };
+                let border = Edges {
+                    top: edges.border.top,
+                    bottom: edges.border.bottom,
+                    left: if opens { edges.border.left } else { 0.0 },
+                    right: if closes { edges.border.right } else { 0.0 },
+                };
+                // Vertical padding and borders reach outside the line
+                // without making it taller.
+                let top = cursor_y - padding.top - border.top;
+                let index = ctx.push(LayoutBox {
+                    node: Some(element),
+                    style_node: element,
+                    kind: BoxKind::Inline,
+                    rect: Rect::new(
+                        left,
+                        top,
+                        (right - left).max(0.0),
+                        content_height + padding.top + padding.bottom + border.top + border.bottom,
+                    ),
+                    text: None,
+                    margin: no_edges(),
+                    padding,
+                    border,
+                    clips: false,
+                    scroll_max_x: 0.0,
+                    scroll_max_y: 0.0,
+                    scroll_x: 0.0,
+                    scroll_y: 0.0,
+                    z_tier: 1,
+                    z_index: 0,
+                    children: Vec::new(),
+                });
+                indices.push(index);
+            }
+
+            // The items: atomic boxes, and text runs. An element's words on
+            // the line merge into one run.
+            let mut open_run: Option<usize> = None;
+            for (position, item) in line.iter().enumerate() {
                 if let Some(atomic) = item.atomic {
+                    let node = item.node.expect("an atomic inline has a node");
                     ctx.layout_element(
-                        item.node,
-                        cursor_x + atomic.margin_left,
+                        node,
+                        at[position] + atomic.margin_left,
                         cursor_y + atomic.margin_top,
                         atomic.available,
                         None,
                     );
-                    if let Some(index) = ctx.tree_index(item.node) {
+                    if let Some(index) = ctx.tree_index(node) {
                         indices.push(index);
                     }
-                    cursor_x += item.width;
                     open_run = None;
                     continue;
                 }
-                if item.kind == BoxKind::Inline
-                    && let Some((run_node, index)) = open_run
-                    && run_node == item.node
-                {
+                let previous = position.checked_sub(1).map(|p| &line[p]);
+                let merges = item.style_node != parent_node
+                    && item.lead == 0.0
+                    && previous.is_some_and(|previous| {
+                        previous.atomic.is_none()
+                            && previous.style_node == item.style_node
+                            && previous.node == item.node
+                            && previous.trail == 0.0
+                    });
+                if merges && let Some(index) = open_run {
                     let run = &mut ctx.tree.boxes[index];
-                    run.rect.width = cursor_x + item.width - run.rect.x;
+                    run.rect.width = at[position] + item.width - run.rect.x;
                     run.rect.height = run.rect.height.max(item.height);
                     if let Some(text) = run.text.as_mut() {
                         if item.spaced {
@@ -539,14 +796,13 @@ pub(crate) fn layout_inline_run(
                         }
                         text.push_str(&item.text);
                     }
-                    cursor_x += item.width;
                     continue;
                 }
                 let index = ctx.push(LayoutBox {
-                    node: Some(item.node),
+                    node: item.node,
                     style_node: item.style_node,
                     kind: item.kind,
-                    rect: Rect::new(cursor_x, cursor_y, item.width, item.height),
+                    rect: Rect::new(at[position], cursor_y, item.width, item.height),
                     text: Some(item.text.clone()),
                     margin: no_edges(),
                     padding: no_edges(),
@@ -561,11 +817,10 @@ pub(crate) fn layout_inline_run(
                     children: Vec::new(),
                 });
                 indices.push(index);
-                open_run = (item.kind == BoxKind::Inline).then_some((item.node, index));
-                cursor_x += item.width;
+                open_run = Some(index);
             }
             cursor_y += line_h;
-            start += line.len();
+            start += line_len;
         }
     }
 

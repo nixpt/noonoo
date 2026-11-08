@@ -1284,6 +1284,26 @@ mod tests {
         assert_eq!(TextRuns.metrics(FontRequest::any(), 20.0), (16.0, 8.0));
     }
 
+    #[test]
+    fn an_inline_background_covers_its_padding_once() {
+        let list = render(
+            r#"<p><span>ab</span></p>"#,
+            "p { margin: 0 } span { background-color: #ff0000; padding: 0 4px }",
+        );
+        let red: Vec<Rect> = list
+            .commands()
+            .iter()
+            .filter_map(|c| match c {
+                Command::FillRect { rect, color, .. } if *color == Color::rgb(255, 0, 0) => {
+                    Some(*rect)
+                }
+                _ => None,
+            })
+            .collect();
+        // 4 + "ab" (16) + 4, the text run painting none of its own.
+        assert_eq!(red, [Rect::new(0.0, 0.0, 24.0, 19.2)]);
+    }
+
     fn transforms(list: &CommandList) -> Vec<[f32; 6]> {
         list.commands()
             .iter()

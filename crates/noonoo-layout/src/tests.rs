@@ -1700,7 +1700,10 @@ fn an_inline_elements_positioned_descendant_leaves_its_text() {
         800.0,
     );
     let s = tree.get(id(&doc, "s")).unwrap();
-    assert_eq!(s.text.as_deref(), Some("b"));
+    // The span's own text is "b": "c" is the positioned box's, "d" hidden.
+    let shown: Vec<String> = drawn_text(&tree).into_iter().map(|(t, _)| t).collect();
+    assert_eq!(shown, ["a", "b", "c"]);
+    assert!(text_box(&tree, "b").rect.x >= s.rect.x);
     let i = tree.get(id(&doc, "i")).unwrap();
     assert_eq!(i.rect.y, s.rect.y + 20.0);
     assert_eq!(i.rect.x, s.rect.x);
@@ -2570,8 +2573,8 @@ fn hidden_and_positioned_descendants_leave_the_line() {
             .into_iter()
             .filter(|(t, _)| t != "c")
             .collect::<Vec<_>>(),
-        // Two text nodes of one span, touching: one run.
-        vec![("ab".to_owned(), 0.0)]
+        // Two text nodes of one span, touching: no space between.
+        vec![("a".to_owned(), 0.0), ("b".to_owned(), 8.0)]
     );
     // The positioned descendant still gets laid out as its own box.
     assert!(tree.get(id(&doc, "abs")).is_some());
@@ -2594,4 +2597,89 @@ fn an_atomic_inline_against_text_gets_no_space_but_may_wrap() {
         400.0,
     );
     assert!(tree.get(id(&doc, "i")).unwrap().rect.y > 0.0);
+}
+
+/// The boxes an element has, in order: one per line it's on.
+fn fragments(doc: &Document, tree: &LayoutTree, name: &str) -> Vec<LayoutBox> {
+    let node = id(doc, name);
+    tree.boxes()
+        .iter()
+        .filter(|b| b.node == Some(node))
+        .cloned()
+        .collect()
+}
+
+/// bliss-diff (devtools badges): an inline element's padding, border and
+/// margin took no room on the line and painted nowhere.
+#[test]
+fn an_inline_elements_horizontal_edges_take_room_on_the_line() {
+    let (doc, tree) = page(
+        r#"<p id="p">a<span id="s">b</span>c</p>"#,
+        "p { margin: 0 } span { margin: 0 3px; border: 2px solid #000; padding: 0 4px }",
+        400.0,
+    );
+    // a (8px), the 3px margin, then the span's border box: 2 + 4 + 8 + 4 + 2.
+    let span = fragments(&doc, &tree, "s");
+    assert_eq!(span.len(), 1);
+    assert_eq!(span[0].rect, Rect::new(11.0, -2.0, 20.0, 23.2));
+    assert_eq!(
+        (
+            span[0].border.left,
+            span[0].padding.left,
+            span[0].padding.right
+        ),
+        (2.0, 4.0, 4.0)
+    );
+    assert_eq!(
+        drawn_x(&tree),
+        vec![
+            ("a".to_owned(), 0.0),
+            ("b".to_owned(), 17.0),
+            ("c".to_owned(), 34.0)
+        ]
+    );
+    // Vertical padding and borders don't make the line taller.
+    assert_eq!(tree.get(id(&doc, "p")).unwrap().rect.height, 19.2);
+}
+
+#[test]
+fn a_wrapped_inline_element_puts_its_start_edge_first_and_end_edge_last() {
+    let (doc, tree) = page(
+        r#"<div><span id="s">aaa bbb</span></div>"#,
+        "div { width: 60px; line-height: 20px } span { padding: 0 5px }",
+        400.0,
+    );
+    let span = fragments(&doc, &tree, "s");
+    assert_eq!(span.len(), 2);
+    assert_eq!(span[0].rect, Rect::new(0.0, 0.0, 29.0, 20.0));
+    assert_eq!((span[0].padding.left, span[0].padding.right), (5.0, 0.0));
+    assert_eq!(span[1].rect, Rect::new(0.0, 20.0, 29.0, 20.0));
+    assert_eq!((span[1].padding.left, span[1].padding.right), (0.0, 5.0));
+}
+
+#[test]
+fn an_outer_inline_fragment_spans_its_nested_elements() {
+    let (doc, tree) = page(
+        r#"<p><a id="a">x<b id="b">y</b>z</a></p>"#,
+        "p { margin: 0 } a { padding: 0 2px } b { padding: 0 3px }",
+        400.0,
+    );
+    let a = fragments(&doc, &tree, "a");
+    let b = fragments(&doc, &tree, "b");
+    assert_eq!(a.len(), 1);
+    assert!((a[0].rect.x - 0.0).abs() < 0.01 && (a[0].rect.width - 34.8).abs() < 0.01);
+    assert!((b[0].rect.x - 10.0).abs() < 0.01 && (b[0].rect.width - 14.8).abs() < 0.01);
+    // The outer fragment comes first, so it paints under the inner one.
+    let index = |node| tree.boxes().iter().position(|b| b.node == Some(node));
+    assert!(index(id(&doc, "a")) < index(id(&doc, "b")));
+}
+
+#[test]
+fn an_inline_elements_padding_counts_in_a_shrink_to_fit_width() {
+    let (doc, tree) = page(
+        r#"<div id="f"><span>ab</span></div>"#,
+        "#f { float: left } span { padding: 0 10px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 36.0);
 }
