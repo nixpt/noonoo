@@ -101,7 +101,8 @@ pub enum Command {
         /// The fill colour.
         color: Color,
     },
-    /// Draw an encoded image scaled to fill `rect` (a colour emoji glyph).
+    /// Draw an encoded image scaled to fill `rect` (an `<img>`, or a colour
+    /// emoji glyph).
     DrawImage {
         /// Where the image goes.
         rect: Rect,
@@ -278,7 +279,7 @@ pub fn paint_with(styles: &Styles, layout: &LayoutTree, glyphs: &dyn Glyphs) -> 
     let mut roots = layout.root_indices().to_vec();
     roots.sort_by_key(|&root| (boxes[root].z_tier, boxes[root].z_index));
     for root in roots {
-        paint_box(root, boxes, styles, glyphs, 0.0, 0.0, &mut list);
+        paint_box(root, layout, styles, glyphs, 0.0, 0.0, &mut list);
     }
     list
 }
@@ -327,13 +328,14 @@ fn multiply(a: [f32; 6], b: [f32; 6]) -> [f32; 6] {
 /// containers: a box's content is drawn shifted by them.
 fn paint_box(
     index: usize,
-    boxes: &[LayoutBox],
+    layout: &LayoutTree,
     styles: &Styles,
     glyphs: &dyn Glyphs,
     tx: f32,
     ty: f32,
     out: &mut CommandList,
 ) {
+    let boxes = layout.boxes();
     let b = &boxes[index];
     let style = styles.get(b.style_node);
     let rect = b.rect.translate(-tx, -ty);
@@ -414,6 +416,14 @@ fn paint_box(
                 }
             }
         }
+
+        // A loaded `<img>` fills its content box, over its background.
+        if let Some(image) = b.node.and_then(|node| layout.image(node)) {
+            out.0.push(Command::DrawImage {
+                rect: b.content_box().translate(-tx, -ty),
+                image: image.clone(),
+            });
+        }
     }
 
     // Empty runs are dropped: an element with nothing to show (a `<br>`, a
@@ -485,7 +495,7 @@ fn paint_box(
     let mut children = b.children.clone();
     children.sort_by_key(|&child| (boxes[child].z_tier, boxes[child].z_index));
     for child in children {
-        paint_box(child, boxes, styles, glyphs, child_tx, child_ty, out);
+        paint_box(child, layout, styles, glyphs, child_tx, child_ty, out);
     }
     if b.clips {
         out.0.push(Command::PopLayer);
@@ -1049,6 +1059,88 @@ mod tests {
         let styles = noonoo_style::compute(&doc, &[sheet]);
         let layout = noonoo_layout::layout(&doc, &styles, Size::new(400.0, 300.0), &MetricShaper);
         paint(&styles, &layout)
+    }
+
+    /// A PNG signature and IHDR chunk for a `width` × `height` image.
+    fn png(width: u32, height: u32) -> Vec<u8> {
+        let mut data = b"\x89PNG\r\n\x1a\n".to_vec();
+        data.extend(13u32.to_be_bytes());
+        data.extend(b"IHDR");
+        data.extend(width.to_be_bytes());
+        data.extend(height.to_be_bytes());
+        data.extend([8, 6, 0, 0, 0]);
+        data
+    }
+
+    #[test]
+    fn a_loaded_image_draws_over_its_content_box() {
+        let doc = noonoo_html::parse(r#"<img id="a" src="a.png"><img src="missing.png" alt="x">"#);
+        let sheet = noonoo_css::Stylesheet::parse(
+            "img { padding: 2px; border: 1px solid #000; background-color: #ff0000; \
+             margin: 0 }",
+        )
+        .unwrap();
+        let styles = noonoo_style::compute(&doc, &[sheet]);
+        let mut images = noonoo_layout::Images::new();
+        let image = noonoo_layout::Image::from_bytes(png(40, 30)).unwrap();
+        images.insert("a.png", image.clone());
+        let layout = noonoo_layout::layout_with_images(
+            &doc,
+            &styles,
+            Size::new(400.0, 300.0),
+            &MetricShaper,
+            &images,
+        );
+        let list = paint(&styles, &layout);
+        let drawn: Vec<(Rect, &EncodedImage)> = list
+            .commands()
+            .iter()
+            .filter_map(|c| match c {
+                Command::DrawImage { rect, image } => Some((*rect, image)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            drawn,
+            vec![(Rect::new(3.0, 3.0, 40.0, 30.0), &image.encoded)]
+        );
+        // Over the background and border, not under them.
+        let position =
+            |pred: &dyn Fn(&Command) -> bool| list.commands().iter().position(pred).unwrap();
+        let image_at = position(&|c| matches!(c, Command::DrawImage { .. }));
+        let background_at = position(
+            &|c| matches!(c, Command::FillRect { color, .. } if *color == Color::rgb(255, 0, 0)),
+        );
+        assert!(background_at < image_at);
+    }
+
+    #[test]
+    fn a_scrolled_image_moves_with_its_container() {
+        let doc = noonoo_html::parse(r#"<div id="s"><img src="a.png"><div id="tall"></div></div>"#);
+        let sheet = noonoo_css::Stylesheet::parse(
+            "#s { height: 50px; overflow: auto } #tall { height: 200px } img { display: block }",
+        )
+        .unwrap();
+        let styles = noonoo_style::compute(&doc, &[sheet]);
+        let mut images = noonoo_layout::Images::new();
+        images.insert(
+            "a.png",
+            noonoo_layout::Image::from_bytes(png(40, 30)).unwrap(),
+        );
+        let mut layout = noonoo_layout::layout_with_images(
+            &doc,
+            &styles,
+            Size::new(400.0, 300.0),
+            &MetricShaper,
+            &images,
+        );
+        layout.scroll_by(doc.get_element_by_id("s").unwrap(), 10.0);
+        let list = paint(&styles, &layout);
+        let rect = list.commands().iter().find_map(|c| match c {
+            Command::DrawImage { rect, .. } => Some(*rect),
+            _ => None,
+        });
+        assert_eq!(rect, Some(Rect::new(0.0, -10.0, 40.0, 30.0)));
     }
 
     #[test]
