@@ -17,6 +17,8 @@
 //! - [`App`] implements winit's `ApplicationHandler`: it creates the window and
 //!   surface in `can_create_surfaces`, drops the surface in `suspended`, maps
 //!   input to `Host` methods, and renders on `RedrawRequested`.
+//! - [`frame`] holds what the embedder adds to every frame: scene and texture
+//!   overlays and a scene-effects hook, shared through [`frame::FrameHooks`].
 //! - [`a11y`] (Linux) bridges the host's accessibility tree to AT-SPI through
 //!   AccessKit: the adapter lives here, but the tree and its projection stay in
 //!   `noonoo-a11y` / `noonoo-accesskit`.
@@ -35,11 +37,15 @@
 #![warn(missing_docs)]
 
 pub mod fonts;
+pub mod frame;
 pub mod input;
 pub mod render;
 
 #[cfg(target_os = "linux")]
 pub mod a11y;
+
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use noonoo_dom::NodeId;
 use noonoo_events::{
@@ -89,6 +95,10 @@ pub struct App {
     press: Option<(usize, NodeId)>,
     /// Whether input has changed anything since the last layout.
     dirty: bool,
+    /// Overlays and effects added to every frame; shared with the embedder.
+    hooks: frame::FrameHooks,
+    /// Set when a hook changed, so the next wake-up draws a frame.
+    hooks_changed: Arc<AtomicBool>,
     /// Field order matters: the renderer (holding the surface) must drop
     /// before the window.
     gpu: Option<render::Renderer>,
@@ -121,6 +131,8 @@ impl App {
             scale: 1.0,
             press: None,
             dirty: false,
+            hooks: frame::FrameHooks::default(),
+            hooks_changed: Arc::new(AtomicBool::new(false)),
             gpu: None,
             window: None,
             #[cfg(target_os = "linux")]
@@ -153,6 +165,12 @@ impl App {
     pub fn with_resize_hook(mut self, hook: impl Fn(&mut Host, Size) + 'static) -> Self {
         self.resize_hook = Some(Box::new(hook));
         self
+    }
+
+    /// The overlays and effects added to every frame. Clone the handle before
+    /// [`App::run`] and set them from anywhere; each change asks for a frame.
+    pub fn frame_hooks(&self) -> frame::FrameHooks {
+        self.hooks.clone()
     }
 
     /// Run the event loop until the window closes.
@@ -257,7 +275,7 @@ impl App {
         if let Some(error) = self
             .gpu
             .as_mut()
-            .and_then(|gpu| gpu.draw(&self.host, self.scale).err())
+            .and_then(|gpu| gpu.draw(&self.host, self.scale, &self.hooks).err())
         {
             eprintln!("noonoo-winit: {error}");
         }
@@ -394,7 +412,16 @@ impl ApplicationHandler for App {
                 pollster::block_on(render::Renderer::new(window.as_ref()))
                     .expect("noonoo-winit: create renderer"),
             );
+            let gpu = self.gpu.as_ref().expect("renderer");
+            self.hooks
+                .attach_gpu(gpu.device().clone(), gpu.queue().clone());
         }
+        let proxy = event_loop.create_proxy();
+        let changed = self.hooks_changed.clone();
+        self.hooks.set_waker(move || {
+            changed.store(true, Ordering::Release);
+            proxy.wake_up();
+        });
         #[cfg(target_os = "linux")]
         if let Some(window) = &self.window {
             let proxy = event_loop.create_proxy();
@@ -470,11 +497,16 @@ impl ApplicationHandler for App {
         // The a11y thread asked the loop to wake so a tree request or action
         // can be serviced promptly, even while the window is otherwise idle.
         self.pump_a11y();
+        // A frame hook changed, maybe from another thread: show it.
+        if self.hooks_changed.swap(false, Ordering::AcqRel) {
+            self.frame();
+        }
     }
 
     fn suspended(&mut self, _event_loop: &dyn ActiveEventLoop) {
         // Drop the surface before the window (field order enforces it), and
         // rebuild on the next `can_create_surfaces`.
+        self.hooks.detach_gpu();
         self.gpu = None;
     }
 }

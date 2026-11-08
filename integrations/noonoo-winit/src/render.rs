@@ -2,7 +2,8 @@
 //!
 //! One [`Renderer`] owns the surface, the device, and Vello's renderer. Each
 //! [`Renderer::draw`] composes the host's layers — one `noonoo_vello` scene per
-//! layer, offset by the layer's rectangle and clipped to it — and presents.
+//! layer, offset by the layer's rectangle and clipped to it — plus the
+//! embedder's [`crate::frame`] hooks, and presents.
 //!
 //! The surface is created from the window's raw handles
 //! ([`SurfaceTargetUnsafe::from_window`]) so it can live for `'static` while the
@@ -10,9 +11,10 @@
 //! (the `App` struct orders its fields so, and drops it on suspend).
 
 use noonoo_shell::Host;
-use vello::kurbo::{Affine, Rect as KRect};
-use vello::peniko::{BlendMode, Color, Fill};
-use vello::{AaConfig, AaSupport, RenderParams, Renderer as VelloRenderer, RendererOptions, Scene};
+
+use crate::frame::{self, FrameHooks, TextureOverlay, TexturePaint};
+use vello::peniko::{Color, ImageData};
+use vello::{AaConfig, AaSupport, RenderParams, Renderer as VelloRenderer, RendererOptions};
 use wgpu::{
     DeviceDescriptor, Instance, InstanceDescriptor, PowerPreference, PresentMode,
     RequestAdapterOptions, SurfaceConfiguration, SurfaceTargetUnsafe, TextureUsages,
@@ -88,6 +90,8 @@ pub struct Renderer {
     target: wgpu::TextureView,
     /// Copies `target` onto the surface each frame.
     blitter: wgpu::util::TextureBlitter,
+    /// The texture overlay last registered with `vello`, and its image.
+    registered: Option<(wgpu::Texture, ImageData)>,
 }
 
 /// The texture Vello renders into, sized to the surface.
@@ -183,6 +187,7 @@ impl Renderer {
             vello,
             target,
             blitter,
+            registered: None,
         })
     }
 
@@ -203,31 +208,53 @@ impl Renderer {
         (self.config.width, self.config.height)
     }
 
-    /// Compose the host's layers and present a frame.
+    /// The device the renderer draws with.
+    pub fn device(&self) -> &wgpu::Device {
+        &self.device
+    }
+
+    /// The queue the renderer submits to.
+    pub fn queue(&self) -> &wgpu::Queue {
+        &self.queue
+    }
+
+    /// The image Vello knows `overlay`'s texture by, registering it when it
+    /// is new. `register_texture` allocates a fresh slot on every call, so
+    /// re-registering an unchanged texture each frame would leak one.
+    fn register(&mut self, overlay: &TextureOverlay) -> ImageData {
+        if let Some((texture, image)) = &self.registered
+            && *texture == overlay.texture
+        {
+            return image.clone();
+        }
+        if let Some((_, old)) = self.registered.take() {
+            self.vello.unregister_texture(old);
+        }
+        let image = self.vello.register_texture(overlay.texture.clone());
+        self.registered = Some((overlay.texture.clone(), image.clone()));
+        image
+    }
+
+    /// Compose a frame — the host's layers, then `hooks`' overlays and
+    /// effects (see [`crate::frame`]) — and present it.
     ///
     /// The host lays out in logical pixels; `scale` (the window's scale
     /// factor) maps them onto the physical surface.
-    pub fn draw(&mut self, host: &Host, scale: f64) -> Result<(), Error> {
-        let to_physical = Affine::scale(scale);
-        let mut scene = Scene::new();
-        for layer in host.layers() {
-            let rect = layer.rect;
-            // Each layer paints into its own rectangle: a layer's content must
-            // not bleed over its neighbours.
-            let clip = KRect::new(
-                f64::from(rect.x),
-                f64::from(rect.y),
-                f64::from(rect.x + rect.width),
-                f64::from(rect.y + rect.height),
-            );
-            let offset = Affine::translate((f64::from(rect.x), f64::from(rect.y)));
-            scene.push_layer(Fill::NonZero, BlendMode::default(), 1.0, to_physical, &clip);
-            scene.append(
-                &noonoo_vello::scene(layer.commands()),
-                Some(to_physical * offset),
-            );
-            scene.pop_layer();
-        }
+    pub fn draw(&mut self, host: &Host, scale: f64, hooks: &FrameHooks) -> Result<(), Error> {
+        let texture = match hooks.texture() {
+            Some(overlay) => Some(TexturePaint {
+                image: self.register(&overlay),
+                transform: overlay.transform,
+                clip: overlay.clip,
+            }),
+            None => {
+                if let Some((_, old)) = self.registered.take() {
+                    self.vello.unregister_texture(old);
+                }
+                None
+            }
+        };
+        let scene = frame::compose(host, scale, self.size(), hooks, texture.as_ref());
 
         let frame = self.surface.get_current_texture()?;
         let view = frame
