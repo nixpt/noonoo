@@ -14,7 +14,9 @@
 
 use noonoo_dom::NodeId;
 use noonoo_geometry::Rect;
-use noonoo_style::{BoxSizing, Clear, ComputedStyle, Display, FlexDirection, Float, WhiteSpace};
+use noonoo_style::{
+    BoxSizing, Clear, ComputedStyle, Display, FlexDirection, FlexWrap, Float, WhiteSpace,
+};
 
 use crate::resolve;
 use crate::{Ctx, child_nodes};
@@ -326,6 +328,113 @@ fn preferred_content(ctx: &Ctx<'_>, node: NodeId) -> f32 {
         }
     }
     widest.max(run)
+}
+
+/// The border-box width a box takes when it wraps wherever it can
+/// (min-content): its longest word, widest inline box or block child. A
+/// flex item with `min-width: auto` shrinks no further than this.
+///
+/// Remembered for the rest of the layout, like [`preferred_width`].
+pub(crate) fn min_content_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
+    if let Some(&width) = ctx.min_content.borrow().get(&node) {
+        return width;
+    }
+    let width = compute_min_content_width(ctx, node);
+    ctx.min_content.borrow_mut().insert(node, width);
+    width
+}
+
+fn compute_min_content_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
+    let style = ctx.style(node);
+    let padding = resolve::paddings(&style.padding, 0.0);
+    let border = resolve::borders(style);
+    let edges = padding.left + padding.right + border.left + border.right;
+    let to_border_box = |width: f32| match style.box_sizing {
+        BoxSizing::BorderBox => width,
+        BoxSizing::ContentBox => width + edges,
+    };
+    let mut width = match resolve::dimension(style.width.clone(), f32::INFINITY)
+        .filter(|width| width.is_finite())
+    {
+        Some(width) => to_border_box(width),
+        None => min_content(ctx, node, style) + edges,
+    };
+    if let Some(maximum) = resolve::dimension(style.max_width.clone(), f32::INFINITY)
+        .filter(|maximum| maximum.is_finite())
+    {
+        width = width.min(to_border_box(maximum));
+    }
+    if let Some(minimum) = resolve::dimension(style.min_width.clone(), f32::INFINITY)
+        .filter(|minimum| minimum.is_finite())
+    {
+        width = width.max(to_border_box(minimum));
+    }
+    width
+}
+
+/// The border box around a box's min-content *contents*, ignoring its own
+/// `width` (clamped by `max-width`): a flex item's content size suggestion.
+pub(crate) fn min_content_of_contents(ctx: &Ctx<'_>, node: NodeId) -> f32 {
+    let style = ctx.style(node);
+    let padding = resolve::paddings(&style.padding, 0.0);
+    let border = resolve::borders(style);
+    let edges = padding.left + padding.right + border.left + border.right;
+    let width = min_content(ctx, node, style) + edges;
+    match resolve::dimension(style.max_width.clone(), f32::INFINITY)
+        .filter(|maximum| maximum.is_finite())
+    {
+        Some(maximum) => width.min(match style.box_sizing {
+            BoxSizing::BorderBox => maximum,
+            BoxSizing::ContentBox => maximum + edges,
+        }),
+        None => width,
+    }
+}
+
+/// The min-content width of a box's contents. A single-line flex row keeps
+/// its items side by side; everything else may break between items.
+fn min_content(ctx: &Ctx<'_>, node: NodeId, style: &ComputedStyle) -> f32 {
+    if let Some(text) = ctx.placeholder(node) {
+        return text_min_width(ctx, &text, style);
+    }
+    let side_by_side = matches!(style.display, Display::Flex | Display::InlineFlex)
+        && matches!(
+            style.flex_direction,
+            FlexDirection::Row | FlexDirection::RowReverse
+        )
+        && style.flex_wrap == FlexWrap::NoWrap;
+    let mut widths = Vec::new();
+    for child in child_nodes(ctx.document, node) {
+        if ctx.is_hidden(child) || ctx.is_out_of_flow(child) {
+            continue;
+        }
+        if ctx.is_text(child) {
+            // Text has no style of its own; it inherits the container's.
+            let text = ctx.document.text_content(child);
+            if !text.trim().is_empty() {
+                widths.push(text_min_width(ctx, &text, style));
+            }
+        } else {
+            let margins = resolve::margins(&ctx.style(child).margin, 0.0);
+            widths.push(min_content_width(ctx, child) + margins.left + margins.right);
+        }
+    }
+    if side_by_side {
+        widths.iter().sum::<f32>() + style.column_gap * widths.len().saturating_sub(1) as f32
+    } else {
+        widths.into_iter().fold(0.0, f32::max)
+    }
+}
+
+/// `text`'s min-content width: its longest word, or all of it where it
+/// can't wrap.
+fn text_min_width(ctx: &Ctx<'_>, text: &str, style: &ComputedStyle) -> f32 {
+    if matches!(style.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre) {
+        return text_width(ctx, text, style);
+    }
+    text.split_whitespace()
+        .map(|word| ctx.advance(word, style))
+        .fold(0.0, f32::max)
 }
 
 /// Measure `text`'s unwrapped advance in `style`'s font (whitespace collapsed).

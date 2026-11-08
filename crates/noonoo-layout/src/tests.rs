@@ -1788,3 +1788,62 @@ fn a_column_stretched_by_a_row_grows_its_items_into_the_height() {
     let content = tree.get(id(&doc, "content")).unwrap();
     assert_eq!((content.rect.y, content.rect.height), (97.0, 503.0));
 }
+
+/// Shrinking stops at an item's `min-width`; the rest of the overflow comes
+/// out of the others.
+#[test]
+fn a_shrinking_row_item_stops_at_its_min_width() {
+    let (doc, tree) = page(
+        r#"<div id="row"><div id="a"></div><div id="b"></div></div>"#,
+        "#row { display: flex; width: 300px } \
+         #a { width: 200px; min-width: 180px } \
+         #b { width: 200px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.width, 180.0);
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.width, 120.0);
+}
+
+/// super-surfer's devtools tabs: with `min-width: auto`, a flex item never
+/// shrinks below its longest word, so labels overflow the row instead of
+/// overlapping.
+#[test]
+fn a_shrinking_row_item_keeps_its_min_content_width() {
+    // MetricShaper: 8px per character at 16px.
+    let (doc, tree) = page(
+        r#"<div id="row"><a id="a">Elements</a><a id="b">aa bbbb</a></div>"#,
+        "#row { display: flex; width: 50px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.width, 64.0);
+    // Two words: it may wrap, so its floor is the longer word.
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.width, 32.0);
+}
+
+/// A clipping item has no automatic minimum: it shrinks below its content.
+#[test]
+fn a_clipping_row_item_shrinks_below_its_content() {
+    let (doc, tree) = page(
+        r#"<div id="row"><a id="a">Elements</a><a id="b">Elements</a></div>"#,
+        "#row { display: flex; width: 64px } a { overflow: hidden }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.width, 32.0);
+}
+
+/// super-surfer's devtools tabs: a flex item's width holds its transformed,
+/// letter-spaced label.
+#[test]
+fn a_flex_item_is_as_wide_as_its_transformed_label() {
+    let (doc, tree) = page(
+        r#"<div id="tabs"><a id="tab">Elements</a></div>"#,
+        "#tabs { display: flex } \
+         #tab { padding: 7px 14px; font-size: 11px; text-transform: uppercase; \
+                letter-spacing: .04em }",
+        400.0,
+    );
+    let tab = tree.get(id(&doc, "tab")).unwrap();
+    let label = text_box(&tree, "Elements");
+    assert_eq!(tab.rect.width, label.rect.width + 28.0);
+    assert_eq!(label.rect.x, tab.rect.x + 14.0);
+}

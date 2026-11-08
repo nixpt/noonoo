@@ -444,10 +444,12 @@ pub fn layout(
         margins: Default::default(),
         measured: HashMap::new(),
         preferred: Default::default(),
+        min_content: Default::default(),
         // The initial containing block: percentages on the root resolve
         // against the viewport's height.
         heights: vec![Some(viewport.height)],
         flexed: None,
+        flexed_width: None,
     };
     // The root's children share one block formatting context.
     ctx.push_bfc();
@@ -540,6 +542,8 @@ pub(crate) struct Ctx<'a> {
     pub measured: HashMap<(NodeId, u32, Option<u32>, Option<u32>), f32>,
     /// [`float::preferred_width`] results by node.
     pub preferred: std::cell::RefCell<HashMap<NodeId, f32>>,
+    /// [`float::min_content_width`] results by node.
+    pub min_content: std::cell::RefCell<HashMap<NodeId, f32>>,
     /// The containing blocks' definite content heights, innermost last
     /// (`None` where it is indefinite): what a percentage height resolves
     /// against.
@@ -547,6 +551,9 @@ pub(crate) struct Ctx<'a> {
     /// A column flex container's decided main size for one item (its border
     /// box): unlike a stretched cross size, it overrides a specified height.
     pub flexed: Option<(NodeId, f32)>,
+    /// A row flex container's decided main size for one item (its border
+    /// box): it overrides a specified width, as `flexed` does a height.
+    pub flexed_width: Option<(NodeId, f32)>,
 }
 
 impl Ctx<'_> {
@@ -854,13 +861,25 @@ impl Ctx<'_> {
             resolve::dimension(style.min_width.clone(), available_width).map(to_border_box);
         let maximum =
             resolve::dimension(style.max_width.clone(), available_width).map(to_border_box);
-        let mut border_box_width = specified.unwrap_or_else(|| available_width.max(0.0));
-        if let Some(maximum) = maximum {
-            border_box_width = border_box_width.min(maximum);
-        }
-        if let Some(minimum) = minimum {
-            border_box_width = border_box_width.max(minimum);
-        }
+        // A row flex item's main size was decided by its container (already
+        // clamped by min/max there): it replaces the specified width.
+        let flexed_width = self
+            .flexed_width
+            .take_if(|(flexed, _)| *flexed == node)
+            .map(|(_, width)| width);
+        let border_box_width = match flexed_width {
+            Some(width) => width,
+            None => {
+                let mut width = specified.unwrap_or_else(|| available_width.max(0.0));
+                if let Some(maximum) = maximum {
+                    width = width.min(maximum);
+                }
+                if let Some(minimum) = minimum {
+                    width = width.max(minimum);
+                }
+                width
+            }
+        };
         let content_width = (border_box_width - horizontal).max(0.0);
 
         let (mut border_x, mut border_y) = (border_x, border_y);
