@@ -33,6 +33,14 @@ pub(crate) fn height(ctx: &Ctx<'_>, text: &str, style: &ComputedStyle, available
         ctx.shaper.line_height(request, style.font_size)
     };
 
+    // Each preserved line takes at least one line box.
+    let pieces = crate::forced_lines(text, style.white_space);
+    if pieces.len() > 1 {
+        return pieces
+            .into_iter()
+            .map(|piece| height(ctx, piece, style, available).max(line_height))
+            .sum();
+    }
     if matches!(style.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre) {
         return line_height;
     }
@@ -69,6 +77,26 @@ pub(crate) fn lines(
     } else {
         ctx.shaper.line_height(request, font_size)
     };
+    // Preserved newlines: lay each line out below the last.
+    let pieces = crate::forced_lines(text, style.white_space);
+    if pieces.len() > 1 {
+        let mut indices = Vec::new();
+        let mut cursor_y = y;
+        for piece in pieces {
+            indices.extend(lines(
+                ctx,
+                node,
+                parent,
+                piece,
+                style,
+                x,
+                cursor_y,
+                available_width,
+            ));
+            cursor_y += height(ctx, piece, style, available_width).max(line_height);
+        }
+        return indices;
+    }
     let alignment = block::map_align(style.text_align);
     let nowrap = matches!(style.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre);
 

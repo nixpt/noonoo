@@ -2281,3 +2281,56 @@ fn a_text_field_is_as_wide_as_its_size() {
     assert_eq!(width("c"), 50.0);
     assert_eq!(width("d"), 0.0, "only text fields take a size");
 }
+
+/// The text boxes' (text, y) in reading order.
+fn text_lines(tree: &LayoutTree) -> Vec<(String, f32)> {
+    tree.boxes()
+        .iter()
+        .filter(|b| b.kind == BoxKind::Text)
+        .map(|b| (b.text.clone().unwrap_or_default(), b.rect.y))
+        .collect()
+}
+
+/// bliss-diff (the devtools console's error row): a preserved newline
+/// didn't break the line, so a two-line `pre-wrap` message ran on as one.
+#[test]
+fn a_preserved_newline_breaks_the_line() {
+    for white_space in ["pre", "pre-wrap", "pre-line"] {
+        let (_doc, tree) = page(
+            "<div>ab cd\nef</div>",
+            &format!("div {{ white-space: {white_space}; line-height: 20px }}"),
+            400.0,
+        );
+        let lines = text_lines(&tree);
+        let ys: Vec<f32> = lines.iter().map(|(_, y)| *y).collect();
+        let words: Vec<&str> = lines.iter().map(|(text, _)| text.as_str()).collect();
+        assert_eq!(words.concat(), "abcdef", "{white_space}");
+        assert_eq!(ys.first(), Some(&0.0), "{white_space}");
+        assert_eq!(ys.last(), Some(&20.0), "{white_space}: ef starts line 2");
+    }
+    // Collapsible white space still collapses the newline.
+    let (_doc, tree) = page("<div>ab\ncd</div>", "div { line-height: 20px }", 400.0);
+    assert!(text_lines(&tree).iter().all(|(_, y)| *y == 0.0));
+}
+
+#[test]
+fn a_shrink_to_fit_box_takes_its_widest_preserved_line() {
+    let (doc, tree) = page(
+        "<div id=\"f\">abcd\nab</div>",
+        "#f { float: left; white-space: pre-wrap }",
+        400.0,
+    );
+    // MetricShaper: 8px a character at 16px.
+    assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 32.0);
+}
+
+#[test]
+fn loose_text_in_a_flex_container_breaks_at_preserved_newlines() {
+    let (doc, tree) = page(
+        "<div id=\"f\">abcd\nab</div>",
+        "#f { display: flex; white-space: pre-wrap; line-height: 20px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.height, 40.0);
+    assert_eq!(text_lines(&tree).last().map(|(_, y)| *y), Some(20.0));
+}

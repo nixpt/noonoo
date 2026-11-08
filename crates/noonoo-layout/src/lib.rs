@@ -86,7 +86,8 @@ use std::collections::{HashMap, HashSet};
 use noonoo_dom::{Document, NodeData, NodeId};
 use noonoo_geometry::{Point, Rect, Size};
 use noonoo_style::{
-    BoxSizing, ComputedStyle, Dimension, Display, Edges, Position, PseudoElement, Styles, ZIndex,
+    BoxSizing, ComputedStyle, Dimension, Display, Edges, Position, PseudoElement, Styles,
+    WhiteSpace, ZIndex,
 };
 
 pub use noonoo_text::{Align, MetricShaper, Shaper};
@@ -165,6 +166,16 @@ impl LayoutBox {
             self.padding.bottom,
             self.padding.left,
         )
+    }
+}
+
+/// `text` split at the newlines `white_space` preserves (`pre`,
+/// `pre-wrap`, `pre-line`): each piece starts a fresh line. Other values
+/// collapse a newline like any space, so the text stays one piece.
+pub(crate) fn forced_lines(text: &str, white_space: WhiteSpace) -> Vec<&str> {
+    match white_space {
+        WhiteSpace::Pre | WhiteSpace::PreWrap | WhiteSpace::PreLine => text.split('\n').collect(),
+        WhiteSpace::Normal | WhiteSpace::NoWrap => vec![text],
     }
 }
 

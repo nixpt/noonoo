@@ -459,6 +459,13 @@ fn min_content(ctx: &Ctx<'_>, node: NodeId, style: &ComputedStyle) -> f32 {
 /// `text`'s min-content width: its longest word, or all of it where it
 /// can't wrap.
 fn text_min_width(ctx: &Ctx<'_>, text: &str, style: &ComputedStyle) -> f32 {
+    let lines = crate::forced_lines(text, style.white_space);
+    if lines.len() > 1 {
+        return lines
+            .into_iter()
+            .map(|line| text_min_width(ctx, line, style))
+            .fold(0.0, f32::max);
+    }
     if matches!(style.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre) {
         return text_width(ctx, text, style);
     }
@@ -474,6 +481,14 @@ fn text_min_width(ctx: &Ctx<'_>, text: &str, style: &ComputedStyle) -> f32 {
 /// (a font can kern a joined string narrower than its parts). `nowrap` and
 /// `pre` text is laid out as one string, and measured as one.
 pub(crate) fn text_width(ctx: &Ctx<'_>, text: &str, style: &ComputedStyle) -> f32 {
+    // Preserved newlines: the widest line.
+    let lines = crate::forced_lines(text, style.white_space);
+    if lines.len() > 1 {
+        return lines
+            .into_iter()
+            .map(|line| text_width(ctx, line, style))
+            .fold(0.0, f32::max);
+    }
     let words: Vec<&str> = text.split_whitespace().collect();
     if matches!(style.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre) {
         return ctx.advance(&words.join(" "), style);

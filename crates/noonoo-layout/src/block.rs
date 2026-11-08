@@ -273,19 +273,29 @@ pub(crate) fn layout_inline_run(
         }
         match ctx.document.node(node) {
             Some(NodeData::Text(text)) => {
-                for word in text.split_whitespace() {
-                    groups
-                        .last_mut()
-                        .expect("the first group always exists")
-                        .push(Item {
-                            node,
-                            style_node: parent_node,
-                            kind: BoxKind::Text,
-                            text: word.to_owned(),
-                            width: ctx.advance(word, parent_style),
-                            height: line_height,
-                            atomic: None,
-                        });
+                // A preserved newline breaks the line like a `<br>`.
+                for (piece, line) in crate::forced_lines(text, parent_style.white_space)
+                    .into_iter()
+                    .enumerate()
+                {
+                    if piece > 0 {
+                        had_break = true;
+                        groups.push(Vec::new());
+                    }
+                    for word in line.split_whitespace() {
+                        groups
+                            .last_mut()
+                            .expect("the first group always exists")
+                            .push(Item {
+                                node,
+                                style_node: parent_node,
+                                kind: BoxKind::Text,
+                                text: word.to_owned(),
+                                width: ctx.advance(word, parent_style),
+                                height: line_height,
+                                atomic: None,
+                            });
+                    }
                 }
             }
             Some(NodeData::Element(element)) => {
