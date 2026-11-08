@@ -384,8 +384,33 @@ impl InlineWalk {
     }
 
     /// Close `element`: the last item inside it ends it, taking its end
-    /// edges; an element with no items never opened.
+    /// edges. An empty element with edges still makes a box, held open by
+    /// an empty item; one without edges never opens.
     fn exit(&mut self, ctx: &Ctx<'_>, element: NodeId, width: f32, groups: &mut [Vec<Item>]) {
+        let entered = self.entered_at.last().copied().unwrap_or(0);
+        if self.count == entered {
+            let edges = InlineEdges::of(ctx, element, width);
+            if edges.start() + edges.end() > 0.0 {
+                let item = Item {
+                    node: None,
+                    style_node: element,
+                    kind: BoxKind::Text,
+                    text: String::new(),
+                    width: 0.0,
+                    height: ctx.line_height_of(ctx.style(element)),
+                    atomic: None,
+                    spaced: self.spaced,
+                    glued: !self.spaced && !self.after_atomic,
+                    preserved: None,
+                    chain: Vec::new(),
+                    opens: 0,
+                    closes: 0,
+                    lead: 0.0,
+                    trail: 0.0,
+                };
+                self.push(ctx, width, groups, item, false);
+            }
+        }
         self.chain.pop();
         let entered = self.entered_at.pop().unwrap_or(0);
         if self.count == entered {
@@ -855,6 +880,11 @@ pub(crate) fn layout_inline_run(
                     if let Some(index) = ctx.tree_index(node) {
                         indices.push(index);
                     }
+                    open_run = None;
+                    continue;
+                }
+                // An empty element's holder: its fragment is the box.
+                if item.node.is_none() && item.text.is_empty() {
                     open_run = None;
                     continue;
                 }

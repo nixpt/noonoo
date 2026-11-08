@@ -2766,3 +2766,38 @@ fn loose_preformatted_text_in_a_flex_container_keeps_its_spaces() {
         .unwrap();
     assert_eq!(run.rect.width, 40.0);
 }
+
+/// An empty inline element still makes an inline box: its padding and
+/// borders take room on the line and paint (an icon slot, a dot).
+#[test]
+fn an_empty_inline_element_with_edges_still_has_a_box() {
+    let (doc, tree) = page(
+        r#"<p>a<span id="s"></span>b<i id="plain"></i>c</p>"#,
+        "p { margin: 0 } span { padding: 0 4px; border: 1px solid #000 }",
+        400.0,
+    );
+    let span = fragments(&doc, &tree, "s");
+    assert_eq!(span.len(), 1);
+    assert_eq!((span[0].rect.x, span[0].rect.width), (8.0, 10.0));
+    assert_eq!(
+        drawn_x(&tree),
+        vec![
+            ("a".to_owned(), 0.0),
+            ("b".to_owned(), 18.0),
+            ("c".to_owned(), 26.0)
+        ]
+    );
+    // Without edges an empty element takes nothing, and draws no run.
+    assert!(fragments(&doc, &tree, "plain").is_empty());
+    assert!(tree.boxes().iter().all(|b| b.text.as_deref() != Some("")));
+}
+
+#[test]
+fn an_empty_inline_elements_edges_count_in_a_shrink_to_fit_width() {
+    let (doc, tree) = page(
+        r#"<div id="f">a<span></span></div>"#,
+        "#f { float: left } span { padding: 0 10px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 28.0);
+}
