@@ -256,7 +256,9 @@ dependencies = [
  "noonoo-geometry",
  "noonoo-paint",
  "noonoo-ttf",
+ "png",
  "vello",
+ "vello_encoding",
 ]
 
 [[package]]

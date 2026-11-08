@@ -13,3 +13,10 @@ noonoo-paint = { path = "../../crates/noonoo-paint" }
 noonoo-geometry = { path = "../../crates/noonoo-geometry" }
 noonoo-ttf = { path = "../../crates/noonoo-ttf" }
 vello = { version = "0.7", default-features = false }
+# Decodes colour glyphs (emoji) and other `DrawImage` PNGs: codecs are bought,
+# not built (docs/DEPENDENCY-EXIT.md).
+png = "0.17"
+
+[dev-dependencies]
+# Names `Patch`, to look at the images a scene carries.
+vello_encoding = "0.7"

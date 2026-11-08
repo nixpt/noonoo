@@ -16,6 +16,7 @@
 //! | `FillGradient` | `Scene::fill` a `kurbo::Rect` with a `peniko::Gradient` (elliptical radial gradients use a brush transform) |
 //! | `FillPolygon` | `Scene::fill` a closed `kurbo::BezPath` |
 //! | `FillContours` | one `Scene::fill` (non-zero) of a `BezPath` with a subpath per contour, so glyph holes stay open |
+//! | `DrawImage` | the PNG decoded (once per distinct image) to RGBA8, then `Scene::draw_image` scaled into its rect; bytes that don't decode draw nothing |
 //! | `PushLayer` / `PopLayer` | `Scene::push_layer` (alpha + clip) / `pop_layer` |
 //! | `DrawText` | a placeholder box per character: text should arrive as glyph outlines (`noonoo-ttf`'s `OutlineGlyphs`, with the faces from [`fonts`]), so a bare run means it was painted without a font |
 //!
@@ -58,7 +59,10 @@ use noonoo_geometry::Point;
 use noonoo_paint::{Command, CommandList, GradientGeometry};
 use vello::Scene;
 use vello::kurbo::{self, Affine, BezPath, Rect as KRect};
-use vello::peniko::{BlendMode, Color, ColorStop, Extend, Fill, Gradient};
+use vello::peniko::{
+    BlendMode, Blob, Color, ColorStop, Extend, Fill, Gradient, ImageAlphaType, ImageBrush,
+    ImageData, ImageFormat,
+};
 
 /// Build a fresh Vello scene from a Noonoo command stream.
 pub fn scene(commands: &CommandList) -> Scene {
@@ -144,6 +148,17 @@ pub fn draw(scene: &mut Scene, commands: &CommandList) {
                 font_size,
                 color,
             } => placeholder_boxes(scene, transform, text, (*x, *y), *font_size, *color),
+            Command::DrawImage { rect, image } => {
+                // Undecodable bytes draw nothing, as a broken image would.
+                if let Some(decoded) = decode(image) {
+                    let to_rect = Affine::translate((f64::from(rect.x), f64::from(rect.y)))
+                        * Affine::scale_non_uniform(
+                            f64::from(rect.width) / f64::from(decoded.width),
+                            f64::from(rect.height) / f64::from(decoded.height),
+                        );
+                    scene.draw_image(&ImageBrush::new(decoded), transform * to_rect);
+                }
+            }
             Command::PushLayer { clip, alpha } => {
                 // No clip: an effectively infinite shape (Vello wants a shape
                 // per layer), so the group covers the whole frame.
@@ -218,6 +233,68 @@ pub fn draw(scene: &mut Scene, commands: &CommandList) {
             }
         }
     }
+}
+
+/// Decoded images by their encoded bytes, so a glyph repainted every frame
+/// decodes once and keeps one blob, which Vello's atlas keys its upload by.
+static DECODED: std::sync::LazyLock<std::sync::Mutex<DecodedImages>> =
+    std::sync::LazyLock::new(Default::default);
+
+/// Encoded bytes to their decode; `None` remembers bytes that don't decode.
+type DecodedImages = std::collections::HashMap<std::sync::Arc<[u8]>, Option<ImageData>>;
+
+/// How many images [`DECODED`] holds before it starts over.
+const DECODED_LIMIT: usize = 1024;
+
+/// `image` as straight-alpha RGBA8 pixels, or `None` when it doesn't decode.
+fn decode(image: &noonoo_paint::EncodedImage) -> Option<ImageData> {
+    let mut cache = DECODED
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(decoded) = cache.get(&image.data) {
+        return decoded.clone();
+    }
+    if cache.len() >= DECODED_LIMIT {
+        cache.clear();
+    }
+    let decoded = match image.format {
+        noonoo_paint::ImageFormat::Png => decode_png(&image.data),
+    };
+    cache.insert(image.data.clone(), decoded.clone());
+    decoded
+}
+
+fn decode_png(bytes: &[u8]) -> Option<ImageData> {
+    let mut decoder = png::Decoder::new(bytes);
+    decoder.set_transformations(png::Transformations::normalize_to_color8());
+    let mut reader = decoder.read_info().ok()?;
+    let mut buffer = vec![0; reader.output_buffer_size()];
+    let frame = reader.next_frame(&mut buffer).ok()?;
+    let pixels = &buffer[..frame.buffer_size()];
+    let rgba: Vec<u8> = match frame.color_type {
+        png::ColorType::Rgba => pixels.to_vec(),
+        png::ColorType::Rgb => pixels
+            .chunks_exact(3)
+            .flat_map(|p| [p[0], p[1], p[2], 255])
+            .collect(),
+        png::ColorType::GrayscaleAlpha => pixels
+            .chunks_exact(2)
+            .flat_map(|p| [p[0], p[0], p[0], p[1]])
+            .collect(),
+        png::ColorType::Grayscale => pixels.iter().flat_map(|&g| [g, g, g, 255]).collect(),
+        // `normalize_to_color8` expands palettes, so none reach here.
+        png::ColorType::Indexed => return None,
+    };
+    if frame.width == 0 || frame.height == 0 {
+        return None;
+    }
+    Some(ImageData {
+        data: Blob::new(std::sync::Arc::new(rgba)),
+        format: ImageFormat::Rgba8,
+        alpha_type: ImageAlphaType::Alpha,
+        width: frame.width,
+        height: frame.height,
+    })
 }
 
 /// A Noonoo gradient into a Vello/peniko brush.
@@ -550,6 +627,75 @@ mod tests {
         }]);
         assert!(paths > 0);
         assert_eq!(draws, 1);
+    }
+
+    /// A `width`×`height` RGBA PNG, every pixel `rgba`.
+    fn png_bytes(width: u32, height: u32, rgba: [u8; 4]) -> Vec<u8> {
+        let mut out = Vec::new();
+        let mut encoder = png::Encoder::new(&mut out, width, height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().unwrap();
+        writer
+            .write_image_data(&rgba.repeat((width * height) as usize))
+            .unwrap();
+        writer.finish().unwrap();
+        out
+    }
+
+    fn image_patches(scene: &Scene) -> Vec<vello::peniko::ImageData> {
+        scene
+            .encoding()
+            .resources
+            .patches
+            .iter()
+            .filter_map(|patch| match patch {
+                vello_encoding::Patch::Image { image, .. } => Some(image.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn draw_image(rect: NRect, data: Vec<u8>) -> Command {
+        Command::DrawImage {
+            rect,
+            image: noonoo_paint::EncodedImage::png(data),
+        }
+    }
+
+    #[test]
+    fn a_png_image_draws_its_decoded_pixels() {
+        let scene = scene(&CommandList(vec![draw_image(
+            NRect::new(0.0, 0.0, 4.0, 2.0),
+            png_bytes(2, 1, [10, 20, 30, 128]),
+        )]));
+        let images = image_patches(&scene);
+        assert_eq!(images.len(), 1);
+        let image = &images[0];
+        assert_eq!((image.width, image.height), (2, 1));
+        assert_eq!(image.format, vello::peniko::ImageFormat::Rgba8);
+        assert_eq!(image.alpha_type, vello::peniko::ImageAlphaType::Alpha);
+        assert_eq!(image.data.data(), &[10, 20, 30, 128, 10, 20, 30, 128]);
+    }
+
+    /// Repainting the same glyph must not hand Vello a new image each frame:
+    /// its atlas keys images by blob, so equal bytes share one decode.
+    #[test]
+    fn equal_png_bytes_share_one_decoded_image() {
+        let bytes = png_bytes(3, 3, [1, 2, 3, 255]);
+        let rect = NRect::new(0.0, 0.0, 3.0, 3.0);
+        let first = image_patches(&scene(&CommandList(vec![draw_image(rect, bytes.clone())])));
+        let second = image_patches(&scene(&CommandList(vec![draw_image(rect, bytes)])));
+        assert_eq!(first[0].data.id(), second[0].data.id());
+    }
+
+    #[test]
+    fn an_undecodable_image_draws_nothing() {
+        let (paths, draws) = encodings(vec![draw_image(
+            NRect::new(0.0, 0.0, 4.0, 4.0),
+            b"not a png".to_vec(),
+        )]);
+        assert_eq!((paths, draws), (0, 0));
     }
 
     fn text_run(text: &str) -> Command {

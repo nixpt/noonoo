@@ -9,8 +9,8 @@
 //! the same way [`crate::FontSetShaper`] does — so a document laid out with a
 //! `FontSetShaper` paints with the very faces it was measured against.
 
-use noonoo_geometry::Point;
-use noonoo_paint::{Color, Command, CommandList, Glyphs};
+use noonoo_geometry::{Point, Rect};
+use noonoo_paint::{Color, Command, CommandList, EncodedImage, Glyphs};
 use noonoo_text::FontRequest;
 
 use crate::{Font, FontSet};
@@ -66,9 +66,10 @@ impl Glyphs for OutlineGlyphs<'_> {
         };
         let mut pen = x;
         let mut previous: Option<(*const Font, u16)> = None;
-        for character in text.chars() {
-            // A character the face lacks comes from a fallback face.
-            let font = self.set.face_for(selected, character);
+        for (character, emoji) in crate::emoji::presented(text) {
+            // A character the face lacks comes from a fallback face; an
+            // emoji prefers a face that has it in colour.
+            let font = self.set.face_presented(selected, character, emoji);
             let scale = font_size / font.units_per_em().max(1) as f32;
             let glyph = font.glyph_for_char_or_notdef(character);
             if let Some((face, left)) = previous
@@ -76,7 +77,20 @@ impl Glyphs for OutlineGlyphs<'_> {
             {
                 pen += font.kern(left, glyph) as f32 * scale;
             }
-            if let Some(outline) = font.outline(glyph) {
+            if let Some(bitmap) = font.color_bitmap(glyph) {
+                // A colour glyph (emoji) is its image, scaled from its
+                // strike's size to this one; it ignores the text colour.
+                let pixel = font_size / f32::from(bitmap.ppem.max(1));
+                out.0.push(Command::DrawImage {
+                    rect: Rect::new(
+                        pen + f32::from(bitmap.bearing_x) * pixel,
+                        baseline - f32::from(bitmap.bearing_y) * pixel,
+                        f32::from(bitmap.width) * pixel,
+                        f32::from(bitmap.height) * pixel,
+                    ),
+                    image: EncodedImage::png(bitmap.data),
+                });
+            } else if let Some(outline) = font.outline(glyph) {
                 // All of a glyph's contours fill as one shape, so a hole
                 // (wound the other way) stays open.
                 let contours: Vec<Vec<Point>> = outline

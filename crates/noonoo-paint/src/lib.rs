@@ -59,6 +59,33 @@ pub enum GradientGeometry {
     },
 }
 
+/// How an [`EncodedImage`]'s bytes are encoded.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ImageFormat {
+    /// PNG (as colour emoji fonts store their glyphs).
+    Png,
+}
+
+/// An image as its codec reads it, not yet decoded: decoding is the
+/// backend's job (image codecs are bought, not owned).
+#[derive(Clone, PartialEq, Debug)]
+pub struct EncodedImage {
+    /// The encoding.
+    pub format: ImageFormat,
+    /// The encoded bytes, shared without copying.
+    pub data: std::sync::Arc<[u8]>,
+}
+
+impl EncodedImage {
+    /// A PNG image from its bytes.
+    pub fn png(data: impl Into<std::sync::Arc<[u8]>>) -> Self {
+        Self {
+            format: ImageFormat::Png,
+            data: data.into(),
+        }
+    }
+}
+
 /// A single drawing instruction.
 #[derive(Clone, PartialEq, Debug)]
 pub enum Command {
@@ -98,6 +125,13 @@ pub enum Command {
         contours: Vec<Vec<Point>>,
         /// The fill colour.
         color: Color,
+    },
+    /// Draw an encoded image scaled to fill `rect` (a colour emoji glyph).
+    DrawImage {
+        /// Where the image goes.
+        rect: Rect,
+        /// The image.
+        image: EncodedImage,
     },
     /// Draw a text run, with `y` on the baseline.
     DrawText {
@@ -738,6 +772,20 @@ fn command_json(command: &Command) -> Json {
             ("inner", rect_json(*inner)),
             ("inner-radius", radius_json(*inner_radius)),
             ("color", Json::String(color_hex(*color))),
+        ]),
+        Command::DrawImage { rect, image } => object(vec![
+            ("op", Json::String("draw-image".into())),
+            ("rect", rect_json(*rect)),
+            (
+                "format",
+                Json::String(
+                    match image.format {
+                        ImageFormat::Png => "png",
+                    }
+                    .into(),
+                ),
+            ),
+            ("bytes", Json::Number(image.data.len() as f64)),
         ]),
         Command::BoxShadow {
             rect,
@@ -1574,6 +1622,21 @@ mod tests {
         );
         let json = round.to_json().to_string();
         assert!(json.contains("radius"));
+    }
+
+    /// An image records where it goes, its format and its size, not its
+    /// bytes: the JSON stays a readable diff.
+    #[test]
+    fn json_records_an_image_by_format_and_size() {
+        let list = CommandList(vec![Command::DrawImage {
+            rect: Rect::new(1.0, 2.0, 3.0, 4.0),
+            image: EncodedImage::png(vec![0x89, b'P', b'N', b'G']),
+        }]);
+        let json = list.to_json().to_string();
+        assert!(json.contains(r#""op":"draw-image""#), "{json}");
+        assert!(json.contains(r#""format":"png""#), "{json}");
+        assert!(json.contains(r#""bytes":4"#), "{json}");
+        assert!(json.contains(r#""width":3"#), "{json}");
     }
 
     #[test]

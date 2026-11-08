@@ -31,12 +31,13 @@ pub(crate) fn advance_units(font: &Font, text: &str) -> i32 {
 }
 
 /// The advance of `text` in pixels, each character measured with the face
-/// [`FontSet::face_for`] picks. Pairs kern only within one face.
+/// [`FontSet::face_for`] (or, for an emoji, [`FontSet::face_for_emoji`])
+/// picks. Variation selectors take no space. Pairs kern only within one face.
 pub(crate) fn fallback_advance(set: &FontSet, selected: &Font, text: &str, font_size: f32) -> f32 {
     let mut pixels = 0.0;
     let mut previous: Option<(*const Font, u16)> = None;
-    for character in text.chars() {
-        let font = set.face_for(selected, character);
+    for (character, emoji) in crate::emoji::presented(text) {
+        let font = set.face_presented(selected, character, emoji);
         let glyph = font.glyph_for_char_or_notdef(character);
         let mut units = i32::from(font.advance(glyph));
         if let Some((face, left)) = previous

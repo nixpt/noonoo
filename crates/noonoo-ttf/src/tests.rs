@@ -650,3 +650,236 @@ fn fallback_order_decides_between_faces_with_the_character() {
     // Nothing has it: the selected face (and its `.notdef`).
     assert_eq!(set.face_for(&primary, 'z').units_per_em(), 1000);
 }
+
+/// A colour bitmap strike at 100 ppem holding glyph 1 (`B` in the minimal
+/// font) as a format-17 record (small metrics + PNG bytes), indexed by a
+/// format-1 subtable — the layout Noto Color Emoji uses.
+fn cblc_cbdt() -> (Vec<u8>, Vec<u8>) {
+    cblc_cbdt_with(&[100], true)
+}
+
+/// `CBLC`/`CBDT` with one strike per `ppems` entry, all mapping glyph 1 to
+/// the same image-format-17 record; without `filled` its slot is empty.
+fn cblc_cbdt_with(ppems: &[u8], filled: bool) -> (Vec<u8>, Vec<u8>) {
+    let mut cbdt = Vec::new();
+    push_u32(&mut cbdt, 0x0003_0000); // version
+    let record_start = cbdt.len() as u32;
+    cbdt.extend_from_slice(&[12, 10, 1, 11, 12]); // height, width, bearingX, bearingY, advance
+    push_u32(&mut cbdt, 7); // dataLen
+    cbdt.extend_from_slice(b"PNGDATA");
+    let record_end = if filled {
+        cbdt.len() as u32
+    } else {
+        record_start
+    };
+
+    let mut cblc = Vec::new();
+    push_u32(&mut cblc, 0x0003_0000); // version
+    push_u32(&mut cblc, ppems.len() as u32); // numSizes
+    let array = 8 + 48 * ppems.len() as u32;
+    for &ppem in ppems {
+        // BitmapSize record (48 bytes).
+        push_u32(&mut cblc, array); // indexSubTableArrayOffset
+        push_u32(&mut cblc, 24); // indexTablesSize
+        push_u32(&mut cblc, 1); // numberOfIndexSubTables
+        push_u32(&mut cblc, 0); // colorRef
+        cblc.extend_from_slice(&[0u8; 24]); // hori + vert line metrics
+        push_u16(&mut cblc, 1); // startGlyphIndex
+        push_u16(&mut cblc, 1); // endGlyphIndex
+        cblc.extend_from_slice(&[ppem, ppem, 32, 1]); // ppemX, ppemY, bitDepth, flags
+    }
+    // IndexSubTableArray: one entry, its subtable right after it.
+    push_u16(&mut cblc, 1); // firstGlyphIndex
+    push_u16(&mut cblc, 1); // lastGlyphIndex
+    push_u32(&mut cblc, 8); // additionalOffsetToIndexSubtable
+    // IndexSubTable format 1: header, then one offset per glyph plus an end.
+    push_u16(&mut cblc, 1); // indexFormat
+    push_u16(&mut cblc, 17); // imageFormat
+    push_u32(&mut cblc, 0); // imageDataOffset
+    push_u32(&mut cblc, record_start);
+    push_u32(&mut cblc, record_end);
+    (cblc, cbdt)
+}
+
+/// A font with glyph outlines and the given colour bitmap tables.
+fn font_with_bitmaps(tables: (Vec<u8>, Vec<u8>)) -> Vec<u8> {
+    color_font_mapping(1000, 'A', tables)
+}
+
+/// A colour font mapping `first` (to glyph 1, which has the bitmap) and the
+/// next character.
+fn color_font_mapping(units_per_em: u16, first: char, (cblc, cbdt): (Vec<u8>, Vec<u8>)) -> Vec<u8> {
+    build(&[
+        (*b"head", head(units_per_em)),
+        (*b"maxp", maxp()),
+        (*b"hhea", hhea()),
+        (*b"hmtx", hmtx()),
+        (*b"cmap", cmap_from(first)),
+        (*b"glyf", glyf()),
+        (*b"loca", loca()),
+        (*b"CBLC", cblc),
+        (*b"CBDT", cbdt),
+    ])
+}
+
+fn color_font() -> Vec<u8> {
+    font_with_bitmaps(cblc_cbdt())
+}
+
+#[test]
+fn reads_a_color_bitmap_glyph() {
+    let font = Font::parse(&color_font()).unwrap();
+    let bitmap = font.color_bitmap(1).expect("glyph 1 has a bitmap");
+    assert_eq!(
+        bitmap,
+        ColorBitmap {
+            data: b"PNGDATA",
+            ppem: 100,
+            width: 10,
+            height: 12,
+            bearing_x: 1,
+            bearing_y: 11,
+        }
+    );
+}
+
+#[test]
+fn a_glyph_outside_every_strike_has_no_bitmap() {
+    let font = Font::parse(&color_font()).unwrap();
+    assert_eq!(font.color_bitmap(2), None);
+    let plain = Font::parse(&minimal_font()).unwrap();
+    assert_eq!(plain.color_bitmap(1), None);
+}
+
+#[test]
+fn outline_glyphs_draw_a_color_glyph_as_its_image() {
+    use noonoo_paint::{Color, Command, CommandList, EncodedImage, Glyphs};
+
+    let font = Font::parse(&color_font()).unwrap();
+    let mut set = FontSet::new();
+    set.add("Emoji", 400, false, &font);
+    let mut list = CommandList::default();
+    // At 50px a 100-ppem strike scales by 0.5; `A` is glyph 1.
+    OutlineGlyphs::new(&set).draw(
+        "A",
+        (10.0, 40.0),
+        50.0,
+        Color::BLACK,
+        FontRequest::any(),
+        &mut list,
+    );
+    assert_eq!(
+        list.commands(),
+        &[Command::DrawImage {
+            rect: noonoo_geometry::Rect::new(10.5, 34.5, 5.0, 6.0),
+            image: EncodedImage::png(b"PNGDATA".to_vec()),
+        }]
+    );
+}
+
+#[test]
+fn the_largest_strike_supplies_the_bitmap() {
+    let font = Font::parse(&font_with_bitmaps(cblc_cbdt_with(&[50, 100, 72], true))).unwrap();
+    assert_eq!(font.color_bitmap(1).map(|bitmap| bitmap.ppem), Some(100));
+}
+
+#[test]
+fn an_empty_bitmap_slot_falls_back_to_the_outline() {
+    let font = Font::parse(&font_with_bitmaps(cblc_cbdt_with(&[100], false))).unwrap();
+    assert_eq!(font.color_bitmap(1), None);
+    assert!(font.outline(1).is_some());
+}
+
+#[test]
+fn a_font_with_cblc_and_cbdt_has_color_bitmaps() {
+    assert!(Font::parse(&color_font()).unwrap().has_color_bitmaps());
+    assert!(!Font::parse(&minimal_font()).unwrap().has_color_bitmaps());
+}
+
+/// Three faces for presentation tests: a text face without `first`, then
+/// fallbacks with a plain glyph (1000 upem) and a colour bitmap (2000 upem)
+/// for it.
+fn presentation_faces(first: char) -> (Font, Font, Font) {
+    (
+        Font::parse(&minimal_font()).unwrap(),
+        Font::parse(&font_mapping(1000, first)).unwrap(),
+        Font::parse(&color_font_mapping(2000, first, cblc_cbdt())).unwrap(),
+    )
+}
+
+fn draw_ops(set: &FontSet, text: &str) -> Vec<&'static str> {
+    use noonoo_paint::{Color, Command, CommandList, Glyphs};
+    let mut list = CommandList::default();
+    OutlineGlyphs::new(set).draw(
+        text,
+        (0.0, 40.0),
+        20.0,
+        Color::BLACK,
+        FontRequest::any(),
+        &mut list,
+    );
+    list.commands()
+        .iter()
+        .map(|command| match command {
+            Command::DrawImage { .. } => "image",
+            Command::FillContours { .. } => "outline",
+            _ => "other",
+        })
+        .collect()
+}
+
+/// ⚡ is an emoji by default (Emoji_Presentation), so it takes the colour
+/// face over an earlier plain one; VS15 asks for the plain glyph instead.
+#[test]
+fn a_default_emoji_draws_from_the_colour_face() {
+    let (text, plain, color) = presentation_faces('\u{26A1}');
+    let mut set = FontSet::new();
+    set.add("Text", 400, false, &text);
+    set.add_fallback(&plain).add_fallback(&color);
+    assert_eq!(draw_ops(&set, "\u{26A1}"), ["image"]);
+    assert_eq!(draw_ops(&set, "\u{26A1}\u{FE0E}"), ["outline"]);
+}
+
+/// ⚙ is text by default; VS16 asks for the colour glyph.
+#[test]
+fn an_emoji_selector_asks_for_the_colour_face() {
+    let (text, plain, color) = presentation_faces('\u{2699}');
+    let mut set = FontSet::new();
+    set.add("Text", 400, false, &text);
+    set.add_fallback(&plain).add_fallback(&color);
+    assert_eq!(draw_ops(&set, "\u{2699}"), ["outline"]);
+    assert_eq!(draw_ops(&set, "\u{2699}\u{FE0F}"), ["image"]);
+}
+
+/// Variation selectors pick a presentation; they are not characters to
+/// draw or measure (no face maps them, so they'd draw `.notdef`).
+#[test]
+fn variation_selectors_take_no_space() {
+    let (text, plain, color) = presentation_faces('\u{2699}');
+    let mut set = FontSet::new();
+    set.add("Text", 400, false, &text);
+    set.add_fallback(&plain).add_fallback(&color);
+    let shaper = FontSetShaper::new(&set);
+    // Glyph 1 is 600 units: 12px from the plain face, 6px from the colour one.
+    assert_eq!(shaper.advance("\u{2699}", FontRequest::any(), 20.0), 12.0);
+    assert_eq!(
+        shaper.advance("\u{2699}\u{FE0F}", FontRequest::any(), 20.0),
+        6.0
+    );
+    assert_eq!(shaper.advance("A\u{FE0E}", FontRequest::any(), 20.0), 12.0);
+    assert_eq!(draw_ops(&set, "A\u{FE0E}"), ["outline"]);
+}
+
+/// A family that is itself a colour font keeps its own emoji over a colour
+/// fallback's.
+#[test]
+fn a_selected_colour_face_draws_its_own_emoji() {
+    let own = Font::parse(&color_font_mapping(2000, '\u{26A1}', cblc_cbdt())).unwrap();
+    let other = Font::parse(&color_font_mapping(1000, '\u{26A1}', cblc_cbdt())).unwrap();
+    let mut set = FontSet::new();
+    set.add("Emoji", 400, false, &own);
+    set.add_fallback(&other);
+    // Glyph 1 is 600 units: 6px from the selected face at 2000 upem.
+    let advance = FontSetShaper::new(&set).advance("\u{26A1}", FontRequest::any(), 20.0);
+    assert_eq!(advance, 6.0);
+}

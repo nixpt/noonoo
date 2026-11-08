@@ -106,6 +106,33 @@ impl<'a> FontSet<'a> {
             .unwrap_or(selected)
     }
 
+    /// The face to draw `character` with when it should be an emoji: the
+    /// first of `selected` and the fallbacks with a colour bitmap for it,
+    /// else whatever [`FontSet::face_for`] picks.
+    pub fn face_for_emoji(&self, selected: &'a Font, character: char) -> &'a Font {
+        std::iter::once(selected)
+            .chain(self.fallbacks.iter().copied())
+            .find(|font| {
+                font.glyph_for_char(character)
+                    .is_some_and(|glyph| font.color_bitmap(glyph).is_some())
+            })
+            .unwrap_or_else(|| self.face_for(selected, character))
+    }
+
+    /// The face for `character` in the presentation [`crate::emoji`] chose.
+    pub(crate) fn face_presented(
+        &self,
+        selected: &'a Font,
+        character: char,
+        emoji: bool,
+    ) -> &'a Font {
+        if emoji {
+            self.face_for_emoji(selected, character)
+        } else {
+            self.face_for(selected, character)
+        }
+    }
+
     /// The number of registered faces.
     pub fn len(&self) -> usize {
         self.faces.len()

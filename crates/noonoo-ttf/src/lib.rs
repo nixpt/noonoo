@@ -19,6 +19,13 @@
 //! units, and [`Outline::flatten`] turns them into polygons for the paint stream.
 //! CFF outlines are not parsed.
 //!
+//! Colour emoji fonts store glyphs as PNG bitmaps (`CBLC`/`CBDT`):
+//! [`Font::color_bitmap`] finds a glyph's PNG bytes and metrics, and
+//! [`OutlineGlyphs`] draws such a glyph as a `DrawImage` of those bytes, scaled
+//! from its strike. Decoding the PNG is the renderer's job. Emoji
+//! presentation (a default-emoji character, or VS16 after one) prefers a face
+//! with the character in colour; see [`FontSet::face_for_emoji`].
+//!
 //! [`OutlineGlyphs`] implements `noonoo_paint::Glyphs`, drawing a run as filled
 //! glyph outlines — pair it with a [`FontSetShaper`] over the same [`FontSet`]
 //! so each run is measured and painted with the face its element selects
@@ -38,7 +45,9 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+mod cbdt;
 mod cmap;
+mod emoji;
 mod glyf;
 mod kern;
 mod reader;
@@ -46,6 +55,8 @@ mod render;
 mod set;
 mod shaper;
 
+pub use cbdt::ColorBitmap;
+pub use emoji::is_default_emoji;
 pub use glyf::{Contour, Outline, Point};
 pub use render::OutlineGlyphs;
 pub use set::FontSet;
@@ -72,6 +83,9 @@ pub struct Font {
     /// Legacy pair-kerning adjustments, sorted by `(left, right)`.
     kern: Vec<kern::Pair>,
     cmap: Option<Cmap>,
+    /// The `CBLC` and `CBDT` tables' offsets, when the font has colour
+    /// bitmaps.
+    color_bitmaps: Option<(usize, usize)>,
 }
 
 impl Font {
@@ -161,6 +175,8 @@ impl Font {
             None => Vec::new(),
         };
 
+        let color_bitmaps = table(b"CBLC").zip(table(b"CBDT"));
+
         Ok(Font {
             data: data.to_vec(),
             units_per_em,
@@ -174,6 +190,7 @@ impl Font {
             glyf_offset,
             kern,
             cmap,
+            color_bitmaps,
         })
     }
 
@@ -193,6 +210,12 @@ impl Font {
     /// its metrics still parse.
     pub fn has_outlines(&self) -> bool {
         !self.loca.is_empty()
+    }
+
+    /// Whether this font carries colour bitmap glyphs (`CBLC`/`CBDT`), as
+    /// colour emoji fonts do instead of outlines.
+    pub fn has_color_bitmaps(&self) -> bool {
+        self.color_bitmaps.is_some()
     }
 
     /// The typographic ascender, in font units (`hhea`).
@@ -235,6 +258,13 @@ impl Font {
     /// The glyph a character maps to, or `.notdef` (glyph 0) when it does not.
     pub fn glyph_for_char_or_notdef(&self, character: char) -> u16 {
         self.glyph_for_char(character).unwrap_or(0)
+    }
+
+    /// `glyph`'s colour bitmap (`CBLC`/`CBDT`), from the largest strike that
+    /// has one; `None` when the font has none for it.
+    pub fn color_bitmap(&self, glyph: u16) -> Option<ColorBitmap<'_>> {
+        let (cblc, cbdt) = self.color_bitmaps?;
+        cbdt::bitmap(&self.data, cblc, cbdt, glyph)
     }
 
     /// The legacy pair-kerning adjustment between two glyphs, in font units.

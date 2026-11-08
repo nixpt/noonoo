@@ -59,11 +59,14 @@ const GENERICS: &[(&str, &[(&str, &str)])] = &[
 ];
 
 /// Faces kept for characters the chosen families lack (arrows, symbols,
-/// math), after the unchosen sans-serif families, best first.
+/// math, then colour emoji), after the unchosen sans-serif families, best
+/// first. Emoji come last so a symbol with a plain glyph keeps its text
+/// presentation.
 const SYMBOLS: &[&str] = &[
     "NotoSansSymbols-Regular.ttf",
     "NotoSansSymbols2-Regular.ttf",
     "NotoSansMath-Regular.ttf",
+    "NotoColorEmoji.ttf",
 ];
 
 /// Each style's file-name suffixes, in the conventions of those families:
@@ -177,7 +180,8 @@ pub fn font_files(dirs: &[PathBuf]) -> Vec<PathBuf> {
 }
 
 /// Load the planned faces into a font set that lives for the process.
-/// Files that don't read or parse, or have no TrueType outlines, are skipped;
+/// Files that don't read or parse, or have neither TrueType outlines nor
+/// colour bitmaps (emoji), are skipped;
 /// `None` when nothing loads.
 ///
 /// The fonts and the set are leaked: the host's glyph renderer and the
@@ -196,7 +200,8 @@ pub fn load(plan: &[FacePlan]) -> Option<&'static FontSet<'static>> {
         .filter_map(|path| {
             let bytes = std::fs::read(path).ok()?;
             let font = Font::parse(&bytes).ok()?;
-            font.has_outlines().then(|| (path.clone(), font))
+            let drawable = font.has_outlines() || font.has_color_bitmaps();
+            drawable.then(|| (path.clone(), font))
         })
         .collect();
     if fonts.is_empty() {
@@ -331,6 +336,7 @@ mod tests {
     fn other_installed_faces_become_fallbacks_for_missing_characters() {
         let plan = plan(&files(&[
             "NotoSansSymbols2-Regular.ttf",
+            "NotoColorEmoji.ttf",
             "NotoSans-Regular.ttf",
             "NotoSansSymbols-Bold.ttf",
             "DejaVuSans.ttf",
@@ -338,7 +344,8 @@ mod tests {
             "NotoSansSymbols-Regular.ttf",
         ]));
         // The chosen sans family is selected by name, never as a fallback;
-        // the other sans families come first, then the symbol faces.
+        // the other sans families come first, then the symbol faces, then
+        // colour emoji.
         assert_eq!(
             fallbacks(&plan),
             vec![
@@ -346,6 +353,7 @@ mod tests {
                 "NotoSansSymbols-Regular.ttf",
                 "NotoSansSymbols2-Regular.ttf",
                 "NotoSansMath-Regular.ttf",
+                "NotoColorEmoji.ttf",
             ]
         );
         assert!(has(&plan, "", 400, false, "NotoSans-Regular.ttf"));
@@ -459,6 +467,22 @@ mod tests {
         let selected = set.select_best(&["sans-serif".into()], 400, false).unwrap();
         assert!(selected.glyph_for_char('←').is_none(), "Noto Sans lacks it");
         assert!(set.face_for(selected, '←').glyph_for_char('←').is_some());
+    }
+
+    /// Noto Color Emoji has bitmaps, not outlines, and still loads as the
+    /// emoji fallback. Skipped where the files aren't present.
+    #[test]
+    fn an_installed_color_emoji_font_supplies_emoji() {
+        let noto = PathBuf::from("/usr/share/fonts/noto/NotoSans-Regular.ttf");
+        let emoji = PathBuf::from("/usr/share/fonts/noto/NotoColorEmoji.ttf");
+        if !noto.exists() || !emoji.exists() {
+            return;
+        }
+        let set = load(&plan(&[noto, emoji])).expect("fonts load");
+        let selected = set.select_best(&["sans-serif".into()], 400, false).unwrap();
+        let face = set.face_for_emoji(selected, '📑');
+        let glyph = face.glyph_for_char('📑').expect("the emoji face maps it");
+        assert!(face.color_bitmap(glyph).is_some());
     }
 }
 
