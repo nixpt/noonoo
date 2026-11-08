@@ -174,6 +174,7 @@ pub(crate) fn layout_block_children(
         let available = flow_width(ctx, child, content_width);
         let height = ctx.layout_element(child, content_x + margin.left, cursor, available, None);
         if let Some(index) = ctx.tree_index(child) {
+            apply_auto_margins(ctx, child, index, content_width);
             indices.push(index);
         }
         cursor += height;
@@ -502,6 +503,33 @@ pub(crate) fn flow_width(ctx: &Ctx<'_>, node: NodeId, container_width: f32) -> f
         (container_width - margin.left - margin.right).max(0.0)
     } else {
         container_width
+    }
+}
+
+/// Auto side margins share out the room a block leaves in its
+/// `container_width` container: both auto centre it, one pushes it to the
+/// other side (CSS 2 §10.3.3). `index` is its laid-out box, at its left
+/// margin. An auto width fills the container and leaves no room, unless
+/// `max-width` narrowed it.
+fn apply_auto_margins(ctx: &mut Ctx<'_>, node: NodeId, index: usize, container_width: f32) {
+    use noonoo_style::Dimension;
+    let style = ctx.style(node);
+    let left = matches!(style.margin.left, Dimension::Auto);
+    let right = matches!(style.margin.right, Dimension::Auto);
+    if !(left || right) {
+        return;
+    }
+    // Auto margins resolve to zero here, so this is the room left over.
+    let margins = crate::resolve::margins(&style.margin, container_width);
+    let width = ctx.tree.boxes[index].rect.width;
+    let free = (container_width - width - margins.left - margins.right).max(0.0);
+    let dx = match (left, right) {
+        (true, true) => free / 2.0,
+        (true, false) => free,
+        _ => 0.0,
+    };
+    if dx > 0.0 {
+        ctx.shift_subtree(index, dx, 0.0);
     }
 }
 

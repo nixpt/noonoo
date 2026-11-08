@@ -2214,3 +2214,32 @@ fn an_empty_declaration_is_dropped() {
     );
     assert_eq!(tree.get(id(&doc, "a")).unwrap().kind, BoxKind::Block);
 }
+
+/// bliss-diff (example.com): auto side margins centre a block of known
+/// width.
+#[test]
+fn auto_side_margins_centre_a_block() {
+    let (doc, tree) = page(
+        r#"<div id="a"></div><div id="b"></div>"#,
+        "#a { width: 100px; height: 5px; margin: 0 auto }
+         #b { width: 100px; height: 5px; margin-left: auto }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.x, 150.0);
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.x, 300.0);
+}
+
+#[test]
+fn auto_margins_centre_a_block_narrowed_by_max_width() {
+    let (doc, tree) = page(
+        r#"<div id="a"></div><div id="b"></div>"#,
+        "#a { max-width: 100px; height: 5px; margin: 0 auto }
+         #b { height: 5px; margin: 0 auto }",
+        400.0,
+    );
+    let a = tree.get(id(&doc, "a")).unwrap().rect;
+    assert_eq!((a.x, a.width), (150.0, 100.0));
+    // An auto width fills the container: nothing is left to share.
+    let b = tree.get(id(&doc, "b")).unwrap().rect;
+    assert_eq!((b.x, b.width), (0.0, 400.0));
+}
