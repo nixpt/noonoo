@@ -17,6 +17,8 @@ noonoo-vello = { path = "../noonoo-vello" }
 noonoo-events = { path = "../../crates/noonoo-events" }
 noonoo-geometry = { path = "../../crates/noonoo-geometry" }
 noonoo-text = { path = "../../crates/noonoo-text" }
+noonoo-ttf = { path = "../../crates/noonoo-ttf" }
+noonoo-paint = { path = "../../crates/noonoo-paint" }
 vello = { version = "0.7", default-features = false, features = ["wgpu"] }
 wgpu = "27"
 winit = "=0.31.0-beta.2"

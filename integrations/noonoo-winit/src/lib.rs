@@ -23,9 +23,9 @@
 //!
 //! ## What the embedder supplies
 //!
-//! A [`Host`] already populated with layers, a listener for DOM events, and —
-//! if fonts are wanted — a `Shaper` (the default is the deterministic
-//! [`noonoo_text::MetricShaper`]). Keyboard focus follows pointer *buttons*
+//! A [`Host`] already populated with layers and a listener for DOM events.
+//! Text is measured and drawn with the system fonts by default ([`fonts`]);
+//! [`App::with_fonts`] swaps in another set. Keyboard focus follows pointer *buttons*
 //! only; pointer moves route to the DOM without stealing focus, update the
 //! host's `:hover` state, and reflect the hovered node's computed `cursor` on
 //! the window. On Linux the window is exposed to assistive technology by
@@ -34,6 +34,7 @@
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod fonts;
 pub mod input;
 pub mod render;
 
@@ -48,6 +49,7 @@ use noonoo_events::{
 use noonoo_geometry::{Point, Size};
 use noonoo_shell::Host;
 use noonoo_text::{MetricShaper, Shaper};
+use noonoo_ttf::{FontSet, FontSetShaper, OutlineGlyphs};
 use winit::application::ApplicationHandler;
 use winit::cursor::CursorIcon;
 use winit::dpi::LogicalSize;
@@ -98,12 +100,17 @@ pub struct App {
 
 impl App {
     /// A window app over `host`, dispatching DOM events to `listener`.
+    ///
+    /// Text is measured and drawn with the system fonts ([`fonts::system`]):
+    /// a GPU window can only draw glyph outlines, so this is the default.
+    /// Where no known font is installed, text falls back to the metric
+    /// shaper and isn't drawn.
     pub fn new(
         title: impl Into<String>,
         host: Host,
         listener: impl Fn(NodeId, &Event, EventPhase) -> Propagation + 'static,
     ) -> Self {
-        Self {
+        let app = Self {
             title: title.into(),
             host,
             shaper: Box::new(MetricShaper),
@@ -118,10 +125,24 @@ impl App {
             window: None,
             #[cfg(target_os = "linux")]
             a11y: None,
+        };
+        match fonts::system() {
+            Some(set) => app.with_fonts(set),
+            None => app,
         }
     }
 
-    /// Measure text with a real shaper (e.g. `noonoo-ttf`'s `FontSetShaper`).
+    /// Measure and draw text with the faces in `set`. The shaper and the
+    /// glyph renderer always share one set, so text is drawn with the faces
+    /// it was measured against.
+    pub fn with_fonts(mut self, set: &'static FontSet<'static>) -> Self {
+        self.shaper = Box::new(FontSetShaper::new(set));
+        self.host.set_glyphs(Box::new(OutlineGlyphs::new(set)));
+        self
+    }
+
+    /// Measure text with another shaper. Prefer [`App::with_fonts`], which
+    /// keeps measuring and drawing on the same faces.
     pub fn with_shaper(mut self, shaper: Box<dyn Shaper>) -> Self {
         self.shaper = shaper;
         self
@@ -455,5 +476,50 @@ impl ApplicationHandler for App {
         // Drop the surface before the window (field order enforces it), and
         // rebuild on the next `can_create_surfaces`.
         self.gpu = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use noonoo_engine::Engine;
+    use noonoo_geometry::Rect;
+    use noonoo_paint::Command;
+
+    fn app() -> App {
+        let mut host = Host::new(Size::new(200.0, 100.0));
+        host.add_content(
+            Engine::from_html("<p>hello</p>"),
+            Rect::new(0.0, 0.0, 200.0, 100.0),
+        );
+        App::new("test", host, |_, _, _| Propagation::Continue)
+    }
+
+    fn glyph_and_text_commands(app: &App) -> (usize, usize) {
+        let commands = app.host.layers()[0].commands().commands();
+        let glyphs = commands
+            .iter()
+            .filter(|c| matches!(c, Command::FillContours { .. }))
+            .count();
+        let runs = commands
+            .iter()
+            .filter(|c| matches!(c, Command::DrawText { .. }))
+            .count();
+        (glyphs, runs)
+    }
+
+    /// Text reaches the GPU as glyph outlines by default: a window built
+    /// with `App::new` draws with the system fonts, with nothing to opt into.
+    /// Skipped where no known font family is installed.
+    #[test]
+    fn text_is_drawn_with_system_fonts_by_default() {
+        if fonts::system().is_none() {
+            return;
+        }
+        let mut app = app();
+        app.layout();
+        let (glyphs, runs) = glyph_and_text_commands(&app);
+        assert_eq!(glyphs, "hello".len());
+        assert_eq!(runs, 0);
     }
 }

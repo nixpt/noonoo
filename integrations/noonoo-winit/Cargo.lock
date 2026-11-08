@@ -1461,6 +1461,16 @@ name = "noonoo-text"
 version = "0.20.0"
 
 [[package]]
+name = "noonoo-ttf"
+version = "0.20.0"
+dependencies = [
+ "noonoo-geometry",
+ "noonoo-paint",
+ "noonoo-parse",
+ "noonoo-text",
+]
+
+[[package]]
 name = "noonoo-vello"
 version = "0.20.0"
 dependencies = [
@@ -1482,9 +1492,11 @@ dependencies = [
  "noonoo-events",
  "noonoo-geometry",
  "noonoo-html",
+ "noonoo-paint",
  "noonoo-shell",
  "noonoo-style",
  "noonoo-text",
+ "noonoo-ttf",
  "noonoo-vello",
  "pollster",
  "vello",
