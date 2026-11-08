@@ -408,6 +408,9 @@ pub enum TextAlign {
     Center,
     /// `justify`.
     Justify,
+    /// `-webkit-center` (and `-moz-center`): centred text, and centred
+    /// block children whose side margins aren't `auto`. `<center>` uses it.
+    WebkitCenter,
 }
 
 /// One `transform` function. Lengths stay unresolved: a percentage

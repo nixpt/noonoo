@@ -2903,3 +2903,29 @@ fn a_tables_max_content_width_sums_its_widest_columns() {
     );
     assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 48.0);
 }
+
+/// `<center>` (`text-align: -webkit-center`) centres its blocks' margin
+/// boxes as well as its text, and the centring inherits.
+#[test]
+fn center_centres_its_blocks_and_its_text() {
+    let (doc, tree) = page(
+        r#"<center><table id="t" style="width: 50%"><tr><td>a</td></tr></table><div id="d"></div><div><p id="p"></p></div>ab</center>"#,
+        "#d { width: 100px; margin-left: 20px } p { width: 100px; margin: 0 }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "t")).unwrap().rect.x, 100.0);
+    assert_eq!(tree.get(id(&doc, "d")).unwrap().rect.x, 160.0);
+    assert_eq!(tree.get(id(&doc, "p")).unwrap().rect.x, 150.0);
+    assert!(drawn_x(&tree).contains(&("ab".to_owned(), 192.0)));
+}
+
+/// Plain `text-align: center` leaves blocks where they are.
+#[test]
+fn text_align_center_does_not_move_blocks() {
+    let (doc, tree) = page(
+        r#"<div style="text-align: center"><div id="d"></div></div>"#,
+        "#d { width: 100px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "d")).unwrap().rect.x, 0.0);
+}

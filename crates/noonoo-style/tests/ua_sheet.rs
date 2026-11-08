@@ -93,7 +93,11 @@ fn the_rest_of_htmls_block_elements_are_blocks() {
     ] {
         assert_eq!(first(&doc, &styles, tag).display, Display::Block, "{tag}");
     }
-    assert_eq!(first(&doc, &styles, "center").text_align, TextAlign::Center);
+    // `center` centres its blocks too, as `-webkit-center` does.
+    assert_eq!(
+        first(&doc, &styles, "center").text_align,
+        TextAlign::WebkitCenter
+    );
     assert_eq!(
         first(&doc, &styles, "address").font_style,
         FontStyle::Italic
@@ -136,4 +140,21 @@ fn author_css_still_wins() {
         first(&doc, &styles, "ul").padding.left,
         noonoo_style::Length::Px(0.0)
     );
+}
+
+#[test]
+fn the_webkit_centre_keywords_parse() {
+    let doc = noonoo_html::parse("<div id=a>a</div><div id=b>b</div>");
+    let sheet =
+        Stylesheet::parse("#a { text-align: -webkit-center } #b { text-align: -moz-center }")
+            .unwrap();
+    let styles = compute(&doc, &[sheet]);
+    for id in ["a", "b"] {
+        let node = doc.get_element_by_id(id).unwrap();
+        assert_eq!(
+            styles.get(node).unwrap().text_align,
+            TextAlign::WebkitCenter,
+            "{id}"
+        );
+    }
 }

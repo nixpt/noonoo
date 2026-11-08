@@ -22,7 +22,7 @@ pub(crate) fn map_align(align: TextAlign) -> noonoo_text::Align {
     match align {
         TextAlign::Start | TextAlign::Left => noonoo_text::Align::Start,
         TextAlign::End | TextAlign::Right => noonoo_text::Align::End,
-        TextAlign::Center => noonoo_text::Align::Center,
+        TextAlign::Center | TextAlign::WebkitCenter => noonoo_text::Align::Center,
         TextAlign::Justify => noonoo_text::Align::Justify,
     }
 }
@@ -154,6 +154,7 @@ pub(crate) fn layout_block_children(
             let available = flow_width(ctx, child, content_width);
             ctx.layout_element(child, content_x + margin.left, cursor, available, None);
             if let Some(index) = ctx.tree_index(child) {
+                apply_auto_margins(ctx, child, index, content_width, parent_style.text_align);
                 indices.push(index);
             }
             i += 1;
@@ -174,7 +175,7 @@ pub(crate) fn layout_block_children(
         let available = flow_width(ctx, child, content_width);
         let height = ctx.layout_element(child, content_x + margin.left, cursor, available, None);
         if let Some(index) = ctx.tree_index(child) {
-            apply_auto_margins(ctx, child, index, content_width);
+            apply_auto_margins(ctx, child, index, content_width, parent_style.text_align);
             indices.push(index);
         }
         cursor += height;
@@ -748,7 +749,7 @@ pub(crate) fn layout_inline_run(
             let available = flow_width(ctx, block, width);
             let height = ctx.layout_element(block, x + margin.left, cursor_y, available, None);
             if let Some(index) = ctx.tree_index(block) {
-                apply_auto_margins(ctx, block, index, width);
+                apply_auto_margins(ctx, block, index, width, parent_style.text_align);
                 indices.push(index);
             }
             cursor_y += height + margin.bottom;
@@ -1032,13 +1033,24 @@ pub(crate) fn flow_width(ctx: &Ctx<'_>, node: NodeId, container_width: f32) -> f
 /// other side (CSS 2 §10.3.3). `index` is its laid-out box, at its left
 /// margin. An auto width fills the container and leaves no room, unless
 /// `max-width` narrowed it.
-fn apply_auto_margins(ctx: &mut Ctx<'_>, node: NodeId, index: usize, container_width: f32) {
+/// Move a laid-out block over by its `auto` side margins, or, in a
+/// `-webkit-center` container (`container_align`), centre one that has none.
+fn apply_auto_margins(
+    ctx: &mut Ctx<'_>,
+    node: NodeId,
+    index: usize,
+    container_width: f32,
+    container_align: TextAlign,
+) {
     use noonoo_style::Dimension;
     let style = ctx.style(node);
-    let left = matches!(style.margin.left, Dimension::Auto);
-    let right = matches!(style.margin.right, Dimension::Auto);
+    let mut left = matches!(style.margin.left, Dimension::Auto);
+    let mut right = matches!(style.margin.right, Dimension::Auto);
     if !(left || right) {
-        return;
+        if container_align != TextAlign::WebkitCenter {
+            return;
+        }
+        (left, right) = (true, true);
     }
     // Auto margins resolve to zero here, so this is the room left over.
     let margins = crate::resolve::margins(&style.margin, container_width);

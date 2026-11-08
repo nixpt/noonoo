@@ -719,6 +719,7 @@ fn set_text_align(slot: &mut TextAlign, values: &[Value]) {
         "right" => TextAlign::Right,
         "center" => TextAlign::Center,
         "justify" => TextAlign::Justify,
+        "-webkit-center" | "-moz-center" => TextAlign::WebkitCenter,
         _ => return,
     };
 }
