@@ -1699,3 +1699,41 @@ fn an_absolute_box_is_as_wide_as_its_unwrappable_content() {
     // "hello world" is 11 characters (88px) plus 8px of padding.
     assert_eq!(tree.get(id(&doc, "t")).unwrap().rect.width, 96.0);
 }
+
+/// A shaper that kerns across spaces: a joined string is 3px narrower than
+/// its words and spaces measured apart, as real fonts can be.
+struct KerningShaper;
+
+impl Shaper for KerningShaper {
+    fn advance(&self, text: &str, _request: noonoo_text::FontRequest, _font_size: f32) -> f32 {
+        let width = text.chars().count() as f32 * 10.0;
+        if text.trim().contains(' ') {
+            width - 3.0
+        } else {
+            width
+        }
+    }
+
+    fn line_height(&self, _request: noonoo_text::FontRequest, _font_size: f32) -> f32 {
+        20.0
+    }
+}
+
+/// super-surfer's shortcuts: text sized to its own max-content must not
+/// wrap, so max-content measures the way line breaking does.
+#[test]
+fn shrink_wrapped_text_fits_on_one_line_with_kerning() {
+    let doc = noonoo_html::parse(r#"<div id="f" style="float: left">Close Tab</div>"#);
+    let styles = noonoo_style::compute_with(
+        &doc,
+        &[],
+        noonoo_style::Viewport {
+            width: 800.0,
+            height: 600.0,
+        },
+    );
+    let tree = layout(&doc, &styles, Size::new(800.0, 600.0), &KerningShaper);
+    // One normal line of 16px text.
+    let height = tree.get(id(&doc, "f")).unwrap().rect.height;
+    assert!((height - 19.2).abs() < 0.01, "{height}");
+}

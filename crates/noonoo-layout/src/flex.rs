@@ -5,7 +5,10 @@
 //! `stretch` (the default) fills the line height when the item's height is
 //! auto — an explicit height wins — and `start`/`center`/`end` position the
 //! item (`baseline` behaves as `start`). Column flex stretches items across
-//! the container as always; cross positioning on columns is not applied yet.
+//! the container (an auto width fills it) or, for `start`/`center`/`end`,
+//! shrink-wraps the item and positions it; a column with a definite height
+//! grows and shrinks its items into it (no smaller than their content, as
+//! `min-height: auto` does) and justifies them.
 //! Line heights come from a measure pass (real layout, discarded) so items
 //! can be positioned within them.
 //!
@@ -135,26 +138,151 @@ fn layout_column(
     content_y: f32,
     content_width: f32,
 ) -> (Vec<usize>, f32) {
-    let mut indices = Vec::new();
-    let mut y = content_y;
+    let gap = style.row_gap;
+    // The container's own definite content height, if it has one: what its
+    // items grow into, shrink to, and are justified within.
+    let container_height = ctx.percent_basis();
+
+    // Each item's cross placement, the width to lay it out at, and its base
+    // main size (margins excluded), with how far it may shrink.
+    struct Column {
+        align: AlignItems,
+        available: f32,
+        base: f32,
+        floor: f32,
+        grow: f32,
+        shrink: f32,
+        margin_main: f32,
+    }
+    let mut columns = Vec::with_capacity(items.len());
     for item in items {
+        let column = match item {
+            Item::Text { text, .. } => {
+                let height = runs::height(ctx, text, style, content_width);
+                Column {
+                    align: AlignItems::Stretch,
+                    available: content_width,
+                    base: height,
+                    floor: height,
+                    grow: 0.0,
+                    shrink: 0.0,
+                    margin_main: 0.0,
+                }
+            }
+            Item::Element(node) => {
+                let item_style = ctx.style(*node).clone();
+                let margin = resolve::margins(&item_style.margin, content_width);
+                let align = item_style.align_self.unwrap_or(style.align_items);
+                let room = (content_width - margin.left - margin.right).max(0.0);
+                // A stretched auto-width item fills the line; any other auto
+                // width shrinks to fit its content.
+                let available = if align != AlignItems::Stretch
+                    && matches!(item_style.width, Dimension::Auto)
+                {
+                    crate::float::shrink_to_fit(ctx, *node, room)
+                } else {
+                    room
+                };
+                let content = ctx.measure_height(*node, content_x, content_y, available, None);
+                let basis = match &item_style.flex_basis {
+                    Dimension::Auto => None,
+                    dimension => match container_height {
+                        Some(height) => resolve::dimension(dimension.clone(), height),
+                        None => resolve::definite(dimension),
+                    },
+                };
+                // `min-height: auto`: an item that doesn't clip shrinks no
+                // smaller than its content. A specified height caps that
+                // minimum in CSS; the content can't be measured apart from it
+                // here, so such an item may shrink freely.
+                let floor = if resolve::clips(&item_style)
+                    || !matches!(item_style.height, Dimension::Auto)
+                {
+                    0.0
+                } else {
+                    content
+                };
+                Column {
+                    align,
+                    available,
+                    base: basis.unwrap_or(content),
+                    floor,
+                    grow: item_style.flex_grow,
+                    shrink: item_style.flex_shrink,
+                    margin_main: margin.top + margin.bottom,
+                }
+            }
+        };
+        columns.push(column);
+    }
+    ctx.prune_pending();
+
+    let gaps = gap * items.len().saturating_sub(1) as f32;
+    let mut sizes: Vec<f32> = columns.iter().map(|column| column.base).collect();
+    let mut free = 0.0;
+    if let Some(height) = container_height {
+        let used: f32 = columns
+            .iter()
+            .map(|column| column.base + column.margin_main)
+            .sum::<f32>()
+            + gaps;
+        free = height - used;
+        if free > 0.0 {
+            let total: f32 = columns.iter().map(|column| column.grow).sum();
+            if total > 0.0 {
+                for (size, column) in sizes.iter_mut().zip(&columns) {
+                    *size += free * column.grow / total;
+                }
+                free = 0.0;
+            }
+        } else if free < 0.0 {
+            let weights: Vec<f32> = columns
+                .iter()
+                .map(|column| column.shrink * column.base)
+                .collect();
+            let total: f32 = weights.iter().sum();
+            if total > 0.0 {
+                for ((size, column), weight) in sizes.iter_mut().zip(&columns).zip(&weights) {
+                    *size = (*size + free * weight / total).max(column.floor);
+                }
+            }
+            free = 0.0;
+        }
+    }
+    let (start, extra) = justify_offset(style.justify_content, free.max(0.0), items.len());
+
+    let mut indices = Vec::new();
+    let mut y = content_y + start;
+    for ((item, column), size) in items.iter().zip(&columns).zip(&sizes) {
         match item {
             Item::Element(node) => {
                 let margin = resolve::margins(&ctx.style(*node).margin, content_width);
+                // The container decided a height only when it had one to share.
+                ctx.flexed = container_height.map(|_| (*node, *size));
                 let height = ctx.layout_element(
                     *node,
                     content_x + margin.left,
                     y + margin.top,
-                    content_width,
+                    column.available,
                     None,
                 );
+                ctx.flexed = None;
                 if let Some(index) = ctx.tree_index(*node) {
+                    let width = ctx.tree.boxes[index].rect.width;
+                    let room = content_width - margin.left - margin.right;
+                    let dx = match column.align {
+                        AlignItems::Center => (room - width) / 2.0,
+                        AlignItems::End => room - width,
+                        _ => 0.0,
+                    };
+                    if dx != 0.0 {
+                        ctx.shift_subtree(index, dx, 0.0);
+                    }
                     indices.push(index);
                 }
-                y += margin.top + height + margin.bottom + style.row_gap;
+                y += margin.top + height + margin.bottom + gap + extra;
             }
             Item::Text { anchor, text } => {
-                let height = runs::height(ctx, text, style, content_width);
                 indices.extend(runs::lines(
                     ctx,
                     *anchor,
@@ -165,11 +293,11 @@ fn layout_column(
                     y,
                     content_width,
                 ));
-                y += height + style.row_gap;
+                y += size + gap + extra;
             }
         }
     }
-    (indices, (y - content_y - style.row_gap).max(0.0))
+    (indices, (y - content_y - gap - extra).max(0.0))
 }
 
 fn layout_row(
@@ -213,10 +341,8 @@ fn layout_row(
             };
             base = basis
                 .or_else(|| resolve::dimension(item_style.width.clone(), content_width))
-                .unwrap_or_else(|| {
-                    let text = ctx.document.text_content(node);
-                    ctx.advance(&text, item_style)
-                });
+                // Auto: the item's max-content border box.
+                .unwrap_or_else(|| crate::float::preferred_width(ctx, node));
             // `min-width`/`max-width` clamp the flex base before grow/shrink, and
             // share `width`'s box (per `box-sizing`).
             let horizontal = {

@@ -49,15 +49,16 @@
 //!   clamped by `min-width`/`max-width` (which share `width`'s box per
 //!   `box-sizing`, with `min` winning over `max` — flex bases freeze and
 //!   re-distribute per CSS 9.7); height: `auto` / px / percentage of the
-//!   containing block (percentages behave as `auto` against an indefinite
-//!   container), clamped by `min-height`/`max-height`.
+//!   containing block (the viewport for the root; percentages behave as
+//!   `auto` against an indefinite container), clamped by
+//!   `min-height`/`max-height`.
 //! - `box-sizing`, margins, padding, and borders, resolved to absolute pixels.
 //!
 //! ## What it does not (yet)
 //!
 //! Full stacking contexts (a positioned box is ordered within its
 //! parent, not hoisted), scrollbar *rendering* (content scrolls; no bars are
-//! drawn), `align-items` cross positioning on flex *columns*, `justify-items`
+//! drawn), `justify-items`
 //! positioning in grid areas, and writing modes. Floats are ignored for flex
 //! and grid items, per CSS. Percentage
 //! tracks on an indefinite axis behave as `auto`. Absolute boxes whose width or height is `auto` fall
@@ -445,6 +446,10 @@ pub fn layout(
         margins: Default::default(),
         measured: HashMap::new(),
         preferred: Default::default(),
+        // The initial containing block: percentages on the root resolve
+        // against the viewport's height.
+        heights: vec![Some(viewport.height)],
+        flexed: None,
     };
     // The root's children share one block formatting context.
     ctx.push_bfc();
@@ -532,13 +537,27 @@ pub(crate) struct Ctx<'a> {
     /// Collapsed vertical margins, which depend only on the document, the
     /// styles and the containing width, so they are computed once per layout.
     pub margins: crate::margin::Cache,
-    /// [`Ctx::measure_height`] results by node, width and definite height.
-    pub measured: HashMap<(NodeId, u32, Option<u32>), f32>,
+    /// [`Ctx::measure_height`] results by node, width, definite height and
+    /// percentage basis.
+    pub measured: HashMap<(NodeId, u32, Option<u32>, Option<u32>), f32>,
     /// [`float::preferred_width`] results by node.
     pub preferred: std::cell::RefCell<HashMap<NodeId, f32>>,
+    /// The containing blocks' definite content heights, innermost last
+    /// (`None` where it is indefinite): what a percentage height resolves
+    /// against.
+    pub heights: Vec<Option<f32>>,
+    /// A column flex container's decided main size for one item (its border
+    /// box): unlike a stretched cross size, it overrides a specified height.
+    pub flexed: Option<(NodeId, f32)>,
 }
 
 impl Ctx<'_> {
+    /// The definite content height a percentage height resolves against, if
+    /// the containing block has one.
+    pub(crate) fn percent_basis(&self) -> Option<f32> {
+        self.heights.last().copied().flatten()
+    }
+
     /// How wide `text` is in `style`: after `text-transform`, plus
     /// `letter-spacing` after every character. Every text measurement in
     /// layout goes through here, so measuring and painting agree.
@@ -880,6 +899,43 @@ impl Ctx<'_> {
             && matches!(style.height, Dimension::Auto)
             && !clips;
 
+        // `height`, `min-height`, and `max-height` share a box (per
+        // `box-sizing`), like the widths above. A percentage resolves against
+        // the containing block's definite height, and behaves as `auto` when
+        // it has none.
+        let to_border_box_height = |height: f32| match style.box_sizing {
+            BoxSizing::BorderBox => height,
+            BoxSizing::ContentBox => height + vertical,
+        };
+        let basis = self.percent_basis();
+        let height_of = |value: &Dimension| match basis {
+            Some(basis) => resolve::dimension(value.clone(), basis),
+            None => resolve::definite(value),
+        };
+        let clamp_height = |height: f32| {
+            let mut height = height;
+            if let Some(maximum) = height_of(&style.max_height) {
+                height = height.min(to_border_box_height(maximum));
+            }
+            if let Some(minimum) = height_of(&style.min_height) {
+                height = height.max(to_border_box_height(minimum));
+            }
+            height
+        };
+        let specified_height = height_of(&style.height).map(to_border_box_height);
+        // A specified height, or one the container decided (a stretched or
+        // flexed item), is definite: the children's percentages use it.
+        let flexed = self
+            .flexed
+            .take_if(|(flexed, _)| *flexed == node)
+            .map(|(_, height)| height);
+        let definite_border_height = flexed
+            .or(specified_height)
+            .or(definite_height)
+            .map(clamp_height);
+        self.heights
+            .push(definite_border_height.map(|height| (height - vertical).max(0.0)));
+
         let establishes_bfc = self.establishes_bfc(node, &style);
         if establishes_bfc {
             self.push_bfc();
@@ -939,27 +995,10 @@ impl Ctx<'_> {
         if establishes_bfc {
             self.pop_bfc();
         }
+        self.heights.pop();
 
-        // `height`, `min-height`, and `max-height` share a box (per
-        // `box-sizing`), like the widths above. A percentage-bearing height has
-        // no definite containing-block height here (the container is still
-        // being sized), so it behaves as `auto`.
-        let to_border_box_height = |height: f32| match style.box_sizing {
-            BoxSizing::BorderBox => height,
-            BoxSizing::ContentBox => height + vertical,
-        };
-        let specified_height = resolve::definite(&style.height).map(to_border_box_height);
-        let mut border_box_height = match specified_height {
-            Some(height) => height,
-            // A stretched item fills the height its container decided.
-            None => definite_height.unwrap_or(content_height + vertical),
-        };
-        if let Some(maximum) = resolve::definite(&style.max_height) {
-            border_box_height = border_box_height.min(to_border_box_height(maximum));
-        }
-        if let Some(minimum) = resolve::definite(&style.min_height) {
-            border_box_height = border_box_height.max(to_border_box_height(minimum));
-        }
+        let border_box_height =
+            definite_border_height.unwrap_or_else(|| clamp_height(content_height + vertical));
 
         let padding_box = Rect::new(
             border_x + border.left,
@@ -1020,6 +1059,7 @@ impl Ctx<'_> {
             node,
             available_width.to_bits(),
             definite_height.map(f32::to_bits),
+            self.percent_basis().map(f32::to_bits),
         );
         if let Some(&height) = self.measured.get(&key) {
             return height;
@@ -1075,7 +1115,7 @@ impl Ctx<'_> {
     }
 
     /// Move box `index` and every box under it by `(dx, dy)`.
-    fn shift_subtree(&mut self, index: usize, dx: f32, dy: f32) {
+    pub(crate) fn shift_subtree(&mut self, index: usize, dx: f32, dy: f32) {
         let mut stack = vec![index];
         while let Some(i) = stack.pop() {
             let b = &mut self.tree.boxes[i];

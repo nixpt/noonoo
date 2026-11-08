@@ -77,6 +77,11 @@ pub fn align(align: Align, free: f32, count: usize) -> Offset {
     }
 }
 
+/// How far past the line a word may reach and still fit: summing the same
+/// widths in another order (as max-content measuring does) can differ by a
+/// rounding error, and text sized to its own width must not wrap over it.
+const WRAP_TOLERANCE: f32 = 0.01;
+
 /// Greedy line breaking: `widths` are item advances, `gap` the inter-item space.
 pub fn wrap(widths: &[f32], gap: f32, max_width: f32) -> Vec<Vec<usize>> {
     let mut lines: Vec<Vec<usize>> = Vec::new();
@@ -86,7 +91,7 @@ pub fn wrap(widths: &[f32], gap: f32, max_width: f32) -> Vec<Vec<usize>> {
         if current.is_empty() {
             used = width;
             current.push(index);
-        } else if used + gap + width > max_width {
+        } else if used + gap + width > max_width + WRAP_TOLERANCE {
             lines.push(std::mem::take(&mut current));
             used = width;
             current.push(index);
@@ -195,6 +200,17 @@ mod tests {
             font_size: 10.0,
             ..TextStyle::default()
         }
+    }
+
+    /// "Focus Address Bar" laid out exactly as wide as its words: summing the
+    /// same widths in another order can land a rounding error over the line,
+    /// which must not wrap the last word.
+    #[test]
+    fn a_line_exactly_as_wide_as_its_words_does_not_wrap() {
+        let widths: [f32; 3] = [12.39, 51.609, 47.008];
+        // Words first, then the spaces: how max-content measures them.
+        let measured = widths.iter().sum::<f32>() + 3.12 * 2.0;
+        assert_eq!(wrap(&widths, 3.12, measured), vec![vec![0, 1, 2]]);
     }
 
     #[test]

@@ -412,10 +412,13 @@ fn paint_box(
     if let Some(text) = &b.text
         && !text.is_empty()
     {
-        let (font_size, color, letter_spacing) = style
-            .map(|s| (s.font_size, s.color, s.letter_spacing))
-            .unwrap_or((16.0, Color::BLACK, 0.0));
-        let baseline = rect.y + font_size * 0.8;
+        let (font_size, color, letter_spacing, line_height) = style
+            .map(|s| (s.font_size, s.color, s.letter_spacing, s.line_height))
+            .unwrap_or((16.0, Color::BLACK, 0.0, 16.0 * 1.2));
+        // Half the leading beyond the normal line height (1.2em) goes above
+        // the text, so a tall line centres it (and a short one raises it).
+        let half_leading = (line_height - font_size * 1.2) / 2.0;
+        let baseline = rect.y + half_leading + font_size * 0.8;
         let request = style
             .map(|style| style.font_request())
             .unwrap_or_else(FontRequest::any);

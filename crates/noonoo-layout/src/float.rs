@@ -14,7 +14,7 @@
 
 use noonoo_dom::NodeId;
 use noonoo_geometry::Rect;
-use noonoo_style::{BoxSizing, Clear, ComputedStyle, Display, FlexDirection, Float};
+use noonoo_style::{BoxSizing, Clear, ComputedStyle, Display, FlexDirection, Float, WhiteSpace};
 
 use crate::resolve;
 use crate::{Ctx, child_nodes};
@@ -231,7 +231,23 @@ fn compute_preferred_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
         },
         None => preferred_content(ctx, node),
     };
-    inner + edges
+    // `min-width`/`max-width` clamp it like a laid-out width (min wins).
+    let to_border_box = |width: f32| match style.box_sizing {
+        BoxSizing::BorderBox => width,
+        BoxSizing::ContentBox => width + edges,
+    };
+    let mut width = inner + edges;
+    if let Some(maximum) = resolve::dimension(style.max_width.clone(), f32::INFINITY)
+        .filter(|maximum| maximum.is_finite())
+    {
+        width = width.min(to_border_box(maximum));
+    }
+    if let Some(minimum) = resolve::dimension(style.min_width.clone(), f32::INFINITY)
+        .filter(|minimum| minimum.is_finite())
+    {
+        width = width.max(to_border_box(minimum));
+    }
+    width
 }
 
 /// A flex container's max-content width: in a row, its items side by side
@@ -313,7 +329,20 @@ fn preferred_content(ctx: &Ctx<'_>, node: NodeId) -> f32 {
 }
 
 /// Measure `text`'s unwrapped advance in `style`'s font (whitespace collapsed).
+///
+/// Wrappable text is measured the way line breaking measures it — words and
+/// spaces apart — so text given exactly its max-content width never wraps
+/// (a font can kern a joined string narrower than its parts). `nowrap` and
+/// `pre` text is laid out as one string, and measured as one.
 pub(crate) fn text_width(ctx: &Ctx<'_>, text: &str, style: &ComputedStyle) -> f32 {
-    let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    ctx.advance(&collapsed, style)
+    let words: Vec<&str> = text.split_whitespace().collect();
+    if matches!(style.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre) {
+        return ctx.advance(&words.join(" "), style);
+    }
+    let space = ctx.advance(" ", style);
+    words
+        .iter()
+        .map(|word| ctx.advance(word, style))
+        .sum::<f32>()
+        + space * words.len().saturating_sub(1) as f32
 }
