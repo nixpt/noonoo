@@ -37,10 +37,10 @@ fn a_new_row_group_closes_the_open_one() {
 }
 
 #[test]
-fn rows_without_a_row_group_stay_in_the_table() {
-    // No implied <tbody> is created (layout treats groups as transparent).
+fn rows_without_a_row_group_get_an_implied_tbody() {
+    // As in HTML5 (and every browser): `table > tr` matches nothing.
     assert_eq!(
         round_trip("<table><tr><td>1<tr><td>2</table>"),
-        "<table><tr><td>1</td></tr><tr><td>2</td></tr></table>"
+        "<table><tbody><tr><td>1</td></tr><tr><td>2</td></tr></tbody></table>"
     );
 }

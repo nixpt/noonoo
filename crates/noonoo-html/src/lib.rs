@@ -15,13 +15,16 @@
 //! start/end tags with attributes, comments, text, and raw-text elements
 //! (`script`, `style`, `textarea`, `title`). The tree builder is a
 //! stack-based one — it handles nesting, void elements, and implicit closes by
-//! matching end tags, but it does **not** yet implement HTML5's full insertion
-//! modes (foster parenting, the "in body"/"in table" state machines, active
-//! formatting elements). That is deliberate scope, not an oversight; see
-//! `docs/ROADMAP.md`.
+//! matching end tags, plus the implied end tags and table sections real
+//! markup leans on (an unclosed `<p>`, `<li>` or `<option>`, a `<tr>` with no
+//! `<tbody>`; see `implied`). It does **not** implement HTML5's full
+//! insertion modes (foster parenting, active formatting elements). That is
+//! deliberate scope, not an oversight; see `docs/ROADMAP.md`.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
+
+mod implied;
 
 use noonoo_dom::{Document, MutError, NodeId};
 
@@ -447,6 +450,23 @@ fn build(doc: &mut Document, base: NodeId, tokens: Vec<Token>) {
                 // explicit end tags; these rules keep a subset of HTML5's
                 // table handling without the full insertion-mode state machine.
                 implied_table_close(&mut stack, doc, &name);
+                implied::Open {
+                    stack: &mut stack,
+                    doc,
+                }
+                .before_start_tag(&name);
+                // A row or cell outside its section opens the section first.
+                while let Some(section) = (implied::Open {
+                    stack: &mut stack,
+                    doc,
+                })
+                .implied_section(&name)
+                {
+                    let parent = insertion_parent(doc, &stack);
+                    let node = doc.create_element(section);
+                    let _ = doc.mutate().append_child(parent, node);
+                    stack.push(node);
+                }
 
                 let parent = insertion_parent(doc, &stack);
                 let node = doc.create_element(name.clone());
@@ -462,6 +482,18 @@ fn build(doc: &mut Document, base: NodeId, tokens: Vec<Token>) {
                 let _ = doc.mutate().append_child(parent, node);
                 if !self_closing && !is_void(&name) {
                     stack.push(node);
+                }
+            }
+            Token::EndTag { name } if name == "p" => {
+                let closed = implied::Open {
+                    stack: &mut stack,
+                    doc,
+                }
+                .end_p();
+                if !closed {
+                    let parent = insertion_parent(doc, &stack);
+                    let node = doc.create_element("p");
+                    let _ = doc.mutate().append_child(parent, node);
                 }
             }
             Token::EndTag { name } => {
