@@ -44,3 +44,40 @@ fn an_invalid_or_foreign_width_attribute_is_ignored() {
     // HTML: a zero width is no hint.
     assert_eq!(width_of(html, "", "z"), Dimension::Auto);
 }
+
+fn padding_of(html: &str, css: &str, id: &str) -> noonoo_style::Length {
+    let doc = noonoo_html::parse(html);
+    let sheets: Vec<Stylesheet> = if css.is_empty() {
+        Vec::new()
+    } else {
+        vec![Stylesheet::parse(css).unwrap()]
+    };
+    let styles = compute(&doc, &sheets);
+    let style = styles.get(doc.get_element_by_id(id).unwrap()).unwrap();
+    assert_eq!(style.padding.top, style.padding.left, "{id}");
+    style.padding.right.clone()
+}
+
+#[test]
+fn cells_have_a_pixel_of_padding_by_default() {
+    let html = r#"<table><tr><td id="d">a</td><th id="h">b</th></tr></table>"#;
+    assert_eq!(padding_of(html, "", "d"), noonoo_style::Length::Px(1.0));
+    assert_eq!(padding_of(html, "", "h"), noonoo_style::Length::Px(1.0));
+}
+
+#[test]
+fn cellpadding_pads_its_own_tables_cells() {
+    let html = r#"<table cellpadding="4"><tbody><tr><td id="d">a<table><tr><td id="inner">b</td></tr></table></td></tr></tbody></table><table cellpadding="0"><tr><th id="z">c</th></tr></table>"#;
+    assert_eq!(padding_of(html, "", "d"), noonoo_style::Length::Px(4.0));
+    assert_eq!(padding_of(html, "", "inner"), noonoo_style::Length::Px(1.0));
+    assert_eq!(padding_of(html, "", "z"), noonoo_style::Length::Px(0.0));
+}
+
+#[test]
+fn author_css_overrides_cellpadding() {
+    let html = r#"<table cellpadding="4"><tr><td id="d">a</td></tr></table>"#;
+    assert_eq!(
+        padding_of(html, "td { padding: 2px }", "d"),
+        noonoo_style::Length::Px(2.0)
+    );
+}

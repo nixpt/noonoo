@@ -271,7 +271,10 @@ fn winners_for(
 
     // Presentational attributes beat the UA sheet and lose to every
     // author rule (HTML's rendering section, "presentational hints").
-    for (order, (property, value)) in presentational_hints(element).into_iter().enumerate() {
+    for (order, (property, value)) in presentational_hints(doc, id, element)
+        .into_iter()
+        .enumerate()
+    {
         let Ok(decls) = parse_declaration(property, &value, false) else {
             continue;
         };
@@ -309,14 +312,48 @@ fn winners_for(
 
 /// The CSS an element's presentational attributes ask for, as
 /// `(property, value)` declarations.
-fn presentational_hints(element: &noonoo_dom::ElementData) -> Vec<(&'static str, String)> {
+fn presentational_hints(
+    doc: &Document,
+    id: NodeId,
+    element: &noonoo_dom::ElementData,
+) -> Vec<(&'static str, String)> {
     let mut hints = Vec::new();
-    if matches!(element.name.as_str(), "table" | "td" | "th")
+    let cell = matches!(element.name.as_str(), "td" | "th");
+    if (cell || element.name == "table")
         && let Some(width) = element.attr("width").and_then(dimension_attribute)
     {
         hints.push(("width", width));
     }
+    if cell
+        && let Some(padding) = owning_table(doc, id)
+            .and_then(|table| doc.element(table)?.attr("cellpadding"))
+            .and_then(non_negative_integer)
+    {
+        hints.push(("padding", format!("{padding}px")));
+    }
     hints
+}
+
+/// The table a cell belongs to: up through its row and row group.
+fn owning_table(doc: &Document, cell: NodeId) -> Option<NodeId> {
+    let mut node = doc.tree().parent(cell)?;
+    loop {
+        match doc.element(node)?.name.as_str() {
+            "table" => return Some(node),
+            "tr" | "tbody" | "thead" | "tfoot" => node = doc.tree().parent(node)?,
+            _ => return None,
+        }
+    }
+}
+
+/// HTML's "rules for parsing non-negative integers": leading digits after
+/// white space.
+fn non_negative_integer(value: &str) -> Option<u32> {
+    let value = value.trim_start();
+    let end = value
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(value.len());
+    value[..end].parse().ok()
 }
 
 /// HTML's "rules for parsing dimension values", nonzero: a number, read

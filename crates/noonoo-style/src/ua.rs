@@ -40,6 +40,7 @@ h5 { font-size: 0.83em; margin-top: 1.67em; margin-bottom: 1.67em; font-weight: 
 h6 { font-size: 0.67em; margin-top: 2.33em; margin-bottom: 2.33em; font-weight: bold }
 pre, listing, plaintext, xmp { white-space: pre }
 textarea { white-space: pre-wrap }
+td, th { padding: 1px }
 th { text-align: center }
 center { text-align: -webkit-center }
 th { font-weight: bold }

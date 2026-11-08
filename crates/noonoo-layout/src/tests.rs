@@ -2857,7 +2857,7 @@ fn a_block_inside_an_inline_counts_in_a_shrink_to_fit_width() {
 fn an_auto_width_table_shrinks_to_fit_its_columns() {
     let (doc, tree) = page(
         r#"<table id="t"><tr><td>ab</td><td>c</td></tr><tr><td>d</td><td>efgh</td></tr></table>"#,
-        "",
+        "td { padding: 0 }",
         400.0,
     );
     // Columns: 16 and 32, the widest cell in each.
@@ -2870,7 +2870,7 @@ fn an_auto_width_table_shrinks_to_fit_its_columns() {
 fn a_tables_columns_stretch_to_its_set_width() {
     let (doc, tree) = page(
         r#"<table id="t"><tr><td id="a">ab</td><td id="b">c</td></tr></table>"#,
-        "#t { width: 50% }",
+        "#t { width: 50% } td { padding: 0 }",
         400.0,
     );
     assert_eq!(tree.get(id(&doc, "t")).unwrap().rect.width, 200.0);
@@ -2898,7 +2898,7 @@ fn a_tables_width_attribute_sizes_it() {
 fn a_tables_max_content_width_sums_its_widest_columns() {
     let (doc, tree) = page(
         r#"<div id="f"><table><tr><td>ab</td><td>c</td></tr><tr><td>d</td><td>efgh</td></tr></table></div>"#,
-        "#f { float: left }",
+        "#f { float: left } td { padding: 0 }",
         400.0,
     );
     assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 48.0);
@@ -2928,4 +2928,16 @@ fn text_align_center_does_not_move_blocks() {
         400.0,
     );
     assert_eq!(tree.get(id(&doc, "d")).unwrap().rect.x, 0.0);
+}
+
+/// A cell's default pixel of padding, and `cellpadding="0"` taking it away.
+#[test]
+fn cells_take_their_padding_in_table_layout() {
+    let (doc, tree) = page(
+        r#"<table id="t"><tr><td>ab</td><td></td></tr></table><table id="z" cellpadding="0"><tr><td>ab</td></tr></table>"#,
+        "",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "t")).unwrap().rect.width, 20.0);
+    assert_eq!(tree.get(id(&doc, "z")).unwrap().rect.width, 16.0);
 }
