@@ -259,19 +259,106 @@ fn decode(image: &noonoo_paint::EncodedImage) -> Option<ImageData> {
     }
     let decoded = match image.format {
         noonoo_paint::ImageFormat::Png => decode_png(&image.data),
-        // Sized by layout from their headers, but not decoded here yet.
-        noonoo_paint::ImageFormat::Jpeg
-        | noonoo_paint::ImageFormat::Gif
-        | noonoo_paint::ImageFormat::Webp => None,
+        noonoo_paint::ImageFormat::Jpeg => decode_jpeg(&image.data),
+        noonoo_paint::ImageFormat::Gif => decode_gif(&image.data),
+        noonoo_paint::ImageFormat::Webp => decode_webp(&image.data),
     };
     cache.insert(image.data.clone(), decoded.clone());
     decoded
+}
+
+/// The most pixels an image may decode to (256 MiB of RGBA): a few bytes of
+/// header can claim any size, and the decode allocates it.
+const MAX_PIXELS: usize = 1 << 26;
+
+/// Whether a `width` × `height` image is non-empty and within
+/// [`MAX_PIXELS`].
+fn fits(width: usize, height: usize) -> bool {
+    width > 0 && height > 0 && width.checked_mul(height).is_some_and(|n| n <= MAX_PIXELS)
+}
+
+/// Straight-alpha RGBA8 `pixels` as Vello image data, if they fill
+/// `width` × `height`.
+fn rgba_image(width: usize, height: usize, pixels: Vec<u8>) -> Option<ImageData> {
+    if !fits(width, height) || pixels.len() != width * height * 4 {
+        return None;
+    }
+    Some(ImageData {
+        data: Blob::new(std::sync::Arc::new(pixels)),
+        format: ImageFormat::Rgba8,
+        alpha_type: ImageAlphaType::Alpha,
+        width: u32::try_from(width).ok()?,
+        height: u32::try_from(height).ok()?,
+    })
+}
+
+fn decode_jpeg(bytes: &[u8]) -> Option<ImageData> {
+    use zune_core::colorspace::ColorSpace;
+    use zune_core::options::DecoderOptions;
+    let options = DecoderOptions::default().jpeg_set_out_colorspace(ColorSpace::RGBA);
+    let mut decoder = zune_jpeg::JpegDecoder::new_with_options(bytes, options);
+    decoder.decode_headers().ok()?;
+    let (width, height) = decoder.dimensions()?;
+    if !fits(width, height) {
+        return None;
+    }
+    let pixels = decoder.decode().ok()?;
+    rgba_image(width, height, pixels)
+}
+
+/// The first frame, placed on the logical screen (transparent elsewhere).
+fn decode_gif(bytes: &[u8]) -> Option<ImageData> {
+    let mut options = gif::DecodeOptions::new();
+    options.set_color_output(gif::ColorOutput::RGBA);
+    let mut decoder = options.read_info(bytes).ok()?;
+    let (width, height) = (usize::from(decoder.width()), usize::from(decoder.height()));
+    if !fits(width, height) {
+        return None;
+    }
+    let frame = decoder.read_next_frame().ok()??;
+    let mut canvas = vec![0; width * height * 4];
+    let (left, top) = (usize::from(frame.left), usize::from(frame.top));
+    let frame_width = usize::from(frame.width);
+    for (row, line) in frame.buffer.chunks_exact(frame_width * 4).enumerate() {
+        let y = top + row;
+        if y >= height || left >= width {
+            break;
+        }
+        let span = frame_width.min(width - left) * 4;
+        let at = (y * width + left) * 4;
+        canvas[at..at + span].copy_from_slice(&line[..span]);
+    }
+    rgba_image(width, height, canvas)
+}
+
+fn decode_webp(bytes: &[u8]) -> Option<ImageData> {
+    let mut decoder = image_webp::WebPDecoder::new(std::io::Cursor::new(bytes)).ok()?;
+    let (width, height) = decoder.dimensions();
+    let (width, height) = (width as usize, height as usize);
+    if !fits(width, height) {
+        return None;
+    }
+    let mut pixels = vec![0; decoder.output_buffer_size()?];
+    decoder.read_image(&mut pixels).ok()?;
+    let rgba = if decoder.has_alpha() {
+        pixels
+    } else {
+        pixels
+            .chunks_exact(3)
+            .flat_map(|p| [p[0], p[1], p[2], 255])
+            .collect()
+    };
+    rgba_image(width, height, rgba)
 }
 
 fn decode_png(bytes: &[u8]) -> Option<ImageData> {
     let mut decoder = png::Decoder::new(bytes);
     decoder.set_transformations(png::Transformations::normalize_to_color8());
     let mut reader = decoder.read_info().ok()?;
+    let info = reader.info();
+    if !fits(info.width as usize, info.height as usize) {
+        return None;
+    }
     let mut buffer = vec![0; reader.output_buffer_size()];
     let frame = reader.next_frame(&mut buffer).ok()?;
     let pixels = &buffer[..frame.buffer_size()];
@@ -289,16 +376,7 @@ fn decode_png(bytes: &[u8]) -> Option<ImageData> {
         // `normalize_to_color8` expands palettes, so none reach here.
         png::ColorType::Indexed => return None,
     };
-    if frame.width == 0 || frame.height == 0 {
-        return None;
-    }
-    Some(ImageData {
-        data: Blob::new(std::sync::Arc::new(rgba)),
-        format: ImageFormat::Rgba8,
-        alpha_type: ImageAlphaType::Alpha,
-        width: frame.width,
-        height: frame.height,
-    })
+    rgba_image(frame.width as usize, frame.height as usize, rgba)
 }
 
 /// A Noonoo gradient into a Vello/peniko brush.
@@ -680,6 +758,110 @@ mod tests {
         assert_eq!(image.format, vello::peniko::ImageFormat::Rgba8);
         assert_eq!(image.alpha_type, vello::peniko::ImageAlphaType::Alpha);
         assert_eq!(image.data.data(), &[10, 20, 30, 128, 10, 20, 30, 128]);
+    }
+
+    /// The one image a `DrawImage` of `bytes` hands Vello, decoded.
+    fn decoded(bytes: &[u8]) -> vello::peniko::ImageData {
+        let image = noonoo_paint::EncodedImage::sniff(bytes.to_vec()).expect("a known format");
+        let scene = scene(&CommandList(vec![Command::DrawImage {
+            rect: NRect::new(0.0, 0.0, 8.0, 8.0),
+            image,
+        }]));
+        let mut images = image_patches(&scene);
+        assert_eq!(images.len(), 1, "one image drawn");
+        images.remove(0)
+    }
+
+    /// Whether each channel of `pixel` is within `slack` of `want`.
+    fn near(pixel: &[u8], want: [u8; 4], slack: u8) -> bool {
+        pixel
+            .iter()
+            .zip(want)
+            .all(|(&got, want)| got.abs_diff(want) <= slack)
+    }
+
+    #[test]
+    fn a_jpeg_image_decodes_to_opaque_pixels() {
+        let image = decoded(include_bytes!("../tests/fixtures/solid.jpg"));
+        assert_eq!((image.width, image.height), (8, 8));
+        let pixels = image.data.data();
+        assert_eq!(pixels.len(), 8 * 8 * 4);
+        assert!(
+            pixels.chunks(4).all(|p| near(p, [200, 40, 40, 255], 6)),
+            "{:?}",
+            &pixels[..4]
+        );
+    }
+
+    #[test]
+    fn a_gif_image_decodes_its_first_frame_with_transparency() {
+        let image = decoded(include_bytes!("../tests/fixtures/tiny.gif"));
+        assert_eq!((image.width, image.height), (3, 2));
+        let pixels = image.data.data();
+        assert_eq!(pixels[3], 0, "the transparent index");
+        assert_eq!(&pixels[4..8], &[0, 200, 0, 255]);
+    }
+
+    #[test]
+    fn a_gif_frame_is_placed_on_its_logical_screen() {
+        // A 2 × 2 screen holding one 1 × 1 green frame at (1, 1).
+        let mut gif = b"GIF89a\x02\x00\x02\x00\x80\x00\x00".to_vec();
+        gif.extend([0, 0, 0, 0, 200, 0]);
+        gif.extend(b",\x01\x00\x01\x00\x01\x00\x01\x00\x00");
+        gif.extend([2, 2, 0x4c, 0x01, 0, b';']);
+        let image = decoded(&gif);
+        assert_eq!((image.width, image.height), (2, 2));
+        let pixels = image.data.data();
+        assert_eq!(&pixels[12..16], &[0, 200, 0, 255]);
+        assert!(pixels[..12].chunks(4).all(|p| p[3] == 0));
+    }
+
+    #[test]
+    fn a_gif_frame_past_the_screen_edge_is_clipped() {
+        // A 2 × 1 screen; a 2 × 1 green frame at x = 1 hangs off the right.
+        let mut gif = b"GIF89a\x02\x00\x01\x00\x80\x00\x00".to_vec();
+        gif.extend([0, 0, 0, 0, 200, 0]);
+        gif.extend(b",\x01\x00\x00\x00\x02\x00\x01\x00\x00");
+        gif.extend([2, 2, 0x4c, 0x0a, 0, b';']);
+        let image = decoded(&gif);
+        assert_eq!((image.width, image.height), (2, 1));
+        assert_eq!(image.data.data(), &[0, 0, 0, 0, 0, 200, 0, 255]);
+    }
+
+    #[test]
+    fn webp_images_decode_lossless_with_alpha_and_lossy_without() {
+        let image = decoded(include_bytes!("../tests/fixtures/alpha.webp"));
+        assert_eq!((image.width, image.height), (3, 2));
+        let pixels = image.data.data();
+        assert_eq!(pixels[3], 0);
+        assert_eq!(&pixels[4..8], &[10, 20, 30, 255]);
+        let image = decoded(include_bytes!("../tests/fixtures/lossy.webp"));
+        assert_eq!((image.width, image.height), (16, 8));
+        let pixels = image.data.data();
+        assert_eq!(pixels.len(), 16 * 8 * 4);
+        assert!(
+            pixels.chunks(4).all(|p| near(p, [40, 40, 200, 255], 8)),
+            "{:?}",
+            &pixels[..4]
+        );
+    }
+
+    /// A header can claim any size; decoding stops at 64 Mpx.
+    #[test]
+    fn images_too_large_to_decode_are_refused_up_front() {
+        assert!(fits(8192, 8192));
+        assert!(!fits(8193, 8192));
+        assert!(!fits(0, 4) && !fits(4, 0));
+        assert!(!fits(usize::MAX, 2));
+        // A GIF claiming 65 535 × 65 535 draws nothing (and allocates nothing).
+        let mut bomb = b"GIF89a\xff\xff\xff\xff\x00\x00\x00".to_vec();
+        bomb.extend(b",\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00;");
+        let image = noonoo_paint::EncodedImage::sniff(bomb).unwrap();
+        let scene = scene(&CommandList(vec![Command::DrawImage {
+            rect: NRect::new(0.0, 0.0, 8.0, 8.0),
+            image,
+        }]));
+        assert!(image_patches(&scene).is_empty());
     }
 
     /// Repainting the same glyph must not hand Vello a new image each frame:

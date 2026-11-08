@@ -13,9 +13,13 @@ noonoo-paint = { path = "../../crates/noonoo-paint" }
 noonoo-geometry = { path = "../../crates/noonoo-geometry" }
 noonoo-ttf = { path = "../../crates/noonoo-ttf" }
 vello = { version = "0.7", default-features = false }
-# Decodes colour glyphs (emoji) and other `DrawImage` PNGs: codecs are bought,
-# not built (docs/DEPENDENCY-EXIT.md).
+# Decode `DrawImage` images (PNG also carries colour emoji glyphs): codecs are
+# bought, not built (docs/DEPENDENCY-EXIT.md). All four are pure Rust.
 png = "0.17"
+zune-jpeg = "0.4"
+zune-core = "0.4"
+gif = "0.14"
+image-webp = "0.2"
 
 [dev-dependencies]
 # Names `Patch`, to look at the images a scene carries.
