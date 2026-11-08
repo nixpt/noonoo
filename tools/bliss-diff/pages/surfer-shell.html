@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Super Surfer Shell</title>
+    <style>
+        {
+                {
+                css|safe
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-shell" id="app-shell">
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar" style="display: flex">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">◈</div>
+                <div class="sidebar-title">EXOSPHERE</div>
+            </div>
+
+            <div class="sidebar-nav">
+                <a href="shell://switch-panel/tabs" class="sidebar-item active" id="btn-tabs">
+                    <span class="sidebar-icon">📑</span>
+                    <span class="sidebar-label">Tabs</span>
+                </a>
+                <a href="shell://switch-panel/bookmarks" class="sidebar-item" id="btn-bookmarks">
+                    <span class="sidebar-icon">⭐</span>
+                    <span class="sidebar-label">Bookmarks</span>
+                </a>
+                <a href="shell://switch-panel/history" class="sidebar-item" id="btn-history">
+                    <span class="sidebar-icon">🕒</span>
+                    <span class="sidebar-label">History</span>
+                </a>
+                <a href="shell://switch-panel/downloads" class="sidebar-item" id="btn-downloads">
+                    <span class="sidebar-icon">⬇️</span>
+                    <span class="sidebar-label">Downloads</span>
+                </a>
+                <div class="sidebar-separator-thin"></div>
+                <a href="shell://switch-panel/apps" class="sidebar-item" id="btn-apps">
+                    <span class="sidebar-icon">📦</span>
+                    <span class="sidebar-label">Apps</span>
+                </a>
+                <a href="shell://switch-panel/services" class="sidebar-item" id="btn-services">
+                    <span class="sidebar-icon">⚡</span>
+                    <span class="sidebar-label">Services</span>
+                </a>
+                <a href="shell://switch-panel/hub" class="sidebar-item" id="btn-hub">
+                    <span class="sidebar-icon">🏪</span>
+                    <span class="sidebar-label">Hub</span>
+                </a>
+                <div class="sidebar-separator-thin"></div>
+                <a href="shell://switch-panel/system" class="sidebar-item" id="btn-system">
+                    <span class="sidebar-icon">📊</span>
+                    <span class="sidebar-label">System</span>
+                </a>
+            </div>
+
+            <div class="sidebar-separator"></div>
+
+            <div class="sidebar-content" id="sidebar-content">
+                <div class="tab-item">Example tab</div><div class="tab-item">Second tab</div>
+            </div>
+
+            <div class="sidebar-footer">
+                <a href="surfer://settings" class="sidebar-item">
+                    <span class="sidebar-icon">⚙️</span>
+                    <span class="sidebar-label">Settings</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Main Panel -->
+        <div class="main-panel">
+            <!-- Top Chrome -->
+            <div class="chrome-top">
+                <!-- Tab Bar -->
+                <div class="tab-bar" id="tab-bar">
+                    <div id="tabs-container" style="display: flex; gap: 4px; overflow-x: auto;">
+                        
+                    </div>
+                    <a href="shell://new-tab" class="tab-new-btn" aria-label="New tab">+</a>
+                </div>
+
+                <!-- Navbar -->
+                <div class="navbar">
+                    <a href="shell://toggle-sidebar" class="nav-btn" id="btn-toggle-sidebar"
+                        aria-label="Toggle sidebar">☰</a>
+                    <div class="nav-separator"></div>
+                    <a href="shell://go-back" class="nav-btn " id="btn-back"
+                        aria-label="Go back">←</a>
+                    <a href="shell://go-forward" class="nav-btn " id="btn-forward"
+                        aria-label="Go forward">→</a>
+                    <a href="shell://reload" class="nav-btn" id="btn-reload" aria-label="Reload page">↻</a>
+                    <div class="nav-separator"></div>
+
+                    <a href="shell://focus-address-bar" class="address-bar-wrap"
+                        style="text-decoration: none; color: inherit;">
+                        <div class="loading-progress" id="loading-progress" style="width: ;"></div>
+                        <span class="address-bar-lock" id="lock-icon" style="display: none;">🔒</span>
+                        <span class="address-bar" id="address-text"></span>
+                    </a>
+
+                    <a href="shell://navigate-current" class="go-btn" id="btn-go" aria-label="Navigate to URL">↗</a>
+                </div>
+            </div>
+
+            <!-- Toolbar (Find bar) -->
+            <div class="find-bar hidden" id="find-bar">
+                <input type="text" class="find-input" id="find-input" placeholder="Find in page…">
+                <span class="find-info" id="find-stats"></span>
+                <a href="shell://find-prev" class="find-btn">↑</a>
+                <a href="shell://find-next" class="find-btn">↓</a>
+                <a href="shell://close-find" class="find-btn">✕</a>
+            </div>
+
+            <!-- Content Area -->
+            <div class="content-area" id="content-area">
+                <!-- Fallback/Placeholder when no active tab or starting up -->
+                <div class="new-tab-page" id="new-tab-page" style="display: ">
+                    <div class="new-tab-hero ntp-animated-bg">
+                        <div class="new-tab-logo">◈</div>
+                        <h1 class="new-tab-title">Super Surfer</h1>
+                        <p class="new-tab-subtitle">The Exosphere Browser Experience</p>
+                        <div class="quick-links">
+                            <a href="surfer://dashboard" class="quick-link">
+                                <span class="quick-link-icon">📊</span>
+                                <span class="quick-link-label">Dashboard</span>
+                            </a>
+                            <a href="surfer://settings" class="quick-link">
+                                <span class="quick-link-icon">⚙️</span>
+                                <span class="quick-link-label">Settings</span>
+                            </a>
+                            <a href="shell://switch-panel/capsules" class="quick-link">
+                                <span class="quick-link-icon">💊</span>
+                                <span class="quick-link-label">Capsules</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="ntp-shortcuts">
+                        <div class="ntp-shortcuts-title">Keyboard Shortcuts</div>
+                        <div class="ntp-shortcuts-grid">
+                            <div class="ntp-shortcut"><kbd>Ctrl+T</kbd><span>New Tab</span></div>
+                            <div class="ntp-shortcut"><kbd>Ctrl+L</kbd><span>Focus Address Bar</span></div>
+                            <div class="ntp-shortcut"><kbd>Ctrl+W</kbd><span>Close Tab</span></div>
+                            <div class="ntp-shortcut"><kbd>Ctrl+F</kbd><span>Find in Page</span></div>
+                            <div class="ntp-shortcut"><kbd>Ctrl+S</kbd><span>Cycle Theme</span></div>
+                            <div class="ntp-shortcut"><kbd>Ctrl+Shift+S</kbd><span>Previous Theme</span></div>
+                        </div>
+                    </div>
+
+                    <div class="ntp-footer">
+                        <span class="ntp-footer-text">Powered by Blitz</span>
+                    </div>
+                </div>
+
+                <!-- Web Content View (rendered via Vello scene overlay) -->
+                <div class="web-content-frame" id="webview-container" style="display: ">
+                </div>
+
+                <!-- Polyglot Console -->
+                <div class="polyglot-page" id="polyglot-console" style="display: ">
+                    <div class="console-container">
+                        <div class="console-header">
+                            <span class="console-title">Polyglot Runtime Environment</span>
+                            <div class="console-controls">
+                                <span class="console-lang-badge" id="console-lang-badge">JS</span>
+                                <button class="console-btn" id="btn-clear-console">Clear</button>
+                                <button class="console-btn-close" id="btn-close-console">✕</button>
+                            </div>
+                        </div>
+                        <div class="console-output" id="console-output">
+                            
+                        </div>
+                        <div class="console-input-area">
+                            <span class="console-prompt">></span>
+                            <input type="text" class="console-input" id="console-input"
+                                placeholder="Enter command or code..." autofocus>
+                        </div>
+                    </div>
+                    <script>
+                        (function () {
+                            const input = document.getElementById('console-input');
+                            const output = document.getElementById('console-output');
+                            const clearBtn = document.getElementById('btn-clear-console');
+                            const closeBtn = document.getElementById('btn-close-console');
+                            const langBadge = document.getElementById('console-lang-badge');
+                            const container = document.getElementById('polyglot-console');
+
+                            // Auto-scroll to bottom
+                            if (output) {
+                                output.scrollTop = output.scrollHeight;
+                            }
+
+                            // Handle Input
+                            if (input) {
+                                input.addEventListener('keydown', function (e) {
+                                    if (e.key === 'Enter') {
+                                        const cmd = input.value;
+                                        if (cmd.trim()) {
+                                            // Send to backend via custom protocol
+                                            // We use Base64 to safely transport code (handling Unicode)
+                                            const encoded = btoa(unescape(encodeURIComponent(cmd)));
+                                            window.location.href = `surfer://polyglot-exec/${encoded}`;
+                                            input.value = '';
+                                        }
+                                    }
+                                });
+                                // Auto-focus input when clicking container
+                                if (container) {
+                                    container.addEventListener('click', (e) => {
+                                        if (e.target !== clearBtn && e.target !== closeBtn && e.target !== langBadge) {
+                                            input.focus();
+                                        }
+                                    });
+                                }
+                            }
+
+                            // Handle Clear
+                            if (clearBtn) {
+                                clearBtn.addEventListener('click', function () {
+                                    window.location.href = 'surfer://polyglot-clear';
+                                });
+                            }
+
+                            // Handle Close
+                            if (closeBtn) {
+                                closeBtn.addEventListener('click', function () {
+                                    window.location.href = 'shell://go-back';
+                                });
+                            }
+
+                            // Handle Language Switch
+                            if (langBadge) {
+                                langBadge.textContent = "".toUpperCase() || "JS";
+                                langBadge.onclick = function () {
+                                    const current = langBadge.textContent.toLowerCase();
+                                    const next = current === 'js' ? 'python' : 'js';
+                                    window.location.href = `surfer://polyglot-lang/${next}`;
+                                };
+                            }
+                        })();
+                    </script>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Daemon status bar -->
+    <div id="daemon-status-bar" style="position:fixed;bottom:0;left:0;right:0;height:20px;background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);display:flex;align-items:center;padding:0 10px;gap:5px;font-size:10px;font-family:monospace;color:rgba(255,255,255,0.38);z-index:9999;border-top:1px solid rgba(255,255,255,0.05);user-select:none;pointer-events:none;">
+        <span id="daemon-dot" style="font-size:8px;color:#f87171;transition:color 0.4s;">●</span>
+        <span id="daemon-label" style="font-weight:600;letter-spacing:0.05em;text-transform:uppercase;">Daemon</span>
+        <span id="daemon-detail" style="opacity:0.65;"></span>
+    </div>
+    <script>
+    (function(){
+        var dot=document.getElementById('daemon-dot'),
+            lbl=document.getElementById('daemon-label'),
+            det=document.getElementById('daemon-detail');
+        async function poll(){
+            try{
+                var invoke=window.__TAURI__&&(window.__TAURI__.core&&window.__TAURI__.core.invoke||window.__TAURI__.invoke);
+                if(!invoke)return;
+                var s=await invoke('daemon_status');
+                if(s&&s.connected){
+                    dot.style.color='#34d399';
+                    lbl.textContent='Daemon';
+                    det.textContent=(s.version?' v'+s.version:'')+(s.capsule_count!=null?' · '+s.capsule_count+' capsule'+(s.capsule_count!==1?'s':''):'');
+                }else{dot.style.color='#f87171';lbl.textContent='Daemon Offline';det.textContent='';}
+            }catch(e){dot.style.color='#f87171';lbl.textContent='Daemon Offline';det.textContent='';}
+        }
+        poll();setInterval(poll,5000);
+    })();
+    </script>
+</body>
+
+</html>

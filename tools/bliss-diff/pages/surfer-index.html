@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Surfer</title>
+    <style>
+        body {
+            background: #020204;
+            color: #ffffff;
+            font-family: ui-sans-serif, system-ui, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .loader {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(168, 85, 247, 0.2);
+            border-top: 3px solid #a855f7;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .text {
+            font-size: 14px;
+            color: #a1a1aa;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="loader">
+        <div class="spinner"></div>
+        <div class="text">Shielding Environment...</div>
+    </div>
+
+    <script>
+        // Use the new Tauri 2.x API
+        const { invoke } = window.__TAURI__.core;
+
+        async function bootstrap() {
+            try {
+                console.log("Super Surfer: Bootstrapping shell...");
+                const html = await invoke('get_shell_html');
+
+                // Replace the entire document content
+                // We use document.open()/write() to ensure scripts in the new HTML are executed
+                document.open();
+                document.write(html);
+                document.close();
+
+                console.log("Super Surfer: Shell bootstrap complete.");
+            } catch (err) {
+                console.error("Super Surfer: Bootstrap failed", err);
+                document.body.innerHTML = `
+                    <div style="padding: 20px; color: #ef4444;">
+                        <h1>Bootstrap Error</h1>
+                        <pre>${err}</pre>
+                        <button onclick="location.reload()">Retry</button>
+                    </div>
+                `;
+            }
+        }
+
+        // Delay slightly to show the nice loader
+        setTimeout(bootstrap, 500);
+    </script>
+</body>
+
+</html>

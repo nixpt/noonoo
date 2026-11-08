@@ -1,0 +1,22 @@
+[package]
+name = "noonoo-bliss-diff"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Noonoo tooling: lay real pages out with noonoo and with bliss, and diff the boxes."
+
+# Deliberately OUTSIDE the noonoo workspace (root `exclude`) and off CI: it
+# builds bliss-engine (stylo, taffy, parley) from a sibling checkout, as the
+# yardstick noonoo replaces. Nothing in the engine depends on it; it only
+# reads bliss's output, so the clean-room line in the root manifest holds.
+[workspace]
+
+[dependencies]
+noonoo-engine = { path = "../../crates/noonoo-engine" }
+noonoo-geometry = { path = "../../crates/noonoo-geometry" }
+noonoo-layout = { path = "../../crates/noonoo-layout" }
+noonoo-dom = { path = "../../crates/noonoo-dom" }
+noonoo-ttf = { path = "../../crates/noonoo-ttf" }
+bliss-dom = { path = "../../../bliss-engine/packages/bliss-dom" }
+bliss-html = { path = "../../../bliss-engine/packages/bliss-html" }
+bliss-traits = { path = "../../../bliss-engine/packages/bliss-traits" }

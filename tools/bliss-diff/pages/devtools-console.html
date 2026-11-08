@@ -1,0 +1,29 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+.dt-console { display: flex; flex-direction: column; height: 100%;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px;
+  color: #d4d4d4; background: #1e1e1e; }
+.dt-con-scroll { flex: 1 1 auto; overflow: auto; padding: 4px 0; }
+.dt-con-row { display: flex; gap: 6px; padding: 2px 8px; border-bottom: 1px solid #2a2a2a;
+  white-space: pre-wrap; word-break: break-word; line-height: 1.5; }
+.dt-con-gutter { width: 10px; flex: 0 0 10px; color: #6a9955; text-align: center; }
+.dt-con-input { color: #9cdcfe; } .dt-con-input .dt-con-gutter { color: #569cd6; }
+.dt-con-result .dt-con-gutter { color: #808080; }
+.dt-con-warn { background: #332b00; color: #e2c08d; } .dt-con-warn .dt-con-gutter { color: #e2c08d; }
+.dt-con-error { background: #311b1b; color: #f48771; } .dt-con-error .dt-con-gutter { color: #f48771; }
+.dt-con-empty { padding: 10px 8px; color: #6a6a6a; }
+.dt-con-inputline { flex: 0 0 auto; display: flex; gap: 6px; align-items: center;
+  border-top: 1px solid #3c3c3c; padding: 5px 8px; background: #252526; }
+.dt-con-prompt { color: #569cd6; }
+.dt-con-field { flex: 1 1 auto; color: #d4d4d4; }
+.dt-con-caret { color: #d4d4d4; }
+.dt-con-caret.on { background: #d4d4d4; color: #252526; }
+.dt-c-string { color: #ce9178; } .dt-c-number { color: #b5cea8; }
+.dt-c-bool { color: #569cd6; } .dt-c-dim { color: #808080; }
+.dt-c-obj { color: #9cdcfe; } .dt-c-error { color: #f48771; }
+.dt-c-expand { color: #808080; text-decoration: none; cursor: pointer; user-select: none; }
+.dt-c-expand:hover { color: #d4d4d4; }
+.dt-props { margin: 2px 0 2px 14px; border-left: 1px solid #333; padding-left: 8px; }
+.dt-prop-row { padding: 1px 0; white-space: pre-wrap; word-break: break-word; }
+.dt-prop-name { color: #9cdcfe; }
+</style></head><body style="margin:0;height:600px;background:#1e1e1e"><div class="dt-console"><div class="dt-con-scroll"><div class="dt-con-row dt-con-log"><span class="dt-con-gutter"></span><span>page script ran 2</span></div><div class="dt-con-row dt-con-log"><span class="dt-con-gutter"></span><span>user agent ready</span></div><div class="dt-con-row dt-con-warn"><span class="dt-con-gutter">⚠</span><span>low on widgets</span></div><div class="dt-con-row dt-con-error"><span class="dt-con-gutter">✖</span><span>boom: synthetic error for proof</span></div><div class="dt-con-row dt-con-input"><span class="dt-con-gutter">›</span><span>1 + 1</span></div><div class="dt-con-row dt-con-result"><span class="dt-con-gutter">‹</span><span><span class="dt-c-number">2</span></span></div><div class="dt-con-row dt-con-input"><span class="dt-con-gutter">›</span><span>&#39;surf&#39; + &#39;er&#39;</span></div><div class="dt-con-row dt-con-result"><span class="dt-con-gutter">‹</span><span><span class="dt-c-string">&quot;surfer&quot;</span></span></div><div class="dt-con-row dt-con-input"><span class="dt-con-gutter">›</span><span>[1, 2, 3].map(x =&gt; x * 2)</span></div><div class="dt-con-row dt-con-result"><span class="dt-con-gutter">‹</span><span><a class="dt-c-expand" href="shell://devtools-console-expand/0">▶</a> <span class="dt-c-obj">Array(3)</span></span></div><div class="dt-con-row dt-con-input"><span class="dt-con-gutter">›</span><span>({ user: &#39;surf&#39;, n: 42, ok: true })</span></div><div class="dt-con-row dt-con-result"><span class="dt-con-gutter">‹</span><span><a class="dt-c-expand" href="shell://devtools-console-expand/1">▶</a> <span class="dt-c-obj">{&quot;n&quot;:42,&quot;ok&quot;:true,&quot;user&quot;:&quot;surf&quot;}</span></span></div><div class="dt-con-row dt-con-input"><span class="dt-con-gutter">›</span><span>document.title</span></div><div class="dt-con-row dt-con-result"><span class="dt-con-gutter">‹</span><span><span class="dt-c-string">&quot;Console Proof&quot;</span></span></div><div class="dt-con-row dt-con-input"><span class="dt-con-gutter">›</span><span>typeof window</span></div><div class="dt-con-row dt-con-result"><span class="dt-con-gutter">‹</span><span><span class="dt-c-string">&quot;object&quot;</span></span></div><div class="dt-con-row dt-con-input"><span class="dt-con-gutter">›</span><span>undefined</span></div><div class="dt-con-row dt-con-result"><span class="dt-con-gutter">‹</span><span><span class="dt-c-dim">undefined</span></span></div><div class="dt-con-row dt-con-input"><span class="dt-con-gutter">›</span><span>nope_not_defined</span></div><div class="dt-con-row dt-con-error"><span class="dt-con-gutter">✖</span><span>ReferenceError: nope_not_defined is not defined
+    at &lt;main&gt; (unknown at :?:?)</span></div></div><div class="dt-con-inputline"><span class="dt-con-prompt">›</span><span class="dt-con-field">document.querySelector(&#39;#t&#39;)<span class="dt-con-caret on"> </span></span></div></div></body></html>
