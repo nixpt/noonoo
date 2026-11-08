@@ -193,6 +193,13 @@ pub fn tokenize(source: &str) -> Vec<Token> {
     tokens
 }
 
+/// The byte index after any whitespace at `pos`, stepping whole characters
+/// (some whitespace, like U+2028, is several bytes).
+fn skip_whitespace(source: &str, pos: usize) -> usize {
+    let rest = &source[pos..];
+    pos + (rest.len() - rest.trim_start().len())
+}
+
 fn parse_start_tag(source: &str, mut pos: usize) -> (Token, usize) {
     pos += 1; // '<'
     let name_start = pos;
@@ -207,9 +214,7 @@ fn parse_start_tag(source: &str, mut pos: usize) -> (Token, usize) {
     let mut attrs = Vec::new();
     let mut self_closing = false;
     loop {
-        while pos < source.len() && source[pos..].chars().next().unwrap().is_whitespace() {
-            pos += 1;
-        }
+        pos = skip_whitespace(source, pos);
         if pos >= source.len() {
             break;
         }
@@ -240,15 +245,11 @@ fn parse_start_tag(source: &str, mut pos: usize) -> (Token, usize) {
             continue;
         }
 
-        while pos < source.len() && source[pos..].chars().next().unwrap().is_whitespace() {
-            pos += 1;
-        }
+        pos = skip_whitespace(source, pos);
 
         let value = if source[pos..].starts_with('=') {
             pos += 1;
-            while pos < source.len() && source[pos..].chars().next().unwrap().is_whitespace() {
-                pos += 1;
-            }
+            pos = skip_whitespace(source, pos);
             match source[pos..].chars().next() {
                 Some(q @ ('"' | '\'')) => {
                     pos += 1;

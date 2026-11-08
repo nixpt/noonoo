@@ -108,3 +108,27 @@ fn random_string(rng: &mut Rng, length: usize, alphabet: &[char]) -> String {
         .map(|_| alphabet[rng.next() as usize % alphabet.len()])
         .collect()
 }
+
+/// Non-ASCII whitespace inside a tag is skipped by whole characters, not by
+/// bytes: U+2006 and U+2028 are three bytes each.
+#[test]
+fn multibyte_whitespace_inside_a_tag_does_not_panic() {
+    for source in [
+        "<ht\u{2006}ml>><h1>hello</h1",
+        "<a \u{2028}]a>x",
+        "<a b\u{2028}=c>x",
+        "<a b=\u{2028}c>x",
+        "<p\u{3000}id=x>y</p>",
+    ] {
+        let doc = noonoo_html::parse(source);
+        let _ = noonoo_html::serialize::inner_html(&doc, doc.root());
+    }
+}
+
+/// An attribute value after multi-byte whitespace is still read.
+#[test]
+fn an_attribute_after_an_ideographic_space_is_kept() {
+    let doc = noonoo_html::parse("<p\u{3000}id=x>y</p>");
+    let html = noonoo_html::serialize::inner_html(&doc, doc.root());
+    assert!(html.contains(r#"id="x""#), "{html}");
+}
