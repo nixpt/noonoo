@@ -83,6 +83,31 @@ pub struct Renderer {
     surface: wgpu::Surface<'static>,
     config: SurfaceConfiguration,
     vello: VelloRenderer,
+    /// Vello renders into this `Rgba8Unorm` storage texture: it can't write
+    /// a surface texture directly (wrong format, and no storage usage).
+    target: wgpu::TextureView,
+    /// Copies `target` onto the surface each frame.
+    blitter: wgpu::util::TextureBlitter,
+}
+
+/// The texture Vello renders into, sized to the surface.
+fn render_target(device: &wgpu::Device, width: u32, height: u32) -> wgpu::TextureView {
+    device
+        .create_texture(&wgpu::TextureDescriptor {
+            label: Some("noonoo-winit render target"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            usage: TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            view_formats: &[],
+        })
+        .create_view(&wgpu::TextureViewDescriptor::default())
 }
 
 impl Renderer {
@@ -111,14 +136,16 @@ impl Renderer {
         let (device, queue) = adapter.request_device(&DeviceDescriptor::default()).await?;
 
         let capabilities = surface.get_capabilities(&adapter);
-        // Prefer an sRGB format so Vello's linear output is gamma-corrected.
+        // Vello's output is already sRGB-encoded, so the surface must not be
+        // an `*Srgb` format, or the blit would encode it a second time and
+        // wash the colours out. This is the format vello's own util picks.
         let format = capabilities
             .formats
             .iter()
             .find(|format| {
                 matches!(
                     format,
-                    wgpu::TextureFormat::Bgra8UnormSrgb | wgpu::TextureFormat::Rgba8UnormSrgb
+                    wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Rgba8Unorm
                 )
             })
             .copied()
@@ -145,12 +172,17 @@ impl Renderer {
             },
         )?;
 
+        let target = render_target(&device, config.width, config.height);
+        let blitter = wgpu::util::TextureBlitter::new(&device, config.format);
+
         Ok(Self {
             device,
             queue,
             surface,
             config,
             vello,
+            target,
+            blitter,
         })
     }
 
@@ -163,6 +195,7 @@ impl Renderer {
         self.config.width = width;
         self.config.height = height;
         self.surface.configure(&self.device, &self.config);
+        self.target = render_target(&self.device, width, height);
     }
 
     /// The configured surface size, in physical pixels.
@@ -171,7 +204,11 @@ impl Renderer {
     }
 
     /// Compose the host's layers and present a frame.
-    pub fn draw(&mut self, host: &Host) -> Result<(), Error> {
+    ///
+    /// The host lays out in logical pixels; `scale` (the window's scale
+    /// factor) maps them onto the physical surface.
+    pub fn draw(&mut self, host: &Host, scale: f64) -> Result<(), Error> {
+        let to_physical = Affine::scale(scale);
         let mut scene = Scene::new();
         for layer in host.layers() {
             let rect = layer.rect;
@@ -184,14 +221,11 @@ impl Renderer {
                 f64::from(rect.y + rect.height),
             );
             let offset = Affine::translate((f64::from(rect.x), f64::from(rect.y)));
-            scene.push_layer(
-                Fill::NonZero,
-                BlendMode::default(),
-                1.0,
-                Affine::IDENTITY,
-                &clip,
+            scene.push_layer(Fill::NonZero, BlendMode::default(), 1.0, to_physical, &clip);
+            scene.append(
+                &noonoo_vello::scene(layer.commands()),
+                Some(to_physical * offset),
             );
-            scene.append(&noonoo_vello::scene(layer.commands()), Some(offset));
             scene.pop_layer();
         }
 
@@ -206,7 +240,15 @@ impl Renderer {
             antialiasing_method: AaConfig::Area,
         };
         self.vello
-            .render_to_texture(&self.device, &self.queue, &scene, &view, &params)?;
+            .render_to_texture(&self.device, &self.queue, &scene, &self.target, &params)?;
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("noonoo-winit blit"),
+            });
+        self.blitter
+            .copy(&self.device, &mut encoder, &self.target, &view);
+        self.queue.submit([encoder.finish()]);
         frame.present();
         Ok(())
     }

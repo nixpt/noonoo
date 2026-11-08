@@ -233,7 +233,11 @@ impl App {
             self.dirty = false;
             self.sync_a11y();
         }
-        if let Some(error) = self.gpu.as_mut().and_then(|gpu| gpu.draw(&self.host).err()) {
+        if let Some(error) = self
+            .gpu
+            .as_mut()
+            .and_then(|gpu| gpu.draw(&self.host, self.scale).err())
+        {
             eprintln!("noonoo-winit: {error}");
         }
     }
