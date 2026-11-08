@@ -44,7 +44,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crate: [noonoo-vello, noonoo-winit, noonoo-accesskit, noonoo-xip]
+        # noonoo-xip is left out: it builds against the private, unpublished
+        # xip-core through a local path, which a runner can't reach.
+        crate: [noonoo-vello, noonoo-winit, noonoo-accesskit]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
