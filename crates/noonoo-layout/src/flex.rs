@@ -2,6 +2,7 @@
 //! row — `flex-wrap` (items spill onto additional lines).
 //!
 //! Rows align items on the cross axis per `align-items`/`align-self`:
+//! a single-line row with a definite height has one line of that height;
 //! `stretch` (the default) fills the line height when the item's height is
 //! auto — an explicit height wins — and `start`/`center`/`end` position the
 //! item (`baseline` behaves as `start`). Column flex stretches items across
@@ -491,7 +492,14 @@ fn layout_row(
             measure_x += line_bases[k] + gap + extra;
         }
         ctx.prune_pending();
-        let line_height = cross.iter().copied().fold(0.0_f32, f32::max);
+        let mut line_height = cross.iter().copied().fold(0.0_f32, f32::max);
+        // A single-line container with a definite height has one line of
+        // exactly that height (CSS Flexbox 9.4, step 15).
+        if style.flex_wrap == FlexWrap::NoWrap
+            && let Some(height) = ctx.percent_basis()
+        {
+            line_height = height;
+        }
 
         let mut x = content_x + start;
         for (k, &i) in line.iter().enumerate() {

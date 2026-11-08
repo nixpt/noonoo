@@ -1737,3 +1737,54 @@ fn shrink_wrapped_text_fits_on_one_line_with_kerning() {
     let height = tree.get(id(&doc, "f")).unwrap().rect.height;
     assert!((height - 19.2).abs() < 0.01, "{height}");
 }
+
+/// super-surfer's devtools dock: `top: 0; bottom: 0` with an auto height
+/// fills its containing block's height, and its children see that height.
+#[test]
+fn absolute_stretches_between_top_and_bottom() {
+    let (doc, tree) = page(
+        r#"<div id="cb"><div id="abs"><div id="half"></div></div></div>"#,
+        "#cb { position: relative; width: 200px; height: 100px; margin-top: 5px } \
+         #abs { position: absolute; top: 10px; bottom: 20px; right: 0; width: 50px } \
+         #half { height: 50% }",
+        400.0,
+    );
+    let abs = tree.get(id(&doc, "abs")).unwrap();
+    assert_eq!(abs.rect, Rect::new(150.0, 15.0, 50.0, 70.0));
+    assert_eq!(tree.get(id(&doc, "half")).unwrap().rect.height, 35.0);
+}
+
+/// A single-line row with a definite height is one line of that height:
+/// stretched items fill it, and `center` centres within it.
+#[test]
+fn a_row_line_takes_the_definite_height_of_its_container() {
+    let (doc, tree) = page(
+        r#"<div id="row"><div id="tall"><div class="h10"></div></div><div id="mid"><div class="h10"></div></div></div>"#,
+        "#row { display: flex; height: 300px } \
+         #tall { width: 50px } \
+         #mid { width: 50px; align-self: center } \
+         .h10 { height: 10px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "tall")).unwrap().rect.height, 300.0);
+    let mid = tree.get(id(&doc, "mid")).unwrap();
+    assert_eq!((mid.rect.y, mid.rect.height), (145.0, 10.0));
+}
+
+/// super-surfer's main panel: a column stretched by a full-height row grows
+/// its `flex: 1` content area into the rest of the height.
+#[test]
+fn a_column_stretched_by_a_row_grows_its_items_into_the_height() {
+    let (doc, tree) = page(
+        r#"<div id="shell"><div id="side"></div><div id="main"><div id="top"></div><div id="content"></div></div></div>"#,
+        "#shell { display: flex; height: 600px } \
+         #side { width: 100px } \
+         #main { flex: 1 1 0px; display: flex; flex-direction: column } \
+         #top { height: 97px } \
+         #content { flex: 1 1 0px }",
+        800.0,
+    );
+    assert_eq!(tree.get(id(&doc, "main")).unwrap().rect.height, 600.0);
+    let content = tree.get(id(&doc, "content")).unwrap();
+    assert_eq!((content.rect.y, content.rect.height), (97.0, 503.0));
+}

@@ -61,9 +61,7 @@
 //! drawn), `justify-items`
 //! positioning in grid areas, and writing modes. Floats are ignored for flex
 //! and grid items, per CSS. Percentage
-//! tracks on an indefinite axis behave as `auto`. Absolute boxes whose width or height is `auto` fall
-//! back to the containing block when only the trailing inset (`right`/`bottom`)
-//! is set. Text is measured through the [`Shaper`] seam — the heuristic
+//! tracks on an indefinite axis behave as `auto`. Text is measured through the [`Shaper`] seam — the heuristic
 //! `MetricShaper` stands in unless the host provides real font metrics.
 
 #![forbid(unsafe_code)]
@@ -1194,6 +1192,19 @@ impl Ctx<'_> {
         let content_x = border_x + border.left + padding.left;
         let content_y = border_y + border.top + padding.top;
 
+        // Height: an explicit height, or stretched between `top`+`bottom`;
+        // either is definite, so the children's percentages resolve against
+        // it.
+        let stretched_height = match (inset.top, inset.bottom) {
+            (Some(top), Some(bottom)) => {
+                Some((cb_height - top - bottom - margin.top - margin.bottom - vertical).max(0.0))
+            }
+            _ => None,
+        };
+        let definite_height =
+            resolve::dimension(style.height.clone(), cb_height).or(stretched_height);
+        self.heights.push(definite_height);
+
         let children_nodes = child_nodes(self.document, node);
         let placeholder = self.placeholder(node);
         let (child_indices, content_height) = match style.display {
@@ -1252,7 +1263,8 @@ impl Ctx<'_> {
             }
         };
 
-        let definite_height = resolve::dimension(style.height.clone(), cb_height);
+        self.heights.pop();
+
         let border_height = match definite_height {
             Some(height) => height + vertical,
             None => content_height + vertical,
