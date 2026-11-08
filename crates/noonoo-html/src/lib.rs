@@ -391,6 +391,7 @@ pub fn plain_text_to_html(source: &str) -> String {
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 mod entities;
+pub mod serialize;
 
 #[cfg(test)]
 mod tests {
