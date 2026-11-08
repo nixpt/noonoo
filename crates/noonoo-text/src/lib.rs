@@ -15,7 +15,10 @@
 
 mod paragraph;
 
-pub use paragraph::{Line, Paragraph, Run, align, layout_paragraph, wrap};
+pub use paragraph::{
+    Line, Paragraph, Run, align, collapsible_words, is_collapsible_space, layout_paragraph,
+    trim_collapsible, wrap,
+};
 
 /// Turns text into advances and line metrics.
 ///

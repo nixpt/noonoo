@@ -82,6 +82,24 @@ pub fn align(align: Align, free: f32, count: usize) -> Offset {
 /// rounding error, and text sized to its own width must not wrap over it.
 const WRAP_TOLERANCE: f32 = 0.01;
 
+/// Whether `c` is CSS's collapsible white space: space, tab, and the line
+/// breaks. A no-break space (U+00A0) and the other Unicode spaces are not:
+/// they belong to the word they sit in.
+pub fn is_collapsible_space(c: char) -> bool {
+    matches!(c, ' ' | '\t' | '\n' | '\r' | '\u{c}')
+}
+
+/// The words of `text` between runs of collapsible white space.
+pub fn collapsible_words(text: &str) -> impl Iterator<Item = &str> {
+    text.split(is_collapsible_space)
+        .filter(|word| !word.is_empty())
+}
+
+/// `text` without its leading and trailing collapsible white space.
+pub fn trim_collapsible(text: &str) -> &str {
+    text.trim_matches(is_collapsible_space)
+}
+
 /// Greedy line breaking: `widths` are item advances, `gap` the inter-item space.
 pub fn wrap(widths: &[f32], gap: f32, max_width: f32) -> Vec<Vec<usize>> {
     let mut lines: Vec<Vec<usize>> = Vec::new();
@@ -124,8 +142,7 @@ pub fn layout_paragraph(
         shaper.line_height(request, style.font_size)
     };
 
-    let words: Vec<(String, f32)> = text
-        .split_whitespace()
+    let words: Vec<(String, f32)> = collapsible_words(text)
         .map(|word| {
             (
                 word.to_owned(),
@@ -219,6 +236,20 @@ mod tests {
         let widths = [10.0, 10.0, 10.0];
         assert_eq!(wrap(&widths, 5.0, 24.0), vec![vec![0], vec![1], vec![2]]);
         assert_eq!(wrap(&widths, 5.0, 25.0), vec![vec![0, 1], vec![2]]);
+    }
+
+    #[test]
+    fn a_no_break_space_joins_words() {
+        // CSS's collapsible white space is space, tab and line breaks; a
+        // no-break space is part of the word it sits in.
+        let paragraph = layout_paragraph("aaaa\u{a0}bbbb cccc", &style(), 55.0, &MetricShaper);
+        assert_eq!(paragraph.lines.len(), 2);
+        assert_eq!(paragraph.lines[0].runs[0].text, "aaaa\u{a0}bbbb");
+        assert_eq!(
+            crate::collapsible_words(" a\u{a0} b\t\n").collect::<Vec<_>>(),
+            ["a\u{a0}", "b"]
+        );
+        assert_eq!(crate::trim_collapsible("\u{a0} x \n"), "\u{a0} x");
     }
 
     #[test]

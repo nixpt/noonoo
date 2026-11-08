@@ -355,14 +355,16 @@ fn words_of(line: &str) -> Vec<(&str, Option<&str>)> {
     let mut rest = line;
     while !rest.is_empty() {
         let word_at = rest
-            .find(|c: char| !c.is_whitespace())
+            .find(|c: char| !noonoo_text::is_collapsible_space(c))
             .unwrap_or(rest.len());
         let (white, after) = rest.split_at(word_at);
         if after.is_empty() {
             pairs.push((white, None));
             break;
         }
-        let end = after.find(char::is_whitespace).unwrap_or(after.len());
+        let end = after
+            .find(noonoo_text::is_collapsible_space)
+            .unwrap_or(after.len());
         pairs.push((white, Some(&after[..end])));
         rest = &after[end..];
     }
@@ -1141,5 +1143,5 @@ pub(crate) fn is_table_part(ctx: &Ctx<'_>, node: NodeId) -> bool {
 
 /// Whether `node` is text with nothing but whitespace.
 fn is_blank_text(ctx: &Ctx<'_>, node: NodeId) -> bool {
-    ctx.is_text(node) && ctx.document.text_content(node).trim().is_empty()
+    ctx.is_text(node) && noonoo_text::trim_collapsible(&ctx.document.text_content(node)).is_empty()
 }

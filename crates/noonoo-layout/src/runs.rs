@@ -39,8 +39,7 @@ pub(crate) fn height(ctx: &Ctx<'_>, text: &str, style: &ComputedStyle, available
     if matches!(style.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre) {
         return line_height;
     }
-    let widths: Vec<f32> = text
-        .split_whitespace()
+    let widths: Vec<f32> = noonoo_text::collapsible_words(text)
         .map(|word| ctx.advance(word, style))
         .collect();
     let lines = noonoo_text::wrap(&widths, space, available);
@@ -95,9 +94,13 @@ pub(crate) fn lines(
     if nowrap {
         // `pre` keeps its spaces (trailing ones hang); `nowrap` collapses.
         let text = if crate::preserves_spaces(style.white_space) {
-            crate::expand_tabs(text, 0).trim_end().to_owned()
+            crate::expand_tabs(text, 0)
+                .trim_end_matches(noonoo_text::is_collapsible_space)
+                .to_owned()
         } else {
-            text.split_whitespace().collect::<Vec<_>>().join(" ")
+            noonoo_text::collapsible_words(text)
+                .collect::<Vec<_>>()
+                .join(" ")
         };
         let used = ctx.advance(&text, style);
         push_text_box(
@@ -111,7 +114,7 @@ pub(crate) fn lines(
         return indices;
     }
 
-    let words: Vec<&str> = text.split_whitespace().collect();
+    let words: Vec<&str> = noonoo_text::collapsible_words(text).collect();
     let widths: Vec<f32> = words.iter().map(|word| ctx.advance(word, style)).collect();
     let lines = noonoo_text::wrap(&widths, space, available_width);
     for line in &lines {

@@ -84,7 +84,7 @@ pub(crate) fn layout_flex_children(
             let mut text = String::new();
             while index < children.len() && ctx.is_text(children[index]) {
                 let chunk = ctx.document.text_content(children[index]);
-                let chunk = chunk.trim();
+                let chunk = noonoo_text::trim_collapsible(&chunk);
                 if !chunk.is_empty() {
                     if !text.is_empty() {
                         text.push(' ');

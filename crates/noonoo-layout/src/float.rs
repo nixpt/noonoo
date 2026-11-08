@@ -271,7 +271,7 @@ fn preferred_flex_content(ctx: &Ctx<'_>, node: NodeId, style: &ComputedStyle) ->
             let mut text = String::new();
             while index < children.len() && ctx.is_text(children[index]) {
                 let chunk = ctx.document.text_content(children[index]);
-                let chunk = chunk.trim();
+                let chunk = noonoo_text::trim_collapsible(&chunk);
                 if !chunk.is_empty() {
                     if !text.is_empty() {
                         text.push(' ');
@@ -335,7 +335,10 @@ fn preferred_content(ctx: &Ctx<'_>, node: NodeId) -> f32 {
             cells += preferred_width(ctx, child) + margins.left + margins.right;
             continue;
         }
-        if ctx.is_text(child) && cells > 0.0 && ctx.document.text_content(child).trim().is_empty() {
+        if ctx.is_text(child)
+            && cells > 0.0
+            && noonoo_text::trim_collapsible(&ctx.document.text_content(child)).is_empty()
+        {
             continue; // Whitespace between cells.
         }
         widest = widest.max(cells);
@@ -444,7 +447,7 @@ fn min_content(ctx: &Ctx<'_>, node: NodeId, style: &ComputedStyle) -> f32 {
         if ctx.is_text(child) {
             // Text has no style of its own; it inherits the container's.
             let text = ctx.document.text_content(child);
-            if !text.trim().is_empty() {
+            if !noonoo_text::trim_collapsible(&text).is_empty() {
                 widths.push(text_min_width(ctx, &text, style));
             }
         } else {
@@ -472,7 +475,7 @@ fn text_min_width(ctx: &Ctx<'_>, text: &str, style: &ComputedStyle) -> f32 {
     if matches!(style.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre) {
         return text_width(ctx, text, style);
     }
-    text.split_whitespace()
+    noonoo_text::collapsible_words(text)
         .map(|word| ctx.advance(word, style))
         .fold(0.0, f32::max)
 }
@@ -494,9 +497,12 @@ pub(crate) fn text_width(ctx: &Ctx<'_>, text: &str, style: &ComputedStyle) -> f3
     }
     // Preserved spaces count as they stand (trailing ones hang).
     if crate::preserves_spaces(style.white_space) {
-        return ctx.advance(crate::expand_tabs(text, 0).trim_end(), style);
+        return ctx.advance(
+            crate::expand_tabs(text, 0).trim_end_matches(noonoo_text::is_collapsible_space),
+            style,
+        );
     }
-    let words: Vec<&str> = text.split_whitespace().collect();
+    let words: Vec<&str> = noonoo_text::collapsible_words(text).collect();
     if matches!(style.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre) {
         return ctx.advance(&words.join(" "), style);
     }

@@ -3046,3 +3046,42 @@ fn preserved_white_space_between_blocks_is_a_line() {
         "{y}"
     );
 }
+
+/// A no-break space is not collapsible white space: runs of them keep their
+/// width, and a line never breaks at one. MetricShaper: 8px a character.
+#[test]
+fn no_break_spaces_keep_their_width_and_never_break() {
+    let (_doc, tree) = page(
+        "<p>a\u{a0}\u{a0}b</p><div style=\"width: 30px\">aa\u{a0}bb cc</div>",
+        "p { margin: 0 }",
+        400.0,
+    );
+    let lines = text_lines(&tree);
+    assert_eq!(lines[0].0, "a\u{a0}\u{a0}b");
+    assert_eq!(
+        lines[1..]
+            .iter()
+            .map(|(text, _)| text.as_str())
+            .collect::<Vec<_>>(),
+        ["aa\u{a0}bb", "cc"]
+    );
+    let widths: Vec<f32> = tree
+        .boxes()
+        .iter()
+        .filter(|b| b.text.as_deref() == Some("a\u{a0}\u{a0}b"))
+        .map(|b| b.rect.width)
+        .collect();
+    assert_eq!(widths, [32.0]);
+}
+
+/// A word joined by a no-break space is one unbreakable piece for
+/// min-content sizing too.
+#[test]
+fn a_no_break_space_holds_together_in_min_content() {
+    let (doc, tree) = page(
+        "<div style=\"width: 10px\"><table id=\"t\" cellpadding=\"0\"><tr><td>a\u{a0}b c</td></tr></table></div>",
+        "",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "t")).unwrap().rect.width, 24.0);
+}
