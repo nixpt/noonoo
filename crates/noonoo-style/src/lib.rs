@@ -643,4 +643,106 @@ mod tests {
             }
         );
     }
+
+    // ── var() inside shorthands: substituted, then expanded, per longhand ──
+
+    fn first_p(html: &str, css: &str) -> ComputedStyle {
+        let (doc, styles) = styled(html, css);
+        let p = doc.get_elements_by_tag_name("p")[0];
+        styles.get(p).unwrap().clone()
+    }
+
+    #[test]
+    fn var_in_the_background_shorthand() {
+        let s = first_p(
+            "<p>x</p>",
+            ":root { --c: #ff0000 } p { background: var(--c) }",
+        );
+        assert_eq!(s.background_color, Color::rgb(255, 0, 0));
+    }
+
+    #[test]
+    fn var_in_the_border_shorthand() {
+        let s = first_p(
+            "<p>x</p>",
+            ":root { --c: #00ff00 } p { border: 2px solid var(--c) }",
+        );
+        assert_eq!(s.border_color.top, Color::rgb(0, 255, 0));
+        assert_eq!(s.border_color.left, Color::rgb(0, 255, 0));
+        assert_eq!(s.border_width.bottom, 2.0);
+        assert_eq!(s.border_style.right, BorderStyle::Solid);
+    }
+
+    #[test]
+    fn a_var_holding_several_values_expands_after_substitution() {
+        // `--m` is two values: it must split into top/bottom and left/right,
+        // not be copied whole onto every side.
+        let s = first_p("<p>x</p>", ":root { --m: 1px 2px } p { margin: var(--m) }");
+        assert_eq!(s.margin.top, Dimension::Px(1.0));
+        assert_eq!(s.margin.right, Dimension::Px(2.0));
+        assert_eq!(s.margin.bottom, Dimension::Px(1.0));
+        assert_eq!(s.margin.left, Dimension::Px(2.0));
+        let s = first_p(
+            "<p>x</p>",
+            ":root { --b: 3px dashed #0000ff } p { border: var(--b) }",
+        );
+        assert_eq!(s.border_width.top, 3.0);
+        assert_eq!(s.border_style.top, BorderStyle::Dashed);
+        assert_eq!(s.border_color.top, Color::rgb(0, 0, 255));
+    }
+
+    #[test]
+    fn each_longhand_of_a_var_shorthand_still_cascades_on_its_own() {
+        let later_longhand = first_p(
+            "<p>x</p>",
+            ":root { --c: #ff0000 } p { background: var(--c) } p { background-color: #0000ff }",
+        );
+        assert_eq!(later_longhand.background_color, Color::rgb(0, 0, 255));
+        let later_shorthand = first_p(
+            "<p>x</p>",
+            ":root { --c: #ff0000 } p { background-color: #0000ff } p { background: var(--c) }",
+        );
+        assert_eq!(later_shorthand.background_color, Color::rgb(255, 0, 0));
+    }
+
+    #[test]
+    fn an_unresolvable_var_shorthand_leaves_its_longhands_initial() {
+        let s = first_p(
+            "<p>x</p>",
+            "p { border-color: #ff0000 } p { border: var(--missing) }",
+        );
+        assert_eq!(
+            s.border_width.top,
+            ComputedStyle::default().border_width.top
+        );
+        assert_eq!(s.border_style.top, BorderStyle::None);
+        let s = first_p(
+            "<p>x</p>",
+            "p { border: 1px solid var(--missing, #00ff00) }",
+        );
+        assert_eq!(
+            s.border_color.top,
+            Color::rgb(0, 255, 0),
+            "the fallback applies"
+        );
+    }
+
+    #[test]
+    fn var_in_the_font_shorthand_reaches_font_size() {
+        let s = first_p("<p>x</p>", ":root { --f: 20px serif } p { font: var(--f) }");
+        assert_eq!(s.font_size, 20.0);
+    }
+
+    #[test]
+    fn var_in_flex_overflow_and_gap_shorthands() {
+        let (doc, styles) = styled(
+            r#"<div id="d"><p>x</p></div>"#,
+            ":root { --g: 2 } #d { display: flex } p { flex: var(--g); overflow: var(--o, hidden) }",
+        );
+        let p = doc.get_elements_by_tag_name("p")[0];
+        let s = styles.get(p).unwrap();
+        assert_eq!(s.flex_grow, 2.0);
+        assert_eq!(s.overflow_x, Overflow::Hidden);
+        assert_eq!(s.overflow_y, Overflow::Hidden);
+    }
 }

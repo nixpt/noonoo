@@ -18,7 +18,10 @@ pub mod property;
 pub mod tokenizer;
 pub mod value;
 
-pub use property::{Declaration, Property, parse_declaration};
+pub use property::{
+    Declaration, PENDING_SHORTHAND, Property, expand_declaration, parse_declaration,
+    pending_shorthand,
+};
 pub use tokenizer::{Token, TokenKind, tokenize};
 pub use value::{Color, Length, LengthUnit, Value, parse_values};
 

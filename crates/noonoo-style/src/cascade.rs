@@ -9,7 +9,10 @@ use std::collections::HashMap;
 
 use crate::Interaction;
 use noonoo_css::value::Value;
-use noonoo_css::{Declaration, Property, Stylesheet, parse_declaration, parse_declarations};
+use noonoo_css::{
+    Declaration, Property, Stylesheet, expand_declaration, parse_declaration, parse_declarations,
+    pending_shorthand,
+};
 use noonoo_dom::{Document, NodeId};
 use noonoo_query::ElementRef;
 use noonoo_selectors::{MatchContext, SelectorList};
@@ -60,6 +63,27 @@ struct Rule {
 struct Candidate {
     key: Key,
     values: Vec<Value>,
+}
+
+/// The winning `values` of `property` with every `var()` substituted, or
+/// `None` if the declaration is invalid at computed-value time.
+///
+/// A pending-substitution longhand (its shorthand held `var()`) substitutes
+/// the shorthand's raw value, expands it, and takes `property`'s part. If
+/// the substituted shorthand doesn't set `property`, that's invalid too.
+fn computed_values(
+    property: &Property,
+    values: &[Value],
+    props: &CustomProperties,
+) -> Option<Vec<Value>> {
+    let Some((shorthand, raw)) = pending_shorthand(values) else {
+        return vars::substitute(values, props);
+    };
+    let substituted = vars::substitute(raw, props)?;
+    expand_declaration(shorthand, substituted, false)
+        .into_iter()
+        .find(|declaration| &declaration.property == property)
+        .map(|declaration| declaration.values)
 }
 
 /// Build the rule list: the UA sheet, then the author stylesheets. A
@@ -242,7 +266,7 @@ pub(crate) fn compute(
 
         let font_size = winners
             .get(&Property::FontSize)
-            .and_then(|c| vars::substitute(&c.values, &props))
+            .and_then(|c| computed_values(&Property::FontSize, &c.values, &props))
             .and_then(|values| resolve_font_size(&values, parent_font, root_font_size, viewport))
             .unwrap_or(parent_font);
 
@@ -264,7 +288,7 @@ pub(crate) fn compute(
             }
             // A `var()` that cannot be resolved invalidates the declaration;
             // the property then keeps its inherited or initial value.
-            let Some(values) = vars::substitute(&candidate.values, &props) else {
+            let Some(values) = computed_values(property, &candidate.values, &props) else {
                 continue;
             };
             apply(

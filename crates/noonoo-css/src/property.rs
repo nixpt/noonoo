@@ -357,13 +357,110 @@ fn sides(top: Property, right: Property, bottom: Property, left: Property) -> [P
     [top, right, bottom, left]
 }
 
+/// The function name of a *pending-substitution* value: the value every
+/// longhand of a shorthand gets when the shorthand holds `var()`.
+///
+/// A shorthand can't be split into longhands until its `var()`s are
+/// substituted: `border: var(--b)` doesn't say which part is the color. So,
+/// as CSS specifies, each longhand carries the shorthand's name and raw
+/// value, `-noonoo-pending-shorthand(border var(--b))`, and still cascades on
+/// its own. At computed-value time the style layer substitutes the raw value,
+/// calls [`expand_declaration`], and takes its own part. See
+/// [`pending_shorthand`].
+pub const PENDING_SHORTHAND: &str = "-noonoo-pending-shorthand";
+
+/// The shorthand name and raw values, if `values` is a pending-substitution
+/// value (see [`PENDING_SHORTHAND`]).
+pub fn pending_shorthand(values: &[Value]) -> Option<(&str, &[Value])> {
+    match values {
+        [Value::Function { name, args }] if name == PENDING_SHORTHAND => match args.split_first() {
+            Some((Value::Keyword(shorthand), raw)) => Some((shorthand.as_str(), raw)),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Whether any value, at any depth, is a `var()` reference.
+fn contains_var(values: &[Value]) -> bool {
+    values.iter().any(|value| match value {
+        Value::Function { name, args } => name.eq_ignore_ascii_case("var") || contains_var(args),
+        _ => false,
+    })
+}
+
+/// A value for each shorthand that sets every longhand it can, used to
+/// find which longhands a pending-substitution shorthand covers. A test
+/// checks each one expands.
+const SHORTHAND_SAMPLES: &[(&str, &str)] = &[
+    ("margin", "0"),
+    ("padding", "0"),
+    ("inset", "0"),
+    ("border-width", "0"),
+    ("border-style", "none"),
+    ("border-color", "black"),
+    ("border-radius", "0"),
+    ("gap", "0"),
+    ("overflow", "visible"),
+    ("flex", "1 1 0"),
+    ("flex-flow", "row nowrap"),
+    ("border", "1px solid black"),
+    ("border-top", "1px solid black"),
+    ("border-right", "1px solid black"),
+    ("border-bottom", "1px solid black"),
+    ("border-left", "1px solid black"),
+    ("background", "black"),
+    ("font", "italic bold 16px/1.2 serif"),
+    ("text-decoration", "underline solid black"),
+];
+
+/// The longhands `shorthand` (lowercased) sets, or `None` if it is not a
+/// shorthand Noonoo expands.
+fn shorthand_longhands(shorthand: &str) -> Option<Vec<Property>> {
+    let (_, sample) = SHORTHAND_SAMPLES
+        .iter()
+        .find(|(name, _)| *name == shorthand)?;
+    let values = parse_values(sample).ok()?;
+    Some(
+        expand_declaration(shorthand, values, false)
+            .into_iter()
+            .map(|declaration| declaration.property)
+            .collect(),
+    )
+}
+
 /// Parse a declaration and expand any shorthand into longhands.
+///
+/// A shorthand whose value holds `var()` expands to pending-substitution
+/// longhands instead (see [`PENDING_SHORTHAND`]).
 pub fn parse_declaration(
     name: &str,
     value: &str,
     important: bool,
 ) -> ParseResult<Vec<Declaration>> {
     let values = parse_values(value)?;
+    let lowered = name.trim().to_ascii_lowercase();
+    if contains_var(&values)
+        && let Some(longhands) = shorthand_longhands(&lowered)
+    {
+        let mut args = vec![Value::Keyword(lowered)];
+        args.extend(values);
+        let pending = Value::Function {
+            name: PENDING_SHORTHAND.into(),
+            args,
+        };
+        return Ok(longhands
+            .into_iter()
+            .map(|property| decl(property, vec![pending.clone()], important))
+            .collect());
+    }
+    Ok(expand_declaration(name, values, important))
+}
+
+/// Expand already-parsed values for `name`: a shorthand into its longhands,
+/// anything else into one declaration. The values must hold no `var()`;
+/// this is the second half of a pending-substitution shorthand.
+pub fn expand_declaration(name: &str, values: Vec<Value>, important: bool) -> Vec<Declaration> {
     let lowered = name.trim().to_ascii_lowercase();
 
     let expanded = match lowered.as_str() {
@@ -467,7 +564,7 @@ pub fn parse_declaration(
         _ => None,
     };
 
-    Ok(expanded.unwrap_or_else(|| vec![decl(Property::parse(name), values, important)]))
+    expanded.unwrap_or_else(|| vec![decl(Property::parse(name), values, important)])
 }
 
 fn decl(property: Property, values: Vec<Value>, important: bool) -> Declaration {
@@ -914,6 +1011,52 @@ mod tests {
             .find(|d| d.property == Property::BorderTopWidth)
             .unwrap();
         assert!(matches!(&top_width.values[0], Value::Function { name, .. } if name == "calc"));
+    }
+
+    #[test]
+    fn every_shorthand_sample_expands_into_known_longhands() {
+        for (name, sample) in SHORTHAND_SAMPLES {
+            let decls = parse_declaration(name, sample, false).unwrap();
+            // At least one (`text-decoration` models only its line).
+            assert!(!decls.is_empty(), "{name}: {sample} gave {decls:?}");
+            assert!(
+                decls
+                    .iter()
+                    .all(|d| !matches!(d.property, Property::Unknown(_))),
+                "{name}: {sample} gave {decls:?}"
+            );
+            assert_eq!(
+                shorthand_longhands(name).unwrap(),
+                props_of(&decls),
+                "{name}"
+            );
+        }
+        assert_eq!(shorthand_longhands("color"), None, "not a shorthand");
+    }
+
+    fn props_of(decls: &[Declaration]) -> Vec<Property> {
+        decls.iter().map(|d| d.property.clone()).collect()
+    }
+
+    #[test]
+    fn a_var_shorthand_becomes_pending_longhands() {
+        let decls = parse_declaration("border", "1px solid var(--c)", true).unwrap();
+        assert_eq!(props_of(&decls), shorthand_longhands("border").unwrap());
+        for d in &decls {
+            assert!(d.important);
+            let (shorthand, raw) = pending_shorthand(&d.values).unwrap();
+            assert_eq!(shorthand, "border");
+            assert_eq!(raw, parse_values("1px solid var(--c)").unwrap().as_slice());
+        }
+        // Nested var() counts; a longhand with var() is left as it is.
+        let decls = parse_declaration("background", "rgb(var(--r), 0, 0)", false).unwrap();
+        assert!(pending_shorthand(&decls[0].values).is_some());
+        let decls = parse_declaration("color", "var(--c)", false).unwrap();
+        assert_eq!(decls.len(), 1);
+        assert!(pending_shorthand(&decls[0].values).is_none());
+        // No var(): expanded at parse time, as before.
+        let decls = parse_declaration("background", "red", false).unwrap();
+        assert!(decls.iter().all(|d| pending_shorthand(&d.values).is_none()));
     }
 
     #[test]
