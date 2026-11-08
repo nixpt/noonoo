@@ -902,3 +902,17 @@ fn a_normal_line_rounds_ascent_and_descent_separately() {
         18.0
     );
 }
+
+#[test]
+fn outline_glyphs_report_the_fonts_rounded_ascent_and_descent() {
+    let font = Font::parse(&minimal_font()).unwrap();
+    let mut set = FontSet::new();
+    set.add("", 400, false, &font);
+    let glyphs = crate::OutlineGlyphs::new(&set);
+    // 800 and 200 units at 17.5px over 1000: 14 and 3.5, rounded as the
+    // shaper rounds a normal line (14 + 4 = its 18px).
+    assert_eq!(
+        noonoo_paint::Glyphs::metrics(&glyphs, FontRequest::any(), 17.5),
+        (14.0, 4.0)
+    );
+}

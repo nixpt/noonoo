@@ -241,6 +241,16 @@ pub trait Glyphs {
         let _ = letter_spacing;
         self.draw(text, origin, font_size, color, request, out);
     }
+
+    /// The ascent and descent, in pixels, of the face `request` selects at
+    /// `font_size`: where the baseline sits in a line.
+    ///
+    /// The default splits a 1.2em line as 0.8em above the baseline and
+    /// 0.4em below, for renderers with no font to ask.
+    fn metrics(&self, request: FontRequest, font_size: f32) -> (f32, f32) {
+        let _ = request;
+        (font_size * 0.8, font_size * 0.4)
+    }
 }
 
 /// The default [`Glyphs`]: one [`Command::DrawText`] per run.
@@ -437,13 +447,15 @@ fn paint_box(
         // `normal` is the font's own line height: layout sized the run's box
         // with it.
         let line_height = line_height.unwrap_or(rect.height);
-        // Half the leading beyond the normal line height (1.2em) goes above
-        // the text, so a tall line centres it (and a short one raises it).
-        let half_leading = (line_height - font_size * 1.2) / 2.0;
-        let baseline = rect.y + half_leading + font_size * 0.8;
         let request = style
             .map(|style| style.font_request())
             .unwrap_or_else(FontRequest::any);
+        // Half the leading (the line height beyond the font's ascent and
+        // descent) goes above the text, so a tall line centres it and a
+        // short one raises it; the baseline is the ascent below that.
+        let (ascent, descent) = glyphs.metrics(request, font_size);
+        let half_leading = (line_height - (ascent + descent)) / 2.0;
+        let baseline = rect.y + half_leading + ascent;
         let shown = match style {
             Some(style) => style.transformed_text(text),
             None => std::borrow::Cow::Borrowed(text.as_str()),
@@ -1226,6 +1238,50 @@ mod tests {
         let glyphs = Spacing(Default::default());
         paint_with(&styles, &layout, &glyphs);
         assert_eq!(*glyphs.0.borrow(), [3.0]);
+    }
+
+    /// A font with a 10px ascent and 5px descent at any size, recording the
+    /// baseline each run is drawn at.
+    struct Metrics(std::cell::RefCell<Vec<f32>>);
+
+    impl Glyphs for Metrics {
+        fn draw(
+            &self,
+            _: &str,
+            (_, baseline): (f32, f32),
+            _: f32,
+            _: Color,
+            _: FontRequest,
+            _: &mut CommandList,
+        ) {
+            self.0.borrow_mut().push(baseline);
+        }
+
+        fn metrics(&self, _: FontRequest, _: f32) -> (f32, f32) {
+            (10.0, 5.0)
+        }
+    }
+
+    /// The baseline sits the font's ascent below the top of its content
+    /// area, which the leading (line height less ascent and descent)
+    /// centres in the line, as CSS 2 §10.8.1 has it.
+    #[test]
+    fn the_baseline_follows_the_fonts_ascent() {
+        let doc = noonoo_html::parse(r#"<div id="a">hi</div><div id="b">hi</div>"#);
+        let sheet = test_sheet("#a { line-height: 30px } #b { line-height: 15px }").unwrap();
+        let styles = noonoo_style::compute(&doc, &[sheet]);
+        let layout = noonoo_layout::layout(&doc, &styles, Size::new(400.0, 300.0), &MetricShaper);
+        let glyphs = Metrics(Default::default());
+        paint_with(&styles, &layout, &glyphs);
+        // #a: (30 - 15) / 2 + 10; #b starts at 30 with no leading.
+        assert_eq!(*glyphs.0.borrow(), [17.5, 40.0]);
+    }
+
+    /// Without a font, [`TextRuns`] keeps the 0.8em / 0.4em split of a
+    /// 1.2em line.
+    #[test]
+    fn the_default_metrics_split_a_line_four_to_two() {
+        assert_eq!(TextRuns.metrics(FontRequest::any(), 20.0), (16.0, 8.0));
     }
 
     fn transforms(list: &CommandList) -> Vec<[f32; 6]> {

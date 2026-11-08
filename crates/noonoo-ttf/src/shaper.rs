@@ -55,11 +55,19 @@ pub(crate) fn fallback_advance(set: &FontSet, selected: &Font, text: &str, font_
 /// descent and line gap each rounded to whole pixels and then added, as
 /// browsers do, so lines (and the boxes they stack in) stay pixel-aligned.
 pub(crate) fn line_height_px(font: &Font, font_size: f32) -> f32 {
-    let scale = scale(font, font_size);
-    let ascent = (font.ascender() as f32 * scale).round();
-    let descent = (-(font.descender() as f32) * scale).round();
-    let gap = (font.line_gap() as f32 * scale).round();
+    let (ascent, descent) = ascent_descent_px(font, font_size);
+    let gap = (font.line_gap() as f32 * scale(font, font_size)).round();
     (ascent + descent + gap).max(0.0)
+}
+
+/// `font`'s ascent and descent at `font_size`, each rounded to whole
+/// pixels, as [`line_height_px`] adds them.
+pub(crate) fn ascent_descent_px(font: &Font, font_size: f32) -> (f32, f32) {
+    let scale = scale(font, font_size);
+    (
+        (font.ascender() as f32 * scale).round(),
+        (-(font.descender() as f32) * scale).round(),
+    )
 }
 
 /// A [`Shaper`] over a single [`Font`]'s metrics.
