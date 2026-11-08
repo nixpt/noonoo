@@ -489,6 +489,10 @@ pub(crate) fn text_width(ctx: &Ctx<'_>, text: &str, style: &ComputedStyle) -> f3
             .map(|line| text_width(ctx, line, style))
             .fold(0.0, f32::max);
     }
+    // Preserved spaces count as they stand (trailing ones hang).
+    if crate::preserves_spaces(style.white_space) {
+        return ctx.advance(crate::expand_tabs(text, 0).trim_end(), style);
+    }
     let words: Vec<&str> = text.split_whitespace().collect();
     if matches!(style.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre) {
         return ctx.advance(&words.join(" "), style);

@@ -93,7 +93,12 @@ pub(crate) fn lines(
     let mut cursor_y = y;
 
     if nowrap {
-        let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        // `pre` keeps its spaces (trailing ones hang); `nowrap` collapses.
+        let text = if crate::preserves_spaces(style.white_space) {
+            crate::expand_tabs(text, 0).trim_end().to_owned()
+        } else {
+            text.split_whitespace().collect::<Vec<_>>().join(" ")
+        };
         let used = ctx.advance(&text, style);
         push_text_box(
             ctx,

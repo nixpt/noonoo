@@ -219,6 +219,9 @@ struct Item {
     spaced: bool,
     /// Whether it sticks to the item before: no line break between them.
     glued: bool,
+    /// Preserved white space before it (`pre`, `pre-wrap`), tabs expanded,
+    /// with its width: drawn as it stands instead of one space.
+    preserved: Option<(String, f32)>,
     /// The inline elements it sits in, outermost first.
     chain: Vec<NodeId>,
     /// How many of the innermost of `chain` start with it, and end with it.
@@ -234,6 +237,21 @@ impl Item {
     /// The room it takes on the line, its elements' edges included.
     fn advance(&self) -> f32 {
         self.lead + self.width + self.trail
+    }
+
+    /// The white space before it on a line, `space` being one collapsed space.
+    fn gap(&self, space: f32) -> f32 {
+        match &self.preserved {
+            Some((_, width)) => *width,
+            None if self.spaced => space,
+            None => 0.0,
+        }
+    }
+
+    /// The white space a line starting with it keeps: preserved white space
+    /// at the start of a line the source began (not a soft wrap).
+    fn leading_gap(&self) -> f32 {
+        self.preserved.as_ref().map_or(0.0, |(_, width)| *width)
     }
 }
 
@@ -297,6 +315,27 @@ fn line_fragments(line: &[Item]) -> Vec<Fragment> {
     fragments
 }
 
+/// `line` as (white space, word) pairs in order: each word with the white
+/// space before it, and a last pair with no word for trailing white space.
+fn words_of(line: &str) -> Vec<(&str, Option<&str>)> {
+    let mut pairs = Vec::new();
+    let mut rest = line;
+    while !rest.is_empty() {
+        let word_at = rest
+            .find(|c: char| !c.is_whitespace())
+            .unwrap_or(rest.len());
+        let (white, after) = rest.split_at(word_at);
+        if after.is_empty() {
+            pairs.push((white, None));
+            break;
+        }
+        let end = after.find(char::is_whitespace).unwrap_or(after.len());
+        pairs.push((white, Some(&after[..end])));
+        rest = &after[end..];
+    }
+    pairs
+}
+
 /// One step of the inline walk: a node to visit, or the end of an inline
 /// element's content.
 enum Step {
@@ -319,12 +358,25 @@ struct InlineWalk {
     entered_at: Vec<usize>,
     /// How many of the innermost open elements no item has opened yet.
     opening: usize,
+    /// Preserved white space waiting for the next item, and its width.
+    kept: String,
+    kept_width: f32,
+    /// Columns since the line began, for tab stops.
+    column: usize,
     /// Items placed so far, and where the last one is.
     count: usize,
     last: Option<(usize, usize)>,
 }
 
 impl InlineWalk {
+    /// A forced break: the next line starts fresh.
+    fn new_line(&mut self) {
+        self.spaced = false;
+        self.kept.clear();
+        self.kept_width = 0.0;
+        self.column = 0;
+    }
+
     fn enter(&mut self, element: NodeId) {
         self.chain.push(element);
         self.entered_at.push(self.count);
@@ -359,6 +411,11 @@ impl InlineWalk {
     ) {
         item.chain = self.chain.clone();
         item.opens = self.opening;
+        if !self.kept.is_empty() {
+            item.preserved = Some((std::mem::take(&mut self.kept), self.kept_width));
+            item.spaced = true;
+            self.kept_width = 0.0;
+        }
         item.lead = self.chain[self.chain.len() - self.opening..]
             .iter()
             .map(|&element| InlineEdges::of(ctx, element, width).start())
@@ -380,7 +437,7 @@ fn first_line_len(items: &[Item], space: f32, width: f32) -> usize {
     // Clusters: (item count, width), split where a break may go.
     let mut clusters: Vec<(usize, f32)> = Vec::new();
     for (index, item) in items.iter().enumerate() {
-        let gap = if item.spaced { space } else { 0.0 };
+        let gap = item.gap(space);
         match clusters.last_mut() {
             Some((count, used)) if index > 0 && item.glued => {
                 *count += 1;
@@ -396,7 +453,7 @@ fn first_line_len(items: &[Item], space: f32, width: f32) -> usize {
         clusters
             .iter()
             .map(|&(count, _)| {
-                let gap = if items[start].spaced { space } else { 0.0 };
+                let gap = items[start].gap(space);
                 start += count;
                 gap
             })
@@ -507,12 +564,21 @@ pub(crate) fn layout_inline_run(
                     if piece > 0 {
                         had_break = true;
                         groups.push(Vec::new());
-                        walk.spaced = false;
+                        walk.new_line();
                     }
-                    if line.starts_with(char::is_whitespace) {
-                        walk.spaced = true;
-                    }
-                    for (index, word) in line.split_whitespace().enumerate() {
+                    let preserve = crate::preserves_spaces(style.white_space);
+                    for (index, (white, word)) in words_of(line).into_iter().enumerate() {
+                        if !white.is_empty() {
+                            walk.spaced = true;
+                            if preserve {
+                                let kept = crate::expand_tabs(white, walk.column);
+                                walk.column += kept.chars().count();
+                                walk.kept_width += ctx.advance(&kept, style);
+                                walk.kept.push_str(&kept);
+                            }
+                        }
+                        let Some(word) = word else { continue };
+                        walk.column += word.chars().count();
                         let first = index == 0;
                         let spaced = !first || walk.spaced;
                         let glued = if first {
@@ -530,6 +596,7 @@ pub(crate) fn layout_inline_run(
                             atomic: None,
                             spaced,
                             glued,
+                            preserved: None,
                             chain: Vec::new(),
                             opens: 0,
                             closes: 0,
@@ -538,16 +605,13 @@ pub(crate) fn layout_inline_run(
                         };
                         walk.push(ctx, width, &mut groups, item, false);
                     }
-                    if line.ends_with(char::is_whitespace) {
-                        walk.spaced = true;
-                    }
                 }
             }
             Some(NodeData::Element(element)) => {
                 if element.name == "br" {
                     had_break = true;
                     groups.push(Vec::new());
-                    walk.spaced = false;
+                    walk.new_line();
                     continue;
                 }
                 let style = ctx.style(node).clone();
@@ -573,6 +637,7 @@ pub(crate) fn layout_inline_run(
                         }),
                         spaced: walk.spaced,
                         glued: false,
+                        preserved: None,
                         chain: Vec::new(),
                         opens: 0,
                         closes: 0,
@@ -602,6 +667,7 @@ pub(crate) fn layout_inline_run(
                             atomic: None,
                             spaced: walk.spaced,
                             glued: !walk.spaced && !walk.after_atomic,
+                            preserved: None,
                             chain: Vec::new(),
                             opens: 0,
                             closes: 0,
@@ -652,24 +718,39 @@ pub(crate) fn layout_inline_run(
                     .band(x, width, cursor_y, cursor_y + line_height);
             let band_width = (band_right - band_left).max(0.0);
             let rest = &items[start..];
+            // A line the source began keeps its leading preserved white
+            // space (indentation); one a soft wrap began drops it.
+            let leading = if start == 0 {
+                rest[0].leading_gap()
+            } else {
+                0.0
+            };
             let line_len = match parent_style.white_space {
                 WhiteSpace::NoWrap | WhiteSpace::Pre => rest.len(),
-                _ => first_line_len(rest, space, band_width),
+                _ => first_line_len(rest, space, band_width - leading),
             };
             let line = &rest[..line_len];
 
-            let spaces = line[1..].iter().filter(|item| item.spaced).count();
-            let used: f32 = line.iter().map(Item::advance).sum::<f32>() + space * spaces as f32;
+            let spaces = line[1..]
+                .iter()
+                .filter(|item| item.spaced && item.preserved.is_none())
+                .count();
+            let used: f32 = leading
+                + line.iter().map(Item::advance).sum::<f32>()
+                + line[1..].iter().map(|item| item.gap(space)).sum::<f32>();
             let free = (band_width - used).max(0.0);
             let offset = noonoo_text::align(alignment, free, spaces + 1);
 
             // Where each item's own box starts, inside its elements' edges.
-            let mut cursor_x = band_left + offset.start;
+            let mut cursor_x = band_left + offset.start + leading;
             let mut line_h = line_height;
             let mut at = Vec::with_capacity(line.len());
             for (position, item) in line.iter().enumerate() {
-                if position > 0 && item.spaced {
-                    cursor_x += space + offset.gap;
+                if position > 0 {
+                    cursor_x += item.gap(space);
+                    if item.spaced && item.preserved.is_none() {
+                        cursor_x += offset.gap;
+                    }
                 }
                 cursor_x += item.lead;
                 at.push(cursor_x);
@@ -791,8 +872,10 @@ pub(crate) fn layout_inline_run(
                     run.rect.width = at[position] + item.width - run.rect.x;
                     run.rect.height = run.rect.height.max(item.height);
                     if let Some(text) = run.text.as_mut() {
-                        if item.spaced {
-                            text.push(' ');
+                        match &item.preserved {
+                            Some((white, _)) => text.push_str(white),
+                            None if item.spaced => text.push(' '),
+                            None => {}
                         }
                         text.push_str(&item.text);
                     }

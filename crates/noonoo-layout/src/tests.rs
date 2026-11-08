@@ -2683,3 +2683,86 @@ fn an_inline_elements_padding_counts_in_a_shrink_to_fit_width() {
     );
     assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 36.0);
 }
+
+/// `pre` and `pre-wrap` keep their spaces: runs of them, indentation, and
+/// tabs (to the next multiple of 8 columns). MetricShaper: 8px a character.
+#[test]
+fn preformatted_text_keeps_its_spaces() {
+    let x_of = |html: &str, css: &str, word: &str| {
+        let (_doc, tree) = page(html, css, 400.0);
+        drawn_x(&tree)
+            .into_iter()
+            .find(|(text, _)| text.ends_with(word))
+            .map(|(_, x)| x)
+    };
+    let pre = "pre { margin: 0 }";
+    assert_eq!(
+        x_of("<pre>a   b</pre>", pre, "b"),
+        Some(32.0),
+        "a run of spaces"
+    );
+    assert_eq!(
+        x_of("<pre>x\n    y</pre>", pre, "y"),
+        Some(32.0),
+        "indentation"
+    );
+    assert_eq!(x_of("<pre>a\tb</pre>", pre, "b"), Some(64.0), "a tab");
+    assert_eq!(
+        x_of("<pre><span>a</span>  <span>b</span></pre>", pre, "b"),
+        Some(24.0),
+        "spaces between elements"
+    );
+    assert_eq!(
+        x_of("<pre><span>ab</span>\tc</pre>", pre, "c"),
+        Some(64.0),
+        "a tab counts columns across elements"
+    );
+    assert_eq!(
+        x_of("<div>a   b</div>", "", "b"),
+        Some(16.0),
+        "normal collapses"
+    );
+}
+
+#[test]
+fn pre_wrap_drops_the_spaces_where_it_wraps() {
+    let (_doc, tree) = page(
+        "<div>aaa  bbb</div>",
+        "div { white-space: pre-wrap; width: 40px; line-height: 20px }",
+        400.0,
+    );
+    assert_eq!(
+        drawn_x(&tree)
+            .into_iter()
+            .zip(drawn_text(&tree))
+            .map(|((t, x), (_, y))| (t, x, y))
+            .collect::<Vec<_>>(),
+        vec![("aaa".to_owned(), 0.0, 0.0), ("bbb".to_owned(), 0.0, 20.0)]
+    );
+}
+
+#[test]
+fn preserved_spaces_count_in_a_shrink_to_fit_width() {
+    let (doc, tree) = page(
+        "<div id=\"f\">a   b</div>",
+        "#f { float: left; white-space: pre }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 40.0);
+}
+
+#[test]
+fn loose_preformatted_text_in_a_flex_container_keeps_its_spaces() {
+    let (_doc, tree) = page(
+        "<div id=\"f\">a   b</div>",
+        "#f { display: flex; white-space: pre }",
+        400.0,
+    );
+    assert_eq!(drawn_text(&tree)[0].0, "a   b");
+    let run = tree
+        .boxes()
+        .iter()
+        .find(|b| b.text.as_deref() == Some("a   b"))
+        .unwrap();
+    assert_eq!(run.rect.width, 40.0);
+}

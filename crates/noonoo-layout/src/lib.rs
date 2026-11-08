@@ -179,6 +179,30 @@ pub(crate) fn forced_lines(text: &str, white_space: WhiteSpace) -> Vec<&str> {
     }
 }
 
+/// Whether `white_space` keeps runs of spaces and tabs (`pre`,
+/// `pre-wrap`); the other values collapse them to one space.
+pub(crate) fn preserves_spaces(white_space: WhiteSpace) -> bool {
+    matches!(white_space, WhiteSpace::Pre | WhiteSpace::PreWrap)
+}
+
+/// `text` with each tab expanded to spaces up to the next multiple of 8
+/// columns, counting from `column` (the columns already on the line).
+pub(crate) fn expand_tabs(text: &str, column: usize) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut column = column;
+    for character in text.chars() {
+        if character == '\t' {
+            let stop = 8 - column % 8;
+            out.extend(std::iter::repeat_n(' ', stop));
+            column += stop;
+        } else {
+            out.push(character);
+            column += 1;
+        }
+    }
+    out
+}
+
 /// Whether `element` is a single-line text field: an `<input>` whose type
 /// takes typed text (the default type is `text`).
 fn is_text_field(element: &noonoo_dom::ElementData) -> bool {
