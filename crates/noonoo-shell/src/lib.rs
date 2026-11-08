@@ -30,7 +30,7 @@ use noonoo_engine::Engine;
 use noonoo_events::{Event, EventListener, dispatch};
 use noonoo_geometry::{Point, Rect, Size};
 use noonoo_layout::{LayoutTree, Shaper};
-use noonoo_paint::CommandList;
+use noonoo_paint::{CommandList, Glyphs, TextRuns};
 use noonoo_style::{Cursor, Interaction, Styles};
 
 /// A document's trust context.
@@ -151,6 +151,9 @@ pub struct Host {
     focus: Option<(usize, NodeId)>,
     hovered: Option<(usize, NodeId)>,
     active: Option<(usize, NodeId)>,
+    /// How text runs are painted: plain `DrawText` by default, glyph
+    /// outlines once a font-backed renderer is set.
+    glyphs: Box<dyn Glyphs + Send + Sync>,
 }
 
 impl Host {
@@ -162,7 +165,15 @@ impl Host {
             focus: None,
             hovered: None,
             active: None,
+            glyphs: Box::new(TextRuns),
         }
+    }
+
+    /// Paint text with `glyphs` from the next layout on: e.g. `noonoo-ttf`'s
+    /// `OutlineGlyphs`, so a GPU window receives glyph outlines. The default,
+    /// `TextRuns`, emits `DrawText` commands.
+    pub fn set_glyphs(&mut self, glyphs: Box<dyn Glyphs + Send + Sync>) {
+        self.glyphs = glyphs;
     }
 
     /// Admit the chrome document, placed at `rect`.
@@ -229,7 +240,6 @@ impl Host {
     }
 
     /// Compute styles, layout, and paint commands for every layer.
-    /// Compute styles, layout, and paint commands for every layer.
     ///
     /// A sub-document's rectangle is taken from its host node's content box in
     /// the (already laid-out) parent, so the parent sizes it; the sub-document
@@ -263,7 +273,7 @@ impl Host {
                 noonoo_layout::layout(layer.engine.dom(), &styles, layer.rect.size(), shaper);
             // Preserve what the user scrolled across a re-layout.
             layout.inherit_scroll(&layer.layout);
-            let commands = noonoo_paint::paint(&styles, &layout);
+            let commands = noonoo_paint::paint_with(&styles, &layout, self.glyphs.as_ref());
             layer.styles = styles;
             layer.layout = layout;
             layer.commands = commands;
@@ -402,7 +412,8 @@ impl Host {
     /// Re-run paint for one layer against its current layout, after a scroll.
     fn repaint(&mut self, index: usize) {
         let layer = &mut self.layers[index];
-        layer.commands = noonoo_paint::paint(&layer.styles, &layer.layout);
+        layer.commands =
+            noonoo_paint::paint_with(&layer.styles, &layer.layout, self.glyphs.as_ref());
     }
 
     /// Apply a wheel (scroll) delta at `point`, chaining outward.
@@ -810,6 +821,68 @@ mod tests {
         let chain = host.wheel(Point::new(10.0, 10.0), 50.0);
         assert_eq!(chain, vec![(sub_index, 50.0)]);
         assert_eq!(host.layer(parent).unwrap().scroll().y, 0.0);
+    }
+
+    /// A `Glyphs` that marks each run with a green square, standing in for
+    /// a font-backed renderer.
+    struct MarkGlyphs;
+
+    impl noonoo_paint::Glyphs for MarkGlyphs {
+        fn draw(
+            &self,
+            _text: &str,
+            (x, y): (f32, f32),
+            _font_size: f32,
+            _color: Color,
+            _request: noonoo_paint::FontRequest,
+            out: &mut noonoo_paint::CommandList,
+        ) {
+            out.0.push(noonoo_paint::Command::FillRect {
+                rect: Rect::new(x, y, 1.0, 1.0),
+                color: Color::rgb(0, 255, 0),
+                radius: (0.0, 0.0, 0.0, 0.0),
+            });
+        }
+    }
+
+    fn marks(host: &Host, index: usize) -> (usize, usize) {
+        let commands = host.layer(index).unwrap().commands().commands();
+        let marks = commands
+            .iter()
+            .filter(|c| {
+                matches!(c, noonoo_paint::Command::FillRect { color, .. } if *color == Color::rgb(0, 255, 0))
+            })
+            .count();
+        let runs = commands
+            .iter()
+            .filter(|c| matches!(c, noonoo_paint::Command::DrawText { .. }))
+            .count();
+        (marks, runs)
+    }
+
+    /// Text paints through the host's `Glyphs`, on layout and on the repaint
+    /// after a scroll, so a window gets glyph outlines instead of text runs
+    /// a GPU backend can't draw.
+    #[test]
+    fn text_paints_through_the_hosts_glyphs() {
+        let mut host = Host::new(Size::new(400.0, 300.0));
+        host.set_glyphs(Box::new(MarkGlyphs));
+        let index = host.add_content(
+            engine(
+                r#"<div id="list"><p>one</p><div id="tall"></div></div>"#,
+                "#list { height: 50px; overflow-y: auto } #tall { height: 200px }",
+            ),
+            Rect::new(0.0, 0.0, 400.0, 300.0),
+        );
+        host.layout(&MetricShaper);
+        assert_eq!(marks(&host, index), (1, 0));
+
+        host.wheel(Point::new(10.0, 10.0), 100.0);
+        assert_eq!(
+            marks(&host, index),
+            (1, 0),
+            "the scroll repaint keeps the glyphs"
+        );
     }
 
     #[test]
