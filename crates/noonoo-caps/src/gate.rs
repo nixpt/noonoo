@@ -295,16 +295,35 @@ impl<'a> GatedMutator<'a> {
     }
 
     fn require_scope(&self, scope: &Scope) -> Result<(), CapsError> {
+        self.require_scope_for(Action::Write, scope)
+    }
+
+    fn require_scope_for(&self, action: Action, scope: &Scope) -> Result<(), CapsError> {
         if self
             .authorizer
-            .authorize(self.subject, Action::Write, scope)
+            .authorize(self.subject, action, scope)
             .is_denied()
         {
             return Err(CapsError::Denied(Denied {
                 subject: self.subject.clone(),
-                action: Action::Write,
+                action,
                 scope: scope.clone(),
             }));
+        }
+        Ok(())
+    }
+
+    /// Read access to `node` and, for a deep copy, every guard inside it:
+    /// what cloning it would reveal.
+    fn require_readable(&self, node: NodeId, deep: bool) -> Result<(), CapsError> {
+        let document: &Document = self.document;
+        if let Some(scope) = self.gate.required(document, node) {
+            self.require_scope_for(Action::Read, scope)?;
+        }
+        if deep {
+            for scope in self.gate.guards_within(document, node) {
+                self.require_scope_for(Action::Read, scope)?;
+            }
         }
         Ok(())
     }
@@ -416,6 +435,38 @@ impl<'a> GatedMutator<'a> {
         self.document
             .mutate()
             .insert_before(sibling, child)
+            .map_err(CapsError::Mutation)
+    }
+
+    /// Insert `child` after `sibling`, if the subject may write `sibling`
+    /// and `child`.
+    pub fn insert_after(&mut self, sibling: NodeId, child: NodeId) -> Result<(), CapsError> {
+        self.require(sibling)?;
+        self.require(child)?;
+        self.document
+            .mutate()
+            .insert_after(sibling, child)
+            .map_err(CapsError::Mutation)
+    }
+
+    /// Put `new` in `old`'s place, if the subject may write `old` and every
+    /// guarded node inside it (they leave the document), and `new`.
+    pub fn replace_with(&mut self, old: NodeId, new: NodeId) -> Result<(), CapsError> {
+        self.require_subtree(old)?;
+        self.require(new)?;
+        self.document
+            .mutate()
+            .replace_with(old, new)
+            .map_err(CapsError::Mutation)
+    }
+
+    /// A detached copy of `node` (`cloneNode`), if the subject may read it
+    /// and, for a deep copy, every guarded node inside it. The copy carries
+    /// no guards of its own.
+    pub fn clone_node(&mut self, node: NodeId, deep: bool) -> Result<NodeId, CapsError> {
+        self.require_readable(node, deep)?;
+        self.document
+            .clone_node(node, deep)
             .map_err(CapsError::Mutation)
     }
 

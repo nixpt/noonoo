@@ -331,3 +331,83 @@ fn style_property_writes_are_gated() {
         Some("width: 1px !important")
     );
 }
+
+#[test]
+fn insert_after_and_replace_with_are_gated() {
+    let (mut document, public, secret) = fixture();
+    let mut gate = Gate::new();
+    gate.guard(secret, secret_scope());
+    let subject = Subject::anonymous();
+    let policy = Policy::new();
+    let fresh = document.create_element("p");
+    let other = document.create_element("p");
+    let mut writer = GatedMutator::new(&mut document, &gate, &policy, &subject);
+
+    assert!(matches!(
+        writer.insert_after(secret, fresh),
+        Err(CapsError::Denied(_))
+    ));
+    assert!(matches!(
+        writer.replace_with(secret, fresh),
+        Err(CapsError::Denied(_))
+    ));
+    // Replacing an open node with a guarded one would move the guarded one.
+    assert!(matches!(
+        writer.replace_with(public, secret),
+        Err(CapsError::Denied(_))
+    ));
+    writer.insert_after(public, fresh).unwrap();
+    writer.replace_with(fresh, other).unwrap();
+    assert_eq!(
+        document.tree().children(document.root()),
+        &[public, other, secret]
+    );
+}
+
+#[test]
+fn replace_with_needs_write_on_the_guards_it_removes() {
+    let (mut document, public, secret) = fixture();
+    let mut gate = Gate::new();
+    let inner = document.tree().children(secret)[0];
+    gate.guard(inner, secret_scope());
+    let subject = Subject::anonymous();
+    let policy = Policy::new();
+    let fresh = document.create_element("p");
+    let mut writer = GatedMutator::new(&mut document, &gate, &policy, &subject);
+    assert!(matches!(
+        writer.replace_with(secret, fresh),
+        Err(CapsError::Denied(_))
+    ));
+    writer.replace_with(public, fresh).unwrap();
+}
+
+#[test]
+fn clone_node_needs_read_on_everything_it_copies() {
+    let (mut document, public, secret) = fixture();
+    let mut gate = Gate::new();
+    let inner = document.tree().children(secret)[0];
+    gate.guard(inner, secret_scope());
+    let subject = Subject::anonymous();
+    let policy = Policy::new();
+    {
+        let mut writer = GatedMutator::new(&mut document, &gate, &policy, &subject);
+        // A shallow copy of the open parent is fine; a deep one would copy
+        // the guarded child.
+        writer.clone_node(secret, false).unwrap();
+        assert!(matches!(
+            writer.clone_node(secret, true),
+            Err(CapsError::Denied(_))
+        ));
+        assert!(matches!(
+            writer.clone_node(inner, false),
+            Err(CapsError::Denied(_))
+        ));
+        writer.clone_node(public, true).unwrap();
+    }
+
+    let reader = Subject::new("did:exo:reader");
+    let policy = Policy::new().grant(Grant::read(reader.clone(), secret_scope()));
+    let mut writer = GatedMutator::new(&mut document, &gate, &policy, &reader);
+    let copy = writer.clone_node(secret, true).unwrap();
+    assert_eq!(document.text_content(copy), "classified");
+}
