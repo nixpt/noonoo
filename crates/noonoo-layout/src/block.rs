@@ -347,21 +347,31 @@ pub(crate) fn layout_inline_run(
                         had_break = true;
                         groups.push(Vec::new());
                     }
-                    if line.is_empty() {
-                        continue;
+                    // Wrappable text breaks between its words; on a line,
+                    // the element's words merge back into one box.
+                    let words: Vec<&str> =
+                        if matches!(style.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre) {
+                            Some(line)
+                                .filter(|line| !line.is_empty())
+                                .into_iter()
+                                .collect()
+                        } else {
+                            line.split_whitespace().collect()
+                        };
+                    for word in words {
+                        groups
+                            .last_mut()
+                            .expect("the first group always exists")
+                            .push(Item {
+                                node,
+                                style_node: node,
+                                kind: BoxKind::Inline,
+                                width: ctx.advance(word, &style),
+                                text: word.to_owned(),
+                                height,
+                                atomic: None,
+                            });
                     }
-                    groups
-                        .last_mut()
-                        .expect("the first group always exists")
-                        .push(Item {
-                            node,
-                            style_node: node,
-                            kind: BoxKind::Inline,
-                            width: ctx.advance(line, &style),
-                            text: line.to_owned(),
-                            height,
-                            atomic: None,
-                        });
                 }
             }
             _ => {}
@@ -418,6 +428,9 @@ pub(crate) fn layout_inline_run(
 
             let mut cursor_x = band_left + offset.start;
             let mut line_h = line_height;
+            // The element run just placed on this line, which the element's
+            // next word extends.
+            let mut open_run: Option<(NodeId, usize)> = None;
             for (position, &i) in line.iter().enumerate() {
                 if position > 0 {
                     cursor_x += space + offset.gap;
@@ -434,6 +447,21 @@ pub(crate) fn layout_inline_run(
                     );
                     if let Some(index) = ctx.tree_index(item.node) {
                         indices.push(index);
+                    }
+                    cursor_x += item.width;
+                    open_run = None;
+                    continue;
+                }
+                if item.kind == BoxKind::Inline
+                    && let Some((run_node, index)) = open_run
+                    && run_node == item.node
+                {
+                    let run = &mut ctx.tree.boxes[index];
+                    run.rect.width = cursor_x + item.width - run.rect.x;
+                    run.rect.height = run.rect.height.max(item.height);
+                    if let Some(text) = run.text.as_mut() {
+                        text.push(' ');
+                        text.push_str(&item.text);
                     }
                     cursor_x += item.width;
                     continue;
@@ -457,6 +485,7 @@ pub(crate) fn layout_inline_run(
                     children: Vec::new(),
                 });
                 indices.push(index);
+                open_run = (item.kind == BoxKind::Inline).then_some((item.node, index));
                 cursor_x += item.width;
             }
             cursor_y += line_h;

@@ -2433,3 +2433,63 @@ fn a_shrink_to_fit_box_takes_the_widest_line_of_an_inline_element() {
     // MetricShaper: 8px a character at 16px.
     assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 32.0);
 }
+
+/// bliss-diff (the devtools console): an inline element's text was one
+/// unbreakable run, so a long `<span>` overflowed its line instead of
+/// wrapping.
+#[test]
+fn an_inline_elements_text_wraps_at_the_line_end() {
+    let (doc, tree) = page(
+        r#"<div><span id="s">aaa bbb ccc</span> dd</div>"#,
+        "div { width: 80px; line-height: 20px }",
+        400.0,
+    );
+    // MetricShaper: 8px a character. "aaa bbb" (56px) fits in 80px, and
+    // " ccc" would not; "ccc dd" shares the second line.
+    let lines = drawn_text(&tree);
+    assert_eq!(
+        lines,
+        vec![
+            ("aaa bbb".to_owned(), 0.0),
+            ("ccc".to_owned(), 20.0),
+            ("dd".to_owned(), 20.0),
+        ]
+    );
+    // One box per line for the span, each its line's share of the text.
+    let span = id(&doc, "s");
+    let fragments: Vec<Rect> = tree
+        .boxes()
+        .iter()
+        .filter(|b| b.node == Some(span))
+        .map(|b| b.rect)
+        .collect();
+    assert_eq!(
+        fragments,
+        vec![
+            Rect::new(0.0, 0.0, 56.0, 20.0),
+            Rect::new(0.0, 20.0, 24.0, 20.0)
+        ]
+    );
+}
+
+#[test]
+fn a_nowrap_inline_element_stays_on_one_line() {
+    let (_doc, tree) = page(
+        r#"<div><span>aaa bbb ccc</span></div>"#,
+        "div { width: 80px; line-height: 20px } span { white-space: nowrap }",
+        400.0,
+    );
+    assert_eq!(drawn_text(&tree), vec![("aaa bbb ccc".to_owned(), 0.0)]);
+}
+
+#[test]
+fn a_shrink_to_fit_box_can_narrow_to_an_inline_elements_longest_word() {
+    let (doc, tree) = page(
+        r#"<div id="w"><div id="f"><span>aaaa bb cc</span></div></div>"#,
+        "#w { width: 40px } #f { float: left }",
+        400.0,
+    );
+    // Too narrow for the 80px line: the float shrinks to fit its 40px
+    // container, no narrower than "aaaa".
+    assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 40.0);
+}
