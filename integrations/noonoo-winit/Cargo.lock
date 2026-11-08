@@ -1358,6 +1358,7 @@ dependencies = [
  "noonoo-geometry",
  "noonoo-html",
  "noonoo-layout",
+ "noonoo-net",
  "noonoo-paint",
  "noonoo-style",
 ]
@@ -1397,6 +1398,10 @@ dependencies = [
  "noonoo-style",
  "noonoo-text",
 ]
+
+[[package]]
+name = "noonoo-net"
+version = "0.20.0"
 
 [[package]]
 name = "noonoo-paint"
@@ -1494,6 +1499,7 @@ dependencies = [
  "noonoo-events",
  "noonoo-geometry",
  "noonoo-html",
+ "noonoo-net",
  "noonoo-paint",
  "noonoo-shell",
  "noonoo-style",

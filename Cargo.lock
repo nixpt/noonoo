@@ -224,6 +224,7 @@ dependencies = [
  "noonoo-events",
  "noonoo-geometry",
  "noonoo-layout",
+ "noonoo-net",
  "noonoo-paint",
  "noonoo-style",
 ]

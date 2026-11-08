@@ -300,11 +300,23 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 name = "noonoo-caps"
 version = "0.20.0"
 dependencies = [
+ "noonoo-css",
  "noonoo-dom",
 ]
 
 [[package]]
+name = "noonoo-css"
+version = "0.20.0"
+dependencies = [
+ "noonoo-parse",
+]
+
+[[package]]
 name = "noonoo-dom"
+version = "0.20.0"
+
+[[package]]
+name = "noonoo-parse"
 version = "0.20.0"
 
 [[package]]

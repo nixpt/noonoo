@@ -26,6 +26,7 @@ pollster = "0.4"
 
 [dev-dependencies]
 noonoo-engine = { path = "../../crates/noonoo-engine" }
+noonoo-net = { path = "../../crates/noonoo-net" }
 noonoo-html = { path = "../../crates/noonoo-html" }
 
 # Linux accessibility (AT-SPI). The tree and the AccessKit projection are

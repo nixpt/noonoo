@@ -145,8 +145,16 @@ fn run_paint(path: &str, font_path: Option<&str>) -> ExitCode {
             return ExitCode::from(1);
         }
     };
-    let engine = noonoo::engine::Engine::from_html(&html);
+    let mut engine = noonoo::engine::Engine::from_html(&html);
     let viewport = noonoo::geometry::Size::new(800.0, 600.0);
+    // Images load from beside the page (from the current directory for
+    // stdin), all at once: the file loader answers before returning.
+    if path != "-" {
+        engine.set_base_url(path);
+    }
+    engine.set_loader(noonoo::net::FileLoader);
+    engine.load_resources();
+    engine.poll_resources();
 
     // Collect font bytes: `--font` is the universal fallback (registered under
     // the empty family name, which matches every request); each `@font-face`

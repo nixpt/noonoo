@@ -275,8 +275,13 @@ impl Host {
             let styles = layer
                 .engine
                 .compute_styles_in(layer.rect.size(), interaction);
-            let mut layout =
-                noonoo_layout::layout(layer.engine.dom(), &styles, layer.rect.size(), shaper);
+            let mut layout = noonoo_layout::layout_with_images(
+                layer.engine.dom(),
+                &styles,
+                layer.rect.size(),
+                shaper,
+                layer.engine.images(),
+            );
             // Preserve what the user scrolled across a re-layout.
             layout.inherit_scroll(&layer.layout);
             let commands = noonoo_paint::paint_with(&styles, &layout, self.glyphs.as_ref());
@@ -284,6 +289,17 @@ impl Host {
             layer.layout = layout;
             layer.commands = commands;
         }
+    }
+
+    /// Take in each layer's finished loads (see
+    /// [`Engine::poll_resources`]); true when an image arrived, so the next
+    /// [`Host::layout`] changes what's drawn.
+    pub fn poll_resources(&mut self) -> bool {
+        let mut changed = false;
+        for layer in &mut self.layers {
+            changed |= layer.engine.poll_resources();
+        }
+        changed
     }
 
     /// The topmost layer whose rectangle contains `point`.
@@ -528,6 +544,38 @@ mod tests {
         );
         host.layout(&MetricShaper);
         host
+    }
+
+    /// A layer's images load through its engine's loader; polling reports
+    /// the arrival, and the next layout draws them.
+    #[test]
+    fn layers_draw_the_images_their_engines_loaded() {
+        let dir = std::env::temp_dir().join("noonoo-shell-images");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+        png.extend(13u32.to_be_bytes());
+        png.extend(b"IHDR");
+        png.extend(40u32.to_be_bytes());
+        png.extend(30u32.to_be_bytes());
+        png.extend([8, 6, 0, 0, 0]);
+        std::fs::write(dir.join("a.png"), png).unwrap();
+        let mut host = host();
+        assert!(!host.poll_resources());
+        let mut page = engine(r#"<img src="a.png">"#, "");
+        page.set_base_url(format!("{}/index.html", dir.display()));
+        page.set_loader(noonoo_net::FileLoader);
+        page.load_resources();
+        let layer = host.add_content(page, Rect::new(0.0, 24.0, 400.0, 276.0));
+        assert!(host.poll_resources());
+        assert!(!host.poll_resources());
+        host.layout(&MetricShaper);
+        let drawn = host.layers()[layer]
+            .commands()
+            .commands()
+            .iter()
+            .filter(|c| matches!(c, noonoo_paint::Command::DrawImage { .. }))
+            .count();
+        assert_eq!(drawn, 1);
     }
 
     /// An embedder patches a layer's document (super-surfer's address bar,

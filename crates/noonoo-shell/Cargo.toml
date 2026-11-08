@@ -29,3 +29,6 @@ noonoo-geometry.workspace = true
 noonoo-layout.workspace = true
 noonoo-paint.workspace = true
 noonoo-style.workspace = true
+
+[dev-dependencies]
+noonoo-net.workspace = true

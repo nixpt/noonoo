@@ -494,12 +494,17 @@ impl View {
         Flow::Continue
     }
 
-    /// Service accessibility requests: call from the event loop's
-    /// `about_to_wait`.
+    /// Service accessibility requests and take in finished loads: call
+    /// from the event loop's `about_to_wait`. An asynchronous loader's
+    /// waker should wake the event loop, which ends here.
     pub fn about_to_wait(&mut self) {
         // Service accessibility requests; the render loop itself is
         // redraw-driven.
         self.pump_a11y();
+        // An image arrived: lay out again to size and draw it.
+        if self.host.poll_resources() {
+            self.invalidate();
+        }
     }
 
     /// Handle a wake-up from another thread (accessibility, frame hooks):
@@ -551,6 +556,40 @@ mod tests {
             .filter(|c| matches!(c, Command::DrawText { .. }))
             .count();
         (glyphs, runs)
+    }
+
+    /// An image that finished loading marks the view for a new layout,
+    /// which then draws it.
+    #[test]
+    fn an_arrived_image_relays_out_the_view() {
+        let dir = std::env::temp_dir().join("noonoo-winit-images");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+        png.extend(13u32.to_be_bytes());
+        png.extend(b"IHDR");
+        png.extend(40u32.to_be_bytes());
+        png.extend(30u32.to_be_bytes());
+        png.extend([8, 6, 0, 0, 0]);
+        std::fs::write(dir.join("a.png"), png).unwrap();
+        let mut page = Engine::from_html(r#"<img src="a.png">"#);
+        page.set_base_url(format!("{}/index.html", dir.display()));
+        page.set_loader(noonoo_net::FileLoader);
+        let mut host = Host::new(Size::new(200.0, 100.0));
+        host.add_content(page, Rect::new(0.0, 0.0, 200.0, 100.0));
+        let mut view = View::new("test", host, |_, _, _| Propagation::Continue);
+        view.update();
+        assert!(!view.update(), "nothing changed yet");
+        view.host_mut().layers_mut()[0]
+            .engine_mut()
+            .load_resources();
+        view.about_to_wait();
+        assert!(view.update());
+        let drawn = view.host.layers()[0]
+            .commands()
+            .commands()
+            .iter()
+            .any(|c| matches!(c, Command::DrawImage { .. }));
+        assert!(drawn);
     }
 
     /// Text reaches the GPU as glyph outlines by default: a window built
