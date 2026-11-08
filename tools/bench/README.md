@@ -43,8 +43,10 @@ Phase 4). Their starting point, on the zorro box (release build):
 | `ui/layout` | 6.1 ms | 5.4 ms | |
 | `ui/paint` | 0.36 ms | 0.36 ms | |
 | `ui/restyle-one` | 78.9 ms (a full restyle) | 9.1 µs | `Engine::restyle`: only the badge's parent's subtree |
-| `nested/flex-256` | 88.8 ms (32: 0.67 ms) | | |
-| `nested/grid-256` | 112.6 ms (32: 3.7 ms) | | |
+| `nested/flex-256` | 88.8 ms (32: 0.67 ms) | 1.14 ms (32: 0.11 ms) | measured heights reused while measuring |
+| `nested/grid-256` | 112.6 ms (32: 3.7 ms) | 1.38 ms (32: 0.33 ms) | as `nested/flex` |
+| `nested/flex-col-256` | 38.7 ms | 0.57 ms | as `nested/flex` |
+| `nested/inline-block-256` | 44.4 ms | 0.60 ms | as `nested/flex` |
 
 Numbers are medians of wall-clock samples after one warm-up. Treat them as
 relative signals, not a regression gate — CI only smoke-runs the binary so it

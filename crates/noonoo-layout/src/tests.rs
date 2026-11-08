@@ -1847,3 +1847,110 @@ fn a_flex_item_is_as_wide_as_its_transformed_label() {
     assert_eq!(tab.rect.width, label.rect.width + 28.0);
     assert_eq!(label.rect.x, tab.rect.x + 14.0);
 }
+
+/// Elements laid out (for real or to measure) by one `layout` call.
+fn layout_work(html: &str, css: &str) -> usize {
+    LAYOUTS.with(|count| count.set(0));
+    page(html, css, 1024.0);
+    LAYOUTS.with(|count| count.get())
+}
+
+#[test]
+fn nested_measuring_containers_cost_linear_work() {
+    // Each level measures its child before placing it. A measured box's
+    // height is reused, not laid out again, so doubling the depth roughly
+    // doubles the work instead of squaring it.
+    for css in [
+        "div { display: flex }",
+        "div { display: grid } p { margin: 0 }",
+        "div { display: flex; flex-direction: column }",
+        "div { display: inline-block }",
+    ] {
+        let nested = |depth: usize| {
+            layout_work(
+                &format!(
+                    "{}<p>x</p>{}",
+                    "<div>".repeat(depth),
+                    "</div>".repeat(depth)
+                ),
+                css,
+            )
+        };
+        let (shallow, deep) = (nested(32), nested(64));
+        assert!(
+            deep <= 3 * shallow,
+            "{css}: depth 32 took {shallow} layouts, depth 64 took {deep}"
+        );
+    }
+}
+
+#[test]
+fn reusing_measured_heights_changes_no_box() {
+    let shapes = [
+        "div { display: grid } p { margin: 0; grid-row: span 3 }",
+        "div { display: flex }",
+        "div { display: flex; padding: 3px } div:nth-child(odd) { width: 90% }",
+        "div { display: flex; flex-direction: column }",
+        "div { display: flex; flex-direction: column; height: 50% }",
+        "div { display: inline-block; padding: 1px }",
+        "div { float: left; width: 95% }",
+        "div { display: table-cell }",
+        "div { display: flex; align-items: center } p { width: 30px }",
+        "div { display: grid; grid-template-columns: 1fr 2fr } div > div { width: 40px }",
+        "div { overflow: hidden; display: flex; flex-wrap: wrap } p { flex: 1 0 20px }",
+    ];
+    let nested = format!(
+        "{}<p>x y z</p><span>tail words</span>{}",
+        "<div><b>lead</b>".repeat(9),
+        "<p>after</p></div>".repeat(9)
+    );
+    let mut pages: Vec<(String, &str)> = shapes.iter().map(|css| (nested.clone(), *css)).collect();
+    // Inside a measured flex item: the same box measured at one width and
+    // laid out at another (shrinking, wrapping items), without and then with
+    // a definite height (a stretched grid row), and without and then with
+    // a column flex container's decided height.
+    let words = "many words that wrap ".repeat(6);
+    pages.extend([
+        (
+            format!("<div class=o><div class=r><p>{words}</p><p>{words}</p></div></div>"),
+            ".o, .r { display: flex } p { margin: 0 }",
+        ),
+        (
+            "<div class=o><div class=g><div><p>x</p></div></div></div>".to_owned(),
+            ".o { display: flex } .g { display: grid; grid-template-rows: 100px } p { margin: 0 }",
+        ),
+        (
+            "<div class=o><div class=c><div class=i><p>x</p></div></div></div>".to_owned(),
+            ".o { display: flex } .c { display: flex; flex-direction: column; height: 200px } \
+             .i { flex: 1 } p { margin: 0 }",
+        ),
+    ]);
+    for (html, css) in &pages {
+        let (html, css) = (html.as_str(), *css);
+        let boxes = |reuse: bool| {
+            REUSE_MEASURED.with(|cell| cell.set(reuse));
+            let (_, tree) = page(html, css, 300.0);
+            REUSE_MEASURED.with(|cell| cell.set(true));
+            tree.boxes()
+                .iter()
+                .map(|b| (b.node, b.rect, b.children.clone()))
+                .collect::<Vec<_>>()
+        };
+        // A height is a difference of positions, so the same box placed
+        // elsewhere can differ in the last bit; anything more is a bug.
+        let (reused, reference) = (boxes(true), boxes(false));
+        assert_eq!(reused.len(), reference.len(), "{css}");
+        for (a, b) in reused.iter().zip(&reference) {
+            let close = |p: f32, q: f32| (p - q).abs() < 0.01;
+            assert!(
+                a.0 == b.0
+                    && a.2 == b.2
+                    && close(a.1.x, b.1.x)
+                    && close(a.1.y, b.1.y)
+                    && close(a.1.width, b.1.width)
+                    && close(a.1.height, b.1.height),
+                "{css}: {a:?} vs {b:?}"
+            );
+        }
+    }
+}

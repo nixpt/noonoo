@@ -443,6 +443,7 @@ pub fn layout(
         tree: LayoutTree::default(),
         margins: Default::default(),
         measured: HashMap::new(),
+        measuring: 0,
         preferred: Default::default(),
         min_content: Default::default(),
         // The initial containing block: percentages on the root resolve
@@ -522,6 +523,20 @@ fn with_generated_content(document: &Document, styles: &Styles) -> Option<Docume
     Some(copy)
 }
 
+/// What a block formatting context root's height depends on, as bits so
+/// it can key a map.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub(crate) struct MeasureKey {
+    node: NodeId,
+    available_width: u32,
+    definite_height: Option<u32>,
+    percent_basis: Option<u32>,
+    /// A column flex container's decided height for the node.
+    flexed: Option<u32>,
+    /// A row flex container's decided width for the node.
+    flexed_width: Option<u32>,
+}
+
 /// Shared layout state.
 pub(crate) struct Ctx<'a> {
     pub document: &'a Document,
@@ -537,9 +552,11 @@ pub(crate) struct Ctx<'a> {
     /// Collapsed vertical margins, which depend only on the document, the
     /// styles and the containing width, so they are computed once per layout.
     pub margins: crate::margin::Cache,
-    /// [`Ctx::measure_height`] results by node, width, definite height and
-    /// percentage basis.
-    pub measured: HashMap<(NodeId, u32, Option<u32>, Option<u32>), f32>,
+    /// Measured heights of block formatting context roots, by their inputs.
+    pub measured: HashMap<MeasureKey, f32>,
+    /// How many [`Ctx::measure_height`] calls are under way: their boxes
+    /// are thrown away.
+    pub measuring: usize,
     /// [`float::preferred_width`] results by node.
     pub preferred: std::cell::RefCell<HashMap<NodeId, f32>>,
     /// [`float::min_content_width`] results by node.
@@ -828,6 +845,12 @@ impl Ctx<'_> {
     /// `definite_height` is a height the container has already decided for the
     /// item — a stretched flex/grid item fills it when the item's own `height`
     /// is `auto`. `None` sizes to content, as block flow does.
+    ///
+    /// While [measuring](Ctx::measure_height), the boxes are thrown away, so
+    /// a box whose height is already known for these inputs isn't laid out
+    /// again: nested containers each measure their children before placing
+    /// them, and laying each measured subtree out anew made the work grow
+    /// with the square of the depth.
     pub fn layout_element(
         &mut self,
         node: NodeId,
@@ -836,6 +859,63 @@ impl Ctx<'_> {
         available_width: f32,
         definite_height: Option<f32>,
     ) -> f32 {
+        #[cfg(test)]
+        let reuse = REUSE_MEASURED.with(std::cell::Cell::get);
+        #[cfg(not(test))]
+        let reuse = true;
+        let key = (reuse && self.measuring > 0)
+            .then(|| self.measure_key(node, available_width, definite_height));
+        // (A container's decided size for `node` stays set on a hit; the
+        // containers clear it after each item.)
+        if let Some(height) = key.and_then(|key| self.measured.get(&key).copied()) {
+            return height;
+        }
+        let height = self.layout_element_uncached(
+            node,
+            border_x,
+            border_y,
+            available_width,
+            definite_height,
+        );
+        if let Some(key) = key
+            && self.establishes_bfc(node, self.style(node))
+        {
+            self.measured.insert(key, height);
+        }
+        height
+    }
+
+    /// The inputs a block formatting context root's height depends on.
+    fn measure_key(
+        &self,
+        node: NodeId,
+        available_width: f32,
+        definite_height: Option<f32>,
+    ) -> MeasureKey {
+        let decided = |slot: Option<(NodeId, f32)>| {
+            slot.filter(|(flexed, _)| *flexed == node)
+                .map(|(_, size)| size.to_bits())
+        };
+        MeasureKey {
+            node,
+            available_width: available_width.to_bits(),
+            definite_height: definite_height.map(f32::to_bits),
+            percent_basis: self.percent_basis().map(f32::to_bits),
+            flexed: decided(self.flexed),
+            flexed_width: decided(self.flexed_width),
+        }
+    }
+
+    fn layout_element_uncached(
+        &mut self,
+        node: NodeId,
+        border_x: f32,
+        border_y: f32,
+        available_width: f32,
+        definite_height: Option<f32>,
+    ) -> f32 {
+        #[cfg(test)]
+        LAYOUTS.with(|count| count.set(count.get() + 1));
         let style = self.style(node).clone();
         if style.display == Display::None {
             return 0.0;
@@ -1060,10 +1140,9 @@ impl Ctx<'_> {
     /// after a measurement pass.
     ///
     /// A box that starts a block formatting context has a height that
-    /// depends only on its width and definite height, so that is remembered
-    /// for the rest of the layout: nested flex rows, grids and inline-blocks
-    /// each measure their children before placing them, and without it the
-    /// cost doubled per nesting level.
+    /// depends only on its width, its definite height, the percentage basis
+    /// and any size its container decided for it, so that is remembered for
+    /// the rest of the layout (see [`Ctx::layout_element`]).
     pub fn measure_height(
         &mut self,
         node: NodeId,
@@ -1072,22 +1151,12 @@ impl Ctx<'_> {
         available_width: f32,
         definite_height: Option<f32>,
     ) -> f32 {
-        let key = (
-            node,
-            available_width.to_bits(),
-            definite_height.map(f32::to_bits),
-            self.percent_basis().map(f32::to_bits),
-        );
-        if let Some(&height) = self.measured.get(&key) {
-            return height;
-        }
         let base = self.tree.boxes.len();
+        self.measuring += 1;
         let height = self.layout_element(node, x, y, available_width, definite_height);
+        self.measuring -= 1;
         self.tree.boxes.truncate(base);
         self.tree.index.retain(|_, &mut index| index < base);
-        if self.establishes_bfc(node, self.style(node)) {
-            self.measured.insert(key, height);
-        }
         height
     }
 
@@ -1388,6 +1457,15 @@ pub(crate) fn child_nodes(document: &Document, node: NodeId) -> Vec<NodeId> {
 
 /// The version of this crate, taken from the workspace.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[cfg(test)]
+thread_local! {
+    /// How many times `layout_element` ran, for tests that pin layout cost.
+    static LAYOUTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Whether measuring reuses known heights; tests turn it off to get
+    /// the reference layout.
+    static REUSE_MEASURED: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
 
 #[cfg(test)]
 mod tests;
