@@ -2243,3 +2243,23 @@ fn auto_margins_centre_a_block_narrowed_by_max_width() {
     let b = tree.get(id(&doc, "b")).unwrap().rect;
     assert_eq!((b.x, b.width), (0.0, 400.0));
 }
+
+/// bliss-diff (Wikipedia's navboxes): measuring a `width: 100%` cell's
+/// preferred width resolved the percentage against infinity, so a table
+/// nested in such a cell came out infinitely wide.
+#[test]
+fn nested_percentage_tables_stay_finite() {
+    let (_doc, tree) = page(
+        r#"<table><tr><td colspan="2" style="width: 100%"><table><tr><td colspan="2" style="width: 100%">x</td></tr></table></td></tr></table>"#,
+        "",
+        400.0,
+    );
+    for b in tree.boxes() {
+        assert!(
+            b.rect.width.is_finite() && b.rect.x.is_finite(),
+            "{:?} {:?}",
+            b.node,
+            b.rect
+        );
+    }
+}

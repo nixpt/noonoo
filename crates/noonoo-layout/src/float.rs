@@ -225,7 +225,9 @@ fn compute_preferred_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
     let padding = resolve::paddings(&style.padding, 0.0);
     let border = resolve::borders(style);
     let edges = padding.left + padding.right + border.left + border.right;
-    let specified = resolve::dimension(style.width.clone(), f32::INFINITY);
+    // A percentage width has no reference here either: it counts as auto.
+    let specified =
+        resolve::dimension(style.width.clone(), f32::INFINITY).filter(|width| width.is_finite());
     let inner = match specified {
         Some(width) => match style.box_sizing {
             BoxSizing::BorderBox => (width - edges).max(0.0),
