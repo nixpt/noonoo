@@ -211,6 +211,25 @@ mod tests {
         assert_eq!(points.len(), 3);
     }
 
+    /// A number after `Z` is an error: the path stops there, as a browser
+    /// renders up to the first error. It used to repeat `Z` forever.
+    #[test]
+    fn a_number_after_close_path_ends_the_path() {
+        let (done, wait) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = done.send(commands(
+                "<svg><path d=\"M0 0 L10 0 L10 10 Z5 M50 50\"/></svg>",
+            ));
+        });
+        let list = wait
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("the path parser hung");
+        let Command::FillPolygon { points, .. } = &list.commands()[0] else {
+            panic!("expected a polygon");
+        };
+        assert_eq!(points.len(), 3);
+    }
+
     #[test]
     fn tessellates_a_circle() {
         let list = commands(r#"<svg><circle cx="5" cy="5" r="5"/></svg>"#);

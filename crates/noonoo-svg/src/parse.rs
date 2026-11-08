@@ -344,6 +344,11 @@ fn parse_path(d: &str) -> (Vec<(f32, f32)>, bool) {
             'Z' => {
                 closed = true;
                 (cx, cy) = (sx, sy);
+                // `Z` takes no numbers: one after it is an error, and the
+                // path ends there.
+                if matches!(tokens.get(index), Some(Token::Num(_))) {
+                    break;
+                }
             }
             _ => break,
         }
