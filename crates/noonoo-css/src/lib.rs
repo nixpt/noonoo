@@ -14,10 +14,12 @@
 
 use noonoo_parse::ParseResult;
 
+mod inline;
 pub mod property;
 pub mod tokenizer;
 pub mod value;
 
+pub use inline::{InlineStyleError, remove_inline_property, set_inline_property};
 pub use property::{
     Declaration, PENDING_SHORTHAND, Property, expand_declaration, parse_declaration,
     pending_shorthand,

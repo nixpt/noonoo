@@ -416,7 +416,7 @@ const SHORTHAND_SAMPLES: &[(&str, &str)] = &[
 
 /// The longhands `shorthand` (lowercased) sets, or `None` if it is not a
 /// shorthand Noonoo expands.
-fn shorthand_longhands(shorthand: &str) -> Option<Vec<Property>> {
+pub(crate) fn shorthand_longhands(shorthand: &str) -> Option<Vec<Property>> {
     let (_, sample) = SHORTHAND_SAMPLES
         .iter()
         .find(|(name, _)| *name == shorthand)?;
