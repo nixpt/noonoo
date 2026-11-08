@@ -192,6 +192,25 @@ mod tests {
         ));
     }
 
+    /// A character that is not a command, separator or number is skipped.
+    /// It used to stall the path tokenizer forever, so the render runs on a
+    /// thread with a deadline.
+    #[test]
+    fn a_stray_character_in_a_path_is_skipped() {
+        let (done, wait) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let list = commands("<svg><path d=\"M0 0 L10 0 \u{1714}L10 10 # Z\"/></svg>");
+            let _ = done.send(list);
+        });
+        let list = wait
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("the path parser hung");
+        let Command::FillPolygon { points, .. } = &list.commands()[0] else {
+            panic!("expected a polygon");
+        };
+        assert_eq!(points.len(), 3);
+    }
+
     #[test]
     fn tessellates_a_circle() {
         let list = commands(r#"<svg><circle cx="5" cy="5" r="5"/></svg>"#);

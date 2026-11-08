@@ -237,7 +237,10 @@ fn parse_path(d: &str) -> (Vec<(f32, f32)>, bool) {
                     break;
                 }
             }
-            if let Ok(value) = text.parse() {
+            if text.is_empty() {
+                // Not a command, separator or number: skip it.
+                chars.next();
+            } else if let Ok(value) = text.parse() {
                 tokens.push(Token::Num(value));
             }
         }
