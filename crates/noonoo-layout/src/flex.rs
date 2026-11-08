@@ -215,8 +215,7 @@ fn layout_row(
                 .or_else(|| resolve::dimension(item_style.width.clone(), content_width))
                 .unwrap_or_else(|| {
                     let text = ctx.document.text_content(node);
-                    ctx.shaper
-                        .advance(&text, item_style.font_request(), item_style.font_size)
+                    ctx.advance(&text, item_style)
                 });
             // `min-width`/`max-width` clamp the flex base before grow/shrink, and
             // share `width`'s box (per `box-sizing`).

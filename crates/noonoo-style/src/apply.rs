@@ -488,6 +488,24 @@ pub(crate) fn apply(
             style.text_decoration = decoration;
         }
         Property::WhiteSpace => set_white_space(&mut style.white_space, values),
+        Property::LetterSpacing => {
+            if keyword(values) == Some("normal") {
+                style.letter_spacing = 0.0;
+            } else {
+                set_px(&mut style.letter_spacing, values, font_size, root, viewport);
+            }
+        }
+        Property::TextTransform => {
+            if let Some(k) = keyword(values) {
+                style.text_transform = match k {
+                    "uppercase" => TextTransform::Uppercase,
+                    "lowercase" => TextTransform::Lowercase,
+                    "capitalize" => TextTransform::Capitalize,
+                    "none" => TextTransform::None,
+                    _ => return,
+                };
+            }
+        }
         Property::Visibility => set_visibility(&mut style.visibility, values),
         Property::Opacity => {
             if let [Value::Number(number)] = values {
@@ -695,6 +713,8 @@ fn is_inherited(property: &Property) -> bool {
             | Property::LineHeight
             | Property::TextAlign
             | Property::WhiteSpace
+            | Property::LetterSpacing
+            | Property::TextTransform
             | Property::Visibility
             | Property::Cursor
     )
@@ -780,6 +800,8 @@ fn copy_property(dst: &mut ComputedStyle, src: &ComputedStyle, property: &Proper
         Property::TextAlign => dst.text_align = src.text_align,
         Property::TextDecorationLine => dst.text_decoration = src.text_decoration,
         Property::WhiteSpace => dst.white_space = src.white_space,
+        Property::LetterSpacing => dst.letter_spacing = src.letter_spacing,
+        Property::TextTransform => dst.text_transform = src.text_transform,
         Property::Opacity => dst.opacity = src.opacity,
         Property::OverflowX => dst.overflow_x = src.overflow_x,
         Property::OverflowY => dst.overflow_y = src.overflow_y,

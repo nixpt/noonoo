@@ -410,6 +410,20 @@ pub enum TextAlign {
     Justify,
 }
 
+/// `text-transform`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum TextTransform {
+    /// `none`.
+    #[default]
+    None,
+    /// `uppercase`.
+    Uppercase,
+    /// `lowercase`.
+    Lowercase,
+    /// `capitalize`: the first letter of each word.
+    Capitalize,
+}
+
 /// `white-space`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum WhiteSpace {
@@ -681,6 +695,10 @@ pub struct ComputedStyle {
     pub text_decoration: TextDecoration,
     /// `white-space`.
     pub white_space: WhiteSpace,
+    /// `letter-spacing`, in pixels (`normal` is `0`).
+    pub letter_spacing: f32,
+    /// `text-transform`.
+    pub text_transform: TextTransform,
     /// `visibility`.
     pub visibility: Visibility,
     /// `opacity`.
@@ -768,6 +786,8 @@ impl Default for ComputedStyle {
             text_align: TextAlign::Start,
             text_decoration: TextDecoration::NONE,
             white_space: WhiteSpace::Normal,
+            letter_spacing: 0.0,
+            text_transform: TextTransform::None,
             visibility: Visibility::Visible,
             opacity: 1.0,
             width: Dimension::Auto,
@@ -813,6 +833,30 @@ impl ComputedStyle {
         }
     }
 
+    /// `text` as this element shows it, after `text-transform`. Layout
+    /// measures and paint draws this; the DOM text is unchanged.
+    pub fn transformed_text<'t>(&self, text: &'t str) -> std::borrow::Cow<'t, str> {
+        use std::borrow::Cow;
+        match self.text_transform {
+            TextTransform::None => Cow::Borrowed(text),
+            TextTransform::Uppercase => Cow::Owned(text.to_uppercase()),
+            TextTransform::Lowercase => Cow::Owned(text.to_lowercase()),
+            TextTransform::Capitalize => {
+                let mut out = String::with_capacity(text.len());
+                let mut start = true;
+                for c in text.chars() {
+                    if start && c.is_alphanumeric() {
+                        out.extend(c.to_uppercase());
+                    } else {
+                        out.push(c);
+                    }
+                    start = c.is_whitespace();
+                }
+                Cow::Owned(out)
+            }
+        }
+    }
+
     /// The inherited subset, copied from the parent before the cascade runs.
     pub fn inherited_from(parent: &ComputedStyle) -> ComputedStyle {
         ComputedStyle {
@@ -823,6 +867,8 @@ impl ComputedStyle {
             font_family: parent.font_family.clone(),
             text_align: parent.text_align,
             white_space: parent.white_space,
+            letter_spacing: parent.letter_spacing,
+            text_transform: parent.text_transform,
             visibility: parent.visibility,
             cursor: parent.cursor.clone(),
             ..ComputedStyle::default()

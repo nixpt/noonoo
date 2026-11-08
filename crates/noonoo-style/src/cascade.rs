@@ -240,6 +240,8 @@ pub(crate) fn compute(
     let rules = collect_rules(stylesheets, &viewport);
     let mut out: Vec<Option<ComputedStyle>> = vec![None; doc.tree().len()];
     let mut custom: Vec<CustomProperties> = vec![CustomProperties::new(); doc.tree().len()];
+    let mut line_heights: Vec<InheritedLineHeight> =
+        vec![InheritedLineHeight::Normal; doc.tree().len()];
     let mut root_font_size = 16.0_f32;
     let mut first_element = true;
 
@@ -275,7 +277,11 @@ pub(crate) fn compute(
             None => ComputedStyle::default(),
         };
         style.font_size = font_size;
-        style.line_height = font_size * 1.2;
+        let inherited_line = parent_id
+            .map(|p| line_heights[p.index()])
+            .unwrap_or(InheritedLineHeight::Normal);
+        style.line_height = inherited_line.resolve(font_size);
+        let mut line_height = inherited_line;
 
         if first_element {
             root_font_size = font_size;
@@ -302,8 +308,45 @@ pub(crate) fn compute(
             );
         }
 
+        if let Some(candidate) = winners.get(&Property::LineHeight)
+            && let Some(values) = computed_values(&Property::LineHeight, &candidate.values, &props)
+        {
+            line_height = match values.as_slice() {
+                [Value::Number(factor)] => InheritedLineHeight::Factor(*factor),
+                [Value::Keyword(k)] if k.eq_ignore_ascii_case("inherit") => inherited_line,
+                [Value::Keyword(k)] if k.eq_ignore_ascii_case("unset") => inherited_line,
+                [Value::Keyword(k)]
+                    if k.eq_ignore_ascii_case("normal") || k.eq_ignore_ascii_case("initial") =>
+                {
+                    InheritedLineHeight::Normal
+                }
+                _ => InheritedLineHeight::Px(style.line_height),
+            };
+        }
+        line_heights[id.index()] = line_height;
+
         out[id.index()] = Some(style);
     }
 
     out
+}
+
+/// What a child inherits for `line-height`: a bare number stays a
+/// multiplier of the child's own font size; lengths and percentages are
+/// already pixels.
+#[derive(Clone, Copy, Debug)]
+enum InheritedLineHeight {
+    Normal,
+    Factor(f32),
+    Px(f32),
+}
+
+impl InheritedLineHeight {
+    fn resolve(self, font_size: f32) -> f32 {
+        match self {
+            Self::Normal => font_size * 1.2,
+            Self::Factor(factor) => font_size * factor,
+            Self::Px(px) => px,
+        }
+    }
 }

@@ -169,6 +169,26 @@ pub trait Glyphs {
         request: FontRequest,
         out: &mut CommandList,
     );
+
+    /// Emit the commands that draw `text` with `letter_spacing` pixels
+    /// added after each character (CSS `letter-spacing`).
+    ///
+    /// The default ignores the spacing and calls [`Glyphs::draw`]: a run
+    /// renderer like [`TextRuns`] has no per-glyph positions to spread.
+    #[allow(clippy::too_many_arguments)]
+    fn draw_spaced(
+        &self,
+        text: &str,
+        origin: (f32, f32),
+        font_size: f32,
+        letter_spacing: f32,
+        color: Color,
+        request: FontRequest,
+        out: &mut CommandList,
+    ) {
+        let _ = letter_spacing;
+        self.draw(text, origin, font_size, color, request, out);
+    }
 }
 
 /// The default [`Glyphs`]: one [`Command::DrawText`] per run.
@@ -270,14 +290,30 @@ fn paint_box(
     if let Some(text) = &b.text
         && !text.is_empty()
     {
-        let (font_size, color) = style
-            .map(|s| (s.font_size, s.color))
-            .unwrap_or((16.0, Color::BLACK));
+        let (font_size, color, letter_spacing) = style
+            .map(|s| (s.font_size, s.color, s.letter_spacing))
+            .unwrap_or((16.0, Color::BLACK, 0.0));
         let baseline = rect.y + font_size * 0.8;
         let request = style
             .map(|style| style.font_request())
             .unwrap_or_else(FontRequest::any);
-        glyphs.draw(text, (rect.x, baseline), font_size, color, request, out);
+        let shown = match style {
+            Some(style) => style.transformed_text(text),
+            None => std::borrow::Cow::Borrowed(text.as_str()),
+        };
+        if letter_spacing == 0.0 {
+            glyphs.draw(&shown, (rect.x, baseline), font_size, color, request, out);
+        } else {
+            glyphs.draw_spaced(
+                &shown,
+                (rect.x, baseline),
+                font_size,
+                letter_spacing,
+                color,
+                request,
+                out,
+            );
+        }
 
         // Text decorations are bars across the run, in the text colour.
         if let Some(style) = style {
@@ -782,6 +818,64 @@ mod tests {
             c,
             Command::DrawText { text, color, .. } if text == "hi" && *color == Color::rgb(255, 0, 0)
         )));
+    }
+
+    #[test]
+    fn paints_text_transformed() {
+        let list = render(
+            r#"<div id="a">hi there</div>"#,
+            "#a { text-transform: uppercase }",
+        );
+        let texts: Vec<&str> = list
+            .commands()
+            .iter()
+            .filter_map(|c| match c {
+                Command::DrawText { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(texts, ["HI", "THERE"]);
+    }
+
+    /// Records the letter spacing each run is drawn with.
+    struct Spacing(std::cell::RefCell<Vec<f32>>);
+
+    impl Glyphs for Spacing {
+        fn draw(
+            &self,
+            _: &str,
+            _: (f32, f32),
+            _: f32,
+            _: Color,
+            _: FontRequest,
+            _: &mut CommandList,
+        ) {
+            self.0.borrow_mut().push(0.0);
+        }
+
+        fn draw_spaced(
+            &self,
+            _: &str,
+            _: (f32, f32),
+            _: f32,
+            letter_spacing: f32,
+            _: Color,
+            _: FontRequest,
+            _: &mut CommandList,
+        ) {
+            self.0.borrow_mut().push(letter_spacing);
+        }
+    }
+
+    #[test]
+    fn text_is_drawn_with_its_letter_spacing() {
+        let doc = noonoo_html::parse(r#"<div id="a">hi</div>"#);
+        let sheet = noonoo_css::Stylesheet::parse("#a { letter-spacing: 3px }").unwrap();
+        let styles = noonoo_style::compute(&doc, &[sheet]);
+        let layout = noonoo_layout::layout(&doc, &styles, Size::new(400.0, 300.0), &MetricShaper);
+        let glyphs = Spacing(Default::default());
+        paint_with(&styles, &layout, &glyphs);
+        assert_eq!(*glyphs.0.borrow(), [3.0]);
     }
 
     #[test]

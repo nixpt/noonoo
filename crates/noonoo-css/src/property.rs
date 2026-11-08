@@ -147,6 +147,10 @@ pub enum Property {
     BorderCollapse,
     /// `white-space`.
     WhiteSpace,
+    /// `letter-spacing`.
+    LetterSpacing,
+    /// `text-transform`.
+    TextTransform,
     /// `opacity`.
     Opacity,
     /// `overflow-x`.
@@ -241,6 +245,8 @@ impl Property {
             "text-decoration-line" => Self::TextDecorationLine,
             "border-collapse" => Self::BorderCollapse,
             "white-space" => Self::WhiteSpace,
+            "letter-spacing" => Self::LetterSpacing,
+            "text-transform" => Self::TextTransform,
             "opacity" => Self::Opacity,
             "overflow-x" => Self::OverflowX,
             "overflow-y" => Self::OverflowY,
@@ -330,6 +336,8 @@ impl Property {
             Self::TextDecorationLine => "text-decoration-line",
             Self::BorderCollapse => "border-collapse",
             Self::WhiteSpace => "white-space",
+            Self::LetterSpacing => "letter-spacing",
+            Self::TextTransform => "text-transform",
             Self::Opacity => "opacity",
             Self::OverflowX => "overflow-x",
             Self::OverflowY => "overflow-y",

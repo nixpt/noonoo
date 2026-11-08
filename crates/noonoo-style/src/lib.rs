@@ -66,7 +66,7 @@ pub use computed::{
     Cursor, Dimension, Display, Edges, Extreme, FlexDirection, FlexWrap, Float, FontStyle,
     Gradient, GradientKind, GradientStop, GridLine, GridRange, JustifyContent, Length,
     LengthOrAuto, LinearDirection, Overflow, Position, RadialShape, RadialSize, TextAlign,
-    TextDecoration, Track, Visibility, WhiteSpace, ZIndex,
+    TextDecoration, TextTransform, Track, Visibility, WhiteSpace, ZIndex,
 };
 pub use edit::{StyleEditError, remove_style_property, set_style_property};
 
@@ -169,6 +169,66 @@ mod tests {
         let sheet = Stylesheet::parse(css).unwrap();
         let styles = compute_with(&doc, &[sheet], viewport);
         (doc, styles)
+    }
+
+    #[test]
+    fn letter_spacing_resolves_to_pixels_and_inherits() {
+        let (doc, styles) = styled(
+            r#"<div id="a"><p id="b">x</p></div><div id="c"></div><div id="d"></div>"#,
+            "#a { letter-spacing: 2px } #c { font-size: 20px; letter-spacing: 0.5em }
+             #d { letter-spacing: normal }",
+        );
+        let get = |id: &str| styles.get(doc.get_element_by_id(id).unwrap()).unwrap();
+        assert_eq!(get("a").letter_spacing, 2.0);
+        assert_eq!(get("b").letter_spacing, 2.0);
+        assert_eq!(get("c").letter_spacing, 10.0);
+        assert_eq!(get("d").letter_spacing, 0.0);
+    }
+
+    #[test]
+    fn text_transform_parses_and_inherits() {
+        let (doc, styles) = styled(
+            r#"<div id="a"><p id="b">x</p></div><div id="c"></div><div id="d"></div>"#,
+            "#a { text-transform: uppercase } #c { text-transform: capitalize }
+             #d { text-transform: lowercase }",
+        );
+        let get = |id: &str| styles.get(doc.get_element_by_id(id).unwrap()).unwrap();
+        assert_eq!(get("b").text_transform, TextTransform::Uppercase);
+        assert_eq!(get("c").text_transform, TextTransform::Capitalize);
+        assert_eq!(get("d").text_transform, TextTransform::Lowercase);
+        assert_eq!(
+            get("c").transformed_text("hello big world"),
+            "Hello Big World"
+        );
+        assert_eq!(get("b").transformed_text("straße"), "STRASSE");
+        assert_eq!(get("d").transformed_text("ÀB"), "àb");
+    }
+
+    #[test]
+    fn line_height_inherits() {
+        // A length or percentage inherits as pixels; a bare number inherits
+        // as the multiplier, applied to the child's own font size.
+        let (doc, styles) = styled(
+            r#"<div id="a"><p id="b">x</p></div>
+               <div id="c"><p id="d"><b id="e">x</b></p></div>
+               <div id="f"><p id="g">x</p></div>
+               <div id="h"><p id="i">x</p></div>"#,
+            "#a { line-height: 40px } #b { font-size: 30px }
+             #c { line-height: 2 } #d { font-size: 20px } #e { font-size: 5px }
+             #f { font-size: 10px; line-height: 150% } #g { font-size: 40px }
+             #h { line-height: 3 } #i { line-height: normal; font-size: 10px }",
+        );
+        let lh = |id: &str| {
+            styles
+                .get(doc.get_element_by_id(id).unwrap())
+                .unwrap()
+                .line_height
+        };
+        assert_eq!(lh("b"), 40.0);
+        assert_eq!(lh("d"), 40.0);
+        assert_eq!(lh("e"), 10.0);
+        assert_eq!(lh("g"), 15.0);
+        assert_eq!(lh("i"), 12.0);
     }
 
     #[test]

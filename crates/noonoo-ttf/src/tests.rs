@@ -523,3 +523,39 @@ fn outline_glyphs_fill_each_glyph_as_one_shape() {
     // Screen space: y down, baseline at 1000.
     assert_eq!(contours[1][0], noonoo_geometry::Point::new(200.0, 800.0));
 }
+
+/// `letter-spacing` moves each glyph after the first by the spacing so far.
+#[test]
+fn outline_glyphs_add_letter_spacing_after_each_glyph() {
+    use noonoo_paint::{Color, Command, CommandList, Glyphs};
+
+    let font = Font::parse(&minimal_font()).unwrap();
+    let mut set = FontSet::new();
+    set.add("Demo", 400, false, &font);
+    let glyphs = OutlineGlyphs::new(&set);
+    let starts = |spacing: f32| {
+        let mut list = CommandList::default();
+        glyphs.draw_spaced(
+            "AAA",
+            (0.0, 0.0),
+            1000.0,
+            spacing,
+            Color::BLACK,
+            FontRequest::any(),
+            &mut list,
+        );
+        list.commands()
+            .iter()
+            .filter_map(|command| match command {
+                Command::FillContours { contours, .. } => Some(contours[0][0].x),
+                _ => None,
+            })
+            .collect::<Vec<f32>>()
+    };
+    let plain = starts(0.0);
+    let spaced = starts(50.0);
+    assert_eq!(plain.len(), 3);
+    for (i, (p, s)) in plain.iter().zip(&spaced).enumerate() {
+        assert_eq!(s - p, 50.0 * i as f32);
+    }
+}

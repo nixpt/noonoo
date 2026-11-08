@@ -26,7 +26,7 @@ pub(crate) fn width(ctx: &Ctx<'_>, text: &str, style: &ComputedStyle, available:
 /// The run's height wrapped to `available` in `style`'s line height.
 pub(crate) fn height(ctx: &Ctx<'_>, text: &str, style: &ComputedStyle, available: f32) -> f32 {
     let request = style.font_request();
-    let space = ctx.shaper.advance(" ", request, style.font_size);
+    let space = ctx.advance(" ", style);
     let line_height = if style.line_height > 0.0 {
         style.line_height
     } else {
@@ -38,7 +38,7 @@ pub(crate) fn height(ctx: &Ctx<'_>, text: &str, style: &ComputedStyle, available
     }
     let widths: Vec<f32> = text
         .split_whitespace()
-        .map(|word| ctx.shaper.advance(word, request, style.font_size))
+        .map(|word| ctx.advance(word, style))
         .collect();
     let lines = noonoo_text::wrap(&widths, space, available);
     lines.len() as f32 * line_height
@@ -63,7 +63,7 @@ pub(crate) fn lines(
 ) -> Vec<usize> {
     let request = style.font_request();
     let font_size = style.font_size;
-    let space = ctx.shaper.advance(" ", request, font_size);
+    let space = ctx.advance(" ", style);
     let line_height = if style.line_height > 0.0 {
         style.line_height
     } else {
@@ -77,7 +77,7 @@ pub(crate) fn lines(
 
     if nowrap {
         let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
-        let used = ctx.shaper.advance(&text, request, font_size);
+        let used = ctx.advance(&text, style);
         push_text_box(
             ctx,
             node,
@@ -90,10 +90,7 @@ pub(crate) fn lines(
     }
 
     let words: Vec<&str> = text.split_whitespace().collect();
-    let widths: Vec<f32> = words
-        .iter()
-        .map(|word| ctx.shaper.advance(word, request, font_size))
-        .collect();
+    let widths: Vec<f32> = words.iter().map(|word| ctx.advance(word, style)).collect();
     let lines = noonoo_text::wrap(&widths, space, available_width);
     for line in &lines {
         let used: f32 = line.iter().map(|&i| widths[i]).sum::<f32>()

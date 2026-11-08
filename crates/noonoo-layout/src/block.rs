@@ -235,7 +235,7 @@ pub(crate) fn layout_inline_run(
 ) -> (Vec<usize>, f32) {
     let font = parent_style.font_size;
     let request = parent_style.font_request();
-    let space = ctx.shaper.advance(" ", request, font);
+    let space = ctx.advance(" ", parent_style);
     let line_height = if parent_style.line_height > 0.0 {
         parent_style.line_height
     } else {
@@ -265,7 +265,7 @@ pub(crate) fn layout_inline_run(
                             style_node: parent_node,
                             kind: BoxKind::Text,
                             text: word.to_owned(),
-                            width: ctx.shaper.advance(word, request, font),
+                            width: ctx.advance(word, parent_style),
                             height: line_height,
                             atomic: None,
                         });
@@ -326,9 +326,7 @@ pub(crate) fn layout_inline_run(
                         node,
                         style_node: node,
                         kind: BoxKind::Inline,
-                        width: ctx
-                            .shaper
-                            .advance(&content, style.font_request(), style.font_size),
+                        width: ctx.advance(&content, &style),
                         text: content,
                         height,
                         atomic: None,

@@ -1506,3 +1506,48 @@ fn the_implicit_grid_is_clamped() {
     assert_eq!(b.y, (grid::MAX_TRACKS - 9000) as f32);
     assert_eq!(b.height, 9000.0);
 }
+
+/// MetricShaper: 0.5em per character, so 8px per character at 16px.
+fn text_box_width(html: &str, css: &str) -> f32 {
+    let (_, tree) = page(html, css, 800.0);
+    tree.boxes()
+        .iter()
+        .find(|b| b.kind == BoxKind::Text)
+        .unwrap()
+        .rect
+        .width
+}
+
+#[test]
+fn letter_spacing_widens_each_character() {
+    assert_eq!(text_box_width("<div>abc</div>", ""), 24.0);
+    assert_eq!(
+        text_box_width("<div>abc</div>", "div { letter-spacing: 2px }"),
+        30.0
+    );
+    // A space is a character too: a float shrink-wraps "ab cd" to 5 of them.
+    let (doc, tree) = page(
+        r#"<div id="f">ab cd</div>"#,
+        "#f { float: left; letter-spacing: 2px }",
+        800.0,
+    );
+    assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 50.0);
+}
+
+#[test]
+fn letter_spacing_reaches_flex_and_grid_text() {
+    for display in ["flex", "grid"] {
+        let css = format!("div {{ display: {display}; letter-spacing: 2px }}");
+        assert_eq!(text_box_width("<div>abc</div>", &css), 30.0, "{display}");
+    }
+}
+
+#[test]
+fn text_transform_measures_the_transformed_text() {
+    // "ß" uppercases to "SS": two characters wide.
+    assert_eq!(text_box_width("<div>ß</div>", ""), 8.0);
+    assert_eq!(
+        text_box_width("<div>ß</div>", "div { text-transform: uppercase }"),
+        16.0
+    );
+}

@@ -267,6 +267,5 @@ fn preferred_content(ctx: &Ctx<'_>, node: NodeId) -> f32 {
 /// Measure `text`'s unwrapped advance in `style`'s font (whitespace collapsed).
 pub(crate) fn text_width(ctx: &Ctx<'_>, text: &str, style: &ComputedStyle) -> f32 {
     let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    ctx.shaper
-        .advance(&collapsed, style.font_request(), style.font_size)
+    ctx.advance(&collapsed, style)
 }

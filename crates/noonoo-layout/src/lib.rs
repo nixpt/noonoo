@@ -489,6 +489,21 @@ pub(crate) struct Ctx<'a> {
 }
 
 impl Ctx<'_> {
+    /// How wide `text` is in `style`: after `text-transform`, plus
+    /// `letter-spacing` after every character. Every text measurement in
+    /// layout goes through here, so measuring and painting agree.
+    pub(crate) fn advance(&self, text: &str, style: &ComputedStyle) -> f32 {
+        let text = style.transformed_text(text);
+        let width = self
+            .shaper
+            .advance(&text, style.font_request(), style.font_size);
+        if style.letter_spacing == 0.0 {
+            width
+        } else {
+            width + style.letter_spacing * text.chars().count() as f32
+        }
+    }
+
     /// The floats of the current block formatting context.
     pub fn floats(&self) -> &crate::float::Floats {
         self.floats.last().expect("a formatting context is open")
@@ -563,7 +578,7 @@ impl Ctx<'_> {
         if text.is_empty() {
             return (Vec::new(), height);
         }
-        let width = self.shaper.advance(text, request, style.font_size);
+        let width = self.advance(text, style);
         let index = self.push(LayoutBox {
             node: None,
             style_node: node,

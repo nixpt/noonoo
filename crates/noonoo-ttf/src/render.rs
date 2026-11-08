@@ -39,8 +39,21 @@ impl Glyphs for OutlineGlyphs<'_> {
     fn draw(
         &self,
         text: &str,
+        origin: (f32, f32),
+        font_size: f32,
+        color: Color,
+        request: FontRequest,
+        out: &mut CommandList,
+    ) {
+        self.draw_spaced(text, origin, font_size, 0.0, color, request, out);
+    }
+
+    fn draw_spaced(
+        &self,
+        text: &str,
         (x, baseline): (f32, f32),
         font_size: f32,
+        letter_spacing: f32,
         color: Color,
         request: FontRequest,
         out: &mut CommandList,
@@ -80,7 +93,7 @@ impl Glyphs for OutlineGlyphs<'_> {
                     out.0.push(Command::FillContours { contours, color });
                 }
             }
-            pen += font.advance(glyph) as f32 * scale;
+            pen += font.advance(glyph) as f32 * scale + letter_spacing;
             previous = Some(glyph);
         }
     }
