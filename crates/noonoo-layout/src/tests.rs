@@ -1755,9 +1755,9 @@ fn shrink_wrapped_text_fits_on_one_line_with_kerning() {
         },
     );
     let tree = layout(&doc, &styles, Size::new(800.0, 600.0), &KerningShaper);
-    // One normal line of 16px text.
+    // One line, at the shaper's normal line height.
     let height = tree.get(id(&doc, "f")).unwrap().rect.height;
-    assert!((height - 19.2).abs() < 0.01, "{height}");
+    assert_eq!(height, 20.0);
 }
 
 /// super-surfer's devtools dock: `top: 0; bottom: 0` with an auto height
@@ -2355,4 +2355,34 @@ fn loose_text_in_a_flex_container_breaks_at_preserved_newlines() {
     );
     assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.height, 40.0);
     assert_eq!(text_lines(&tree).last().map(|(_, y)| *y), Some(20.0));
+}
+
+/// A shaper with a font whose natural line height is 1.5em, unlike
+/// [`MetricShaper`]'s 1.2em.
+struct TallFont;
+
+impl Shaper for TallFont {
+    fn advance(&self, text: &str, request: noonoo_text::FontRequest, font_size: f32) -> f32 {
+        MetricShaper.advance(text, request, font_size)
+    }
+
+    fn line_height(&self, _request: noonoo_text::FontRequest, font_size: f32) -> f32 {
+        font_size * 1.5
+    }
+}
+
+/// bliss-diff: `line-height: normal` was a fixed 1.2em, where browsers (and
+/// bliss) use the font's own ascent, descent and line gap.
+#[test]
+fn a_normal_line_height_is_the_fonts_own() {
+    let doc = noonoo_html::parse(
+        r#"<p id="n">a</p><p id="z" style="line-height: 0">a</p><p id="x" style="line-height: 30px">a</p>"#,
+    );
+    let sheet = noonoo_css::Stylesheet::parse("body, p { margin: 0 }").unwrap();
+    let styles = noonoo_style::compute(&doc, &[sheet]);
+    let tree = layout(&doc, &styles, Size::new(400.0, 600.0), &TallFont);
+    let height = |name: &str| tree.get(id(&doc, name)).unwrap().rect.height;
+    assert_eq!(height("n"), 24.0);
+    assert_eq!(height("z"), 0.0, "a zero line height is not `normal`");
+    assert_eq!(height("x"), 30.0);
 }

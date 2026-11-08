@@ -51,9 +51,15 @@ pub(crate) fn fallback_advance(set: &FontSet, selected: &Font, text: &str, font_
     pixels
 }
 
-/// The natural line height of a font, in font units.
-pub(crate) fn line_height_units(font: &Font) -> i32 {
-    (font.ascender() as i32 - font.descender() as i32 + font.line_gap() as i32).max(0)
+/// The `normal` line height of `font` at `font_size`, in pixels: ascent,
+/// descent and line gap each rounded to whole pixels and then added, as
+/// browsers do, so lines (and the boxes they stack in) stay pixel-aligned.
+pub(crate) fn line_height_px(font: &Font, font_size: f32) -> f32 {
+    let scale = scale(font, font_size);
+    let ascent = (font.ascender() as f32 * scale).round();
+    let descent = (-(font.descender() as f32) * scale).round();
+    let gap = (font.line_gap() as f32 * scale).round();
+    (ascent + descent + gap).max(0.0)
 }
 
 /// A [`Shaper`] over a single [`Font`]'s metrics.
@@ -79,7 +85,7 @@ impl Shaper for FontShaper<'_> {
     }
 
     fn line_height(&self, _request: FontRequest, font_size: f32) -> f32 {
-        line_height_units(self.font) as f32 * scale(self.font, font_size)
+        line_height_px(self.font, font_size)
     }
 }
 
@@ -116,7 +122,7 @@ impl Shaper for FontSetShaper<'_> {
             .set
             .select_best(request.families, request.weight, request.italic)
         {
-            Some(font) => line_height_units(font) as f32 * scale(font, font_size),
+            Some(font) => line_height_px(font, font_size),
             None => font_size * 1.2,
         }
     }

@@ -25,13 +25,8 @@ pub(crate) fn width(ctx: &Ctx<'_>, text: &str, style: &ComputedStyle, available:
 
 /// The run's height wrapped to `available` in `style`'s line height.
 pub(crate) fn height(ctx: &Ctx<'_>, text: &str, style: &ComputedStyle, available: f32) -> f32 {
-    let request = style.font_request();
     let space = ctx.advance(" ", style);
-    let line_height = if style.line_height > 0.0 {
-        style.line_height
-    } else {
-        ctx.shaper.line_height(request, style.font_size)
-    };
+    let line_height = ctx.line_height_of(style);
 
     // Each preserved line takes at least one line box.
     let pieces = crate::forced_lines(text, style.white_space);
@@ -69,14 +64,8 @@ pub(crate) fn lines(
     y: f32,
     available_width: f32,
 ) -> Vec<usize> {
-    let request = style.font_request();
-    let font_size = style.font_size;
     let space = ctx.advance(" ", style);
-    let line_height = if style.line_height > 0.0 {
-        style.line_height
-    } else {
-        ctx.shaper.line_height(request, font_size)
-    };
+    let line_height = ctx.line_height_of(style);
     // Preserved newlines: lay each line out below the last.
     let pieces = crate::forced_lines(text, style.white_space);
     if pieces.len() > 1 {

@@ -709,7 +709,10 @@ fn resolve(
             {
                 InheritedLineHeight::Normal
             }
-            _ => InheritedLineHeight::Px(style.line_height),
+            _ => match style.line_height {
+                Some(px) => InheritedLineHeight::Px(px),
+                None => InheritedLineHeight::Normal,
+            },
         };
     }
 
@@ -778,11 +781,11 @@ enum InheritedLineHeight {
 }
 
 impl InheritedLineHeight {
-    fn resolve(self, font_size: f32) -> f32 {
+    fn resolve(self, font_size: f32) -> Option<f32> {
         match self {
-            Self::Normal => font_size * 1.2,
-            Self::Factor(factor) => font_size * factor,
-            Self::Px(px) => px,
+            Self::Normal => None,
+            Self::Factor(factor) => Some(font_size * factor),
+            Self::Px(px) => Some(px),
         }
     }
 }

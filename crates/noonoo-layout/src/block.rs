@@ -250,14 +250,8 @@ pub(crate) fn layout_inline_run(
     width: f32,
     parent_style: &ComputedStyle,
 ) -> (Vec<usize>, f32) {
-    let font = parent_style.font_size;
-    let request = parent_style.font_request();
     let space = ctx.advance(" ", parent_style);
-    let line_height = if parent_style.line_height > 0.0 {
-        parent_style.line_height
-    } else {
-        ctx.shaper.line_height(request, font)
-    };
+    let line_height = ctx.line_height_of(parent_style);
 
     // The run's items, split into groups at each `<br>`: a group starts a
     // fresh line, and an empty group is the blank line between two breaks.
@@ -342,12 +336,7 @@ pub(crate) fn layout_inline_run(
                 } else {
                     content
                 };
-                let height = if style.line_height > 0.0 {
-                    style.line_height
-                } else {
-                    ctx.shaper
-                        .line_height(style.font_request(), style.font_size)
-                };
+                let height = ctx.line_height_of(&style);
                 groups
                     .last_mut()
                     .expect("the first group always exists")

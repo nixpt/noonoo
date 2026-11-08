@@ -35,9 +35,12 @@ Options: `--width`/`--height` (viewport, 1024 × 768), `--tolerance` (px, 1),
   box below it, so sizes say more about the boxes themselves.
 - bliss lays non-atomic inline elements out inside their parent's text and
   gives them no box, so those are not compared.
-- bliss rounds boxes to whole pixels and takes `line-height: normal` from the
-  font; noonoo uses 1.2em. A paragraph's height can differ by a pixel or two
-  without either being wrong.
+- bliss rounds the boxes it reports to whole pixels, but lays out with
+  `line-height: normal` as a fixed 1.2em (19.2px at 16px). noonoo, like
+  Chrome, takes it from the font: ascent, descent and line gap each rounded
+  to whole pixels (19px for 16px DejaVu Sans). Lines match in height, but a
+  0.2px difference per line adds up down a page, so positions drift where
+  sizes still agree; neither engine is wrong.
 
 ## Baseline (2026-11-08, 1024 × 768, 1 px)
 
@@ -47,3 +50,4 @@ Options: `--width`/`--height` (viewport, 1024 × 768), `--tolerance` (px, 1),
 | after `ec84ff1` (margins, centring, invalid `display`, percentage cells) | 3% | 24% |
 | after `dd3a669` (text fields, preserved newlines, implied `html`/`body`; danluu.com now compares) | 20% | 47% |
 | after the UA sheet's margins, list indents and block list | 23% | 62% |
+| after `line-height: normal` from the font (positions drift; see above) | 8% | 62% |

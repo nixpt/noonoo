@@ -433,7 +433,10 @@ fn paint_box(
     {
         let (font_size, color, letter_spacing, line_height) = style
             .map(|s| (s.font_size, s.color, s.letter_spacing, s.line_height))
-            .unwrap_or((16.0, Color::BLACK, 0.0, 16.0 * 1.2));
+            .unwrap_or((16.0, Color::BLACK, 0.0, None));
+        // `normal` is the font's own line height: layout sized the run's box
+        // with it.
+        let line_height = line_height.unwrap_or(rect.height);
         // Half the leading beyond the normal line height (1.2em) goes above
         // the text, so a tall line centres it (and a short one raises it).
         let half_leading = (line_height - font_size * 1.2) / 2.0;

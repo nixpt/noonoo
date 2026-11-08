@@ -716,8 +716,9 @@ pub struct ComputedStyle {
     pub font_style: FontStyle,
     /// `font-family`.
     pub font_family: Vec<String>,
-    /// `line-height`, in pixels (`normal` resolves to `1.2 * font-size`).
-    pub line_height: f32,
+    /// `line-height`, in pixels; `None` for `normal`, the font's own line
+    /// height (its ascent, descent and line gap), which only a shaper knows.
+    pub line_height: Option<f32>,
     /// `text-align`.
     pub text_align: TextAlign,
     /// `text-decoration-line`.
@@ -815,7 +816,7 @@ impl Default for ComputedStyle {
             font_weight: 400,
             font_style: FontStyle::Normal,
             font_family: Vec::new(),
-            line_height: 16.0 * 1.2,
+            line_height: None,
             text_align: TextAlign::Start,
             text_decoration: TextDecoration::NONE,
             white_space: WhiteSpace::Normal,

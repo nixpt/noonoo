@@ -891,6 +891,15 @@ impl Ctx<'_> {
         (!text.is_empty() || is_text_field(element)).then(|| text.to_owned())
     }
 
+    /// The line height `style` asks for: its own, or for `normal`, the
+    /// font's natural one (ascent, descent and line gap) from the shaper.
+    pub(crate) fn line_height_of(&self, style: &ComputedStyle) -> f32 {
+        style.line_height.unwrap_or_else(|| {
+            self.shaper
+                .line_height(style.font_request(), style.font_size)
+        })
+    }
+
     /// A text field's intrinsic content width: `size` characters (20
     /// unless the attribute is a positive integer), each as wide as a "0"
     /// in its font, whatever its value (HTML's rendering of text fields).
@@ -921,12 +930,7 @@ impl Ctx<'_> {
         content_x: f32,
         content_y: f32,
     ) -> (Vec<usize>, f32) {
-        let request = style.font_request();
-        let height = if style.line_height > 0.0 {
-            style.line_height
-        } else {
-            self.shaper.line_height(request, style.font_size)
-        };
+        let height = self.line_height_of(style);
         if text.is_empty() {
             return (Vec::new(), height);
         }

@@ -883,3 +883,22 @@ fn a_selected_colour_face_draws_its_own_emoji() {
     let advance = FontSetShaper::new(&set).advance("\u{26A1}", FontRequest::any(), 20.0);
     assert_eq!(advance, 6.0);
 }
+
+/// bliss-diff: browsers (Blink, and bliss) round a font's ascent, descent
+/// and line gap to whole pixels before adding them up for a `normal` line,
+/// so 16px DejaVu Sans lines are 19px, not 18.6.
+#[test]
+fn a_normal_line_rounds_ascent_and_descent_separately() {
+    let font = Font::parse(&minimal_font()).unwrap();
+    let shaper = FontShaper::new(&font);
+    // 800 and 200 units at 17.5px over 1000: 14 + 3.5 → 14 + 4.
+    assert_eq!(shaper.line_height(FontRequest::any(), 17.5), 18.0);
+    // 8.24 + 2.06 → 8 + 2.
+    assert_eq!(shaper.line_height(FontRequest::any(), 10.3), 10.0);
+    let mut set = FontSet::new();
+    set.add("", 400, false, &font);
+    assert_eq!(
+        FontSetShaper::new(&set).line_height(FontRequest::any(), 17.5),
+        18.0
+    );
+}

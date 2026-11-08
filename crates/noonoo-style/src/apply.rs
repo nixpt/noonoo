@@ -684,7 +684,7 @@ fn font_family(values: &[Value]) -> Vec<String> {
         .collect()
 }
 
-fn set_line_height(slot: &mut f32, values: &[Value], font_size: f32, viewport: Viewport) {
+fn set_line_height(slot: &mut Option<f32>, values: &[Value], font_size: f32, viewport: Viewport) {
     let value = if let Some((name, args)) = math_fn(values) {
         // A unitless `line-height` is a multiplier; a length is absolute.
         match calc::evaluate_function(name, args, font_size, font_size, viewport) {
@@ -700,11 +700,14 @@ fn set_line_height(slot: &mut f32, values: &[Value], font_size: f32, viewport: V
             [Value::Number(number)] => font_size * *number,
             [Value::Length(l)] => to_px(l, font_size, font_size, viewport),
             [Value::Percentage(percent)] => font_size * percent / 100.0,
-            [Value::Keyword(k)] if k == "normal" => font_size * 1.2,
+            [Value::Keyword(k)] if k == "normal" || k == "initial" => {
+                *slot = None;
+                return;
+            }
             _ => return,
         }
     };
-    *slot = value;
+    *slot = Some(value);
 }
 
 fn set_text_align(slot: &mut TextAlign, values: &[Value]) {

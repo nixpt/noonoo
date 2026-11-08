@@ -424,11 +424,12 @@ mod tests {
             r#"<div id="a"><p id="b">x</p></div>
                <div id="c"><p id="d"><b id="e">x</b></p></div>
                <div id="f"><p id="g">x</p></div>
-               <div id="h"><p id="i">x</p></div>"#,
+               <div id="h"><p id="i">x</p></div><p id="j">x</p>"#,
             "#a { line-height: 40px } #b { font-size: 30px }
              #c { line-height: 2 } #d { font-size: 20px } #e { font-size: 5px }
              #f { font-size: 10px; line-height: 150% } #g { font-size: 40px }
-             #h { line-height: 3 } #i { line-height: normal; font-size: 10px }",
+             #h { line-height: 3 } #i { line-height: normal; font-size: 10px }
+             #j { line-height: 0 }",
         );
         let lh = |id: &str| {
             styles
@@ -436,11 +437,14 @@ mod tests {
                 .unwrap()
                 .line_height
         };
-        assert_eq!(lh("b"), 40.0);
-        assert_eq!(lh("d"), 40.0);
-        assert_eq!(lh("e"), 10.0);
-        assert_eq!(lh("g"), 15.0);
-        assert_eq!(lh("i"), 12.0);
+        assert_eq!(lh("b"), Some(40.0));
+        assert_eq!(lh("d"), Some(40.0));
+        assert_eq!(lh("e"), Some(10.0));
+        assert_eq!(lh("g"), Some(15.0));
+        // `normal` is the font's own line height, which layout's shaper
+        // knows; `0` is a real (zero) height.
+        assert_eq!(lh("i"), None);
+        assert_eq!(lh("j"), Some(0.0));
     }
 
     #[test]
@@ -588,7 +592,7 @@ mod tests {
         assert_eq!(s.font_style, FontStyle::Italic);
         assert_eq!(s.font_weight, 700);
         assert_eq!(s.font_size, 20.0);
-        assert_eq!(s.line_height, 28.0);
+        assert_eq!(s.line_height, Some(28.0));
         assert_eq!(s.font_family, vec!["serif".to_owned()]);
     }
 
