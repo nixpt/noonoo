@@ -330,6 +330,81 @@ pub fn set_inner_html(document: &mut Document, node: NodeId, html: &str) -> Resu
     Ok(())
 }
 
+/// Where [`insert_adjacent_html`] puts the fragment, relative to the node.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Adjacent {
+    /// Before the node, as its preceding siblings.
+    BeforeBegin,
+    /// Inside the node, before its first child.
+    AfterBegin,
+    /// Inside the node, after its last child.
+    BeforeEnd,
+    /// After the node, as its following siblings.
+    AfterEnd,
+}
+
+/// Parse `html` and insert it at `position` relative to `node`:
+/// `insertAdjacentHTML`. Returns the inserted top-level nodes, in order.
+///
+/// The fragment is parsed in its context: `node` itself for
+/// [`Adjacent::AfterBegin`]/[`Adjacent::BeforeEnd`], its parent for the
+/// other two. As with [`set_inner_html`], it can't close anything outside
+/// that context, and a raw-text context takes the markup as text.
+///
+/// A sibling position on a node with no parent is [`MutError::NoParent`].
+/// An inside position on a node that can't hold children is
+/// [`MutError::CannotHaveChildren`]. An id not in the document is
+/// [`MutError::NoSuchNode`]. In each case the document is unchanged.
+pub fn insert_adjacent_html(
+    document: &mut Document,
+    node: NodeId,
+    position: Adjacent,
+    html: &str,
+) -> Result<Vec<NodeId>, MutError> {
+    let data = document.node(node).ok_or(MutError::NoSuchNode(node))?;
+    let can_hold = data.can_have_children();
+    let tree = document.tree();
+    // The context the fragment parses in, and the node it goes in front of
+    // (`None`: the context's end, where the builder appends).
+    let (context, anchor) = match position {
+        Adjacent::AfterBegin | Adjacent::BeforeEnd if !can_hold => {
+            return Err(MutError::CannotHaveChildren(node));
+        }
+        Adjacent::AfterBegin => (node, tree.children(node).first().copied()),
+        Adjacent::BeforeEnd => (node, None),
+        Adjacent::BeforeBegin | Adjacent::AfterEnd => {
+            let parent = tree.parent(node).ok_or(MutError::NoParent(node))?;
+            let siblings = tree.children(parent);
+            let anchor = match position {
+                Adjacent::BeforeBegin => Some(node),
+                _ => siblings
+                    .iter()
+                    .position(|&id| id == node)
+                    .and_then(|index| siblings.get(index + 1).copied()),
+            };
+            (parent, anchor)
+        }
+    };
+
+    let start = document.tree().children(context).len();
+    if document
+        .element(context)
+        .is_some_and(|e| is_raw_text(&e.name))
+    {
+        let text = document.create_text(html);
+        document.mutate().append_child(context, text)?;
+    } else {
+        build(document, context, tokenize(html));
+    }
+    let inserted = document.tree().children(context)[start..].to_vec();
+    if let Some(anchor) = anchor {
+        for &child in &inserted {
+            document.mutate().insert_before(anchor, child)?;
+        }
+    }
+    Ok(inserted)
+}
+
 /// Build `tokens` as children of `base`, the bottom of the open-element
 /// stack, which an end tag or an implied close never pops.
 fn build(doc: &mut Document, base: NodeId, tokens: Vec<Token>) {
