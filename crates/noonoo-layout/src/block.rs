@@ -119,12 +119,18 @@ pub(crate) fn layout_block_children(
                 i += 1;
             }
             // Inline content is a line box between the blocks: it stops
-            // collapsing, so any pending margin applies in full first.
-            if let Some(margin) = pending.take() {
-                cursor += margin;
-            }
+            // collapsing, so the run applies any pending margin in full
+            // before its first line. A block inside an inline element at
+            // the run's start or end still adjoins the flow's margins.
             if !run.is_empty() {
-                let (mut placed, height) = layout_inline_run(
+                let at_top = !has_content && collapse_top;
+                let margins = RunMargins {
+                    incoming: pending.take(),
+                    collapsed_top: at_top
+                        .then(|| margin::edge_block(ctx, run[0], true))
+                        .flatten(),
+                };
+                let (mut placed, height, trailing) = layout_inline_run(
                     ctx,
                     parent_node,
                     &run,
@@ -132,9 +138,22 @@ pub(crate) fn layout_block_children(
                     cursor,
                     content_width,
                     parent_style,
+                    margins,
                 );
                 indices.append(&mut placed);
                 cursor += height;
+                // The trailing block's margin stays open only if the margin
+                // walk sees it at the run's end too.
+                if let Some((margin, block)) = trailing {
+                    let last = run[run.len() - 1];
+                    if margin::edge_block(ctx, last, false) == Some(block) {
+                        pending = Some(margin);
+                    } else {
+                        cursor += margin;
+                    }
+                }
+            } else if let Some(margin) = pending.take() {
+                cursor += margin;
             }
             has_content = true;
             continue;
@@ -507,6 +526,17 @@ struct Atomic {
     margin_top: f32,
 }
 
+/// The vertical margins around an inline run's blocks (blocks inside its
+/// inline elements), which collapse with the flow around the run.
+#[derive(Default)]
+pub(crate) struct RunMargins {
+    /// The margin pending before the run, from the blocks above it.
+    pub incoming: Option<f32>,
+    /// A leading block whose top margin already collapsed into the
+    /// container's: it sits at the run's top.
+    pub collapsed_top: Option<NodeId>,
+}
+
 /// Lay out an inline formatting context: text and inline boxes wrapped into
 /// lines inside the band the container's floats leave free, aligned per the
 /// container's `text-align`.
@@ -524,6 +554,10 @@ struct Atomic {
 ///   line tall), matching how browsers collapse the collapsed line box;
 /// - breaks are part of the flow they appear in, so `white-space: pre` lines
 ///   from source text and `<br>` breaks do not interact (each just breaks).
+///
+/// Blocks inside its inline elements are laid out between its lines, their
+/// margins collapsing with `margins`. Returns the boxes, the height, and the
+/// margin left pending after a trailing block, with that block.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn layout_inline_run(
     ctx: &mut Ctx<'_>,
@@ -533,7 +567,8 @@ pub(crate) fn layout_inline_run(
     y: f32,
     width: f32,
     parent_style: &ComputedStyle,
-) -> (Vec<usize>, f32) {
+    margins: RunMargins,
+) -> (Vec<usize>, f32, Option<(f32, NodeId)>) {
     let space = ctx.advance(" ", parent_style);
     let line_height = ctx.line_height_of(parent_style);
 
@@ -722,7 +757,8 @@ pub(crate) fn layout_inline_run(
     }
 
     if !had_break && blocks.is_empty() && groups.iter().all(|group| group.is_empty()) {
-        return (Vec::new(), 0.0);
+        let height = margins.incoming.unwrap_or(0.0);
+        return (Vec::new(), height, None);
     }
 
     let alignment = map_align(parent_style.text_align);
@@ -734,36 +770,48 @@ pub(crate) fn layout_inline_run(
     // so still gives an otherwise empty container a line's height.)
     let last_group = groups.len() - 1;
 
-    // Consecutive blocks' margins collapse; a line between them stops that.
-    let mut block_margin: Option<f32> = None;
+    // The margin waiting below the last block: it collapses with the next
+    // block's, and a line applies it in full.
+    let mut pending: Option<(f32, NodeId)> = None;
+    let mut incoming = margins.incoming;
     for (group_index, items) in groups.iter().enumerate() {
         for &(_, block) in blocks.iter().filter(|(before, _)| *before == group_index) {
             let margin = margin::effective_margins(ctx, block, width);
-            cursor_y = cursor_y.max(ctx.floats().clearance(ctx.style(block).clear, cursor_y));
-            cursor_y += match block_margin {
-                Some(previous) => margin::collapse(previous, margin.top) - previous,
+            let above = pending.take().map(|(margin, _)| margin).or(incoming.take());
+            let gap = match above {
+                Some(above) => margin::collapse(above, margin.top),
                 None => margin.top,
             };
+            if margins.collapsed_top != Some(block) {
+                cursor_y += gap;
+            }
+            cursor_y = cursor_y.max(ctx.floats().clearance(ctx.style(block).clear, cursor_y));
             let available = flow_width(ctx, block, width);
             let height = ctx.layout_element(block, x + margin.left, cursor_y, available, None);
             if let Some(index) = ctx.tree_index(block) {
                 apply_auto_margins(ctx, block, index, width, parent_style.text_align);
                 indices.push(index);
             }
-            cursor_y += height + margin.bottom;
-            block_margin = Some(margin.bottom);
+            cursor_y += height;
+            pending = Some((margin.bottom, block));
         }
+        // A line applies the margin above it in full.
+        let mut settle = |cursor_y: &mut f32| {
+            if let Some(margin) = pending.take().map(|(margin, _)| margin).or(incoming.take()) {
+                *cursor_y += margin;
+            }
+        };
         if items.is_empty() {
             // An empty group a `<br>` ended is a blank line; one a block
             // ended is nothing.
             let ended_by_block = blocks.iter().any(|(before, _)| *before == group_index + 1);
             if !ended_by_block && group_index < last_group {
+                settle(&mut cursor_y);
                 cursor_y += line_height;
-                block_margin = None;
             }
             continue;
         }
-        block_margin = None;
+        settle(&mut cursor_y);
         let mut start = 0;
 
         // Lines wrap one at a time so each line's band reflects the floats
@@ -974,7 +1022,10 @@ pub(crate) fn layout_inline_run(
     // Measuring an atomic inline enqueued its out-of-flow descendants, and
     // placing it enqueued them again.
     ctx.prune_pending();
-    (indices, cursor_y - y)
+    if let Some(margin) = incoming {
+        cursor_y += margin;
+    }
+    (indices, cursor_y - y, pending)
 }
 
 /// Table parts outside a table (CSS 2 §17.2.1): the run of them from

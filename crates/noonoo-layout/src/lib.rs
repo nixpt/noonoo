@@ -1255,14 +1255,16 @@ impl Ctx<'_> {
         let children_nodes = child_nodes(self.document, node);
 
         // A block collapses its top/bottom margin through its first/last child
-        // only when nothing separates them; a clipping box is a formatting
-        // context, so its margins never collapse with its children.
+        // only when nothing separates them; a formatting context root (a
+        // clipping box, a cell, an inline-block, a float, ...) keeps its
+        // children's margins inside it.
         let clips = resolve::clips(&style);
-        let collapse_top = border.top == 0.0 && padding.top == 0.0 && !clips;
+        let contains_margins = clips || self.establishes_bfc(node, &style);
+        let collapse_top = border.top == 0.0 && padding.top == 0.0 && !contains_margins;
         let collapse_bottom = border.bottom == 0.0
             && padding.bottom == 0.0
             && matches!(style.height, Dimension::Auto)
-            && !clips;
+            && !contains_margins;
 
         // `height`, `min-height`, and `max-height` share a box (per
         // `box-sizing`), like the widths above. A percentage resolves against
@@ -1443,7 +1445,7 @@ impl Ctx<'_> {
     /// floats, out-of-flow boxes, flex/grid containers and their items,
     /// inline-blocks and table cells. Its height is then independent of
     /// where it's placed, which [`Ctx::measure_height`]'s cache relies on.
-    fn establishes_bfc(&self, node: NodeId, style: &ComputedStyle) -> bool {
+    pub(crate) fn establishes_bfc(&self, node: NodeId, style: &ComputedStyle) -> bool {
         let in_flex_or_grid = self
             .document
             .tree()

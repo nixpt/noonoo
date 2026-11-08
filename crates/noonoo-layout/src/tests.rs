@@ -2971,3 +2971,42 @@ fn a_text_field_has_padding_and_a_border() {
     assert!((input.height - 25.2).abs() < 0.01, "{}", input.height);
     assert!((tree.get(id(&doc, "d")).unwrap().rect.height - 25.2).abs() < 0.01);
 }
+
+/// A block inside an inline, with nothing before or after it, collapses its
+/// margins with its container's and its siblings', as if the inline weren't
+/// there (HN's upvote arrows: `<center><a><div class="votearrow">`).
+#[test]
+fn a_block_inside_an_inline_collapses_its_margins_through_its_container() {
+    let (doc, tree) = page(
+        r#"<div id="c"><div id="x"><a href="v"><div id="v"></div></a></div><p id="p">z</p></div>"#,
+        "#c { padding: 1px } #v { height: 10px; margin: 3px 2px 6px } p { margin: 4px 0 0 }",
+        400.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    // The 3px top margin collapses out of #x; #x is just the arrow.
+    assert_eq!((rect("x").y, rect("x").height), (4.0, 10.0));
+    assert_eq!(rect("v").y, 4.0);
+    // The 6px bottom margin collapses out too, with the paragraph's 4px.
+    assert_eq!(rect("p").y, 20.0);
+    assert!(
+        (rect("c").height - 40.2).abs() < 0.01,
+        "{}",
+        rect("c").height
+    );
+}
+
+/// A box that starts a block formatting context (a table cell, an
+/// inline-block, a float) keeps its children's margins inside it, padding
+/// or not (CSS 2 §8.3.1).
+#[test]
+fn margins_never_collapse_through_a_formatting_context_root() {
+    let (doc, tree) = page(
+        r#"<table cellpadding="0"><tr><td id="d"><p>x</p></td></tr></table><div><span id="i" style="display: inline-block"><p>y</p></span></div><div id="f" style="float: left"><p>z</p></div>"#,
+        "p { margin: 5px 0 }",
+        400.0,
+    );
+    for name in ["d", "i", "f"] {
+        let height = tree.get(id(&doc, name)).unwrap().rect.height;
+        assert!((height - 29.2).abs() < 0.01, "{name}: {height}");
+    }
+}

@@ -74,9 +74,9 @@ fn compute_effective_margins(ctx: &Ctx<'_>, node: NodeId, width: f32) -> Vertica
     let margin = resolve::margins(&style.margin, width);
     let padding = resolve::paddings(&style.padding, width);
     let border = resolve::borders(style);
-    // A clipping box is a formatting context: its margins never collapse with
-    // its children's.
-    let clipping = resolve::clips(style);
+    // A formatting context root (a clipping box, a cell, an inline-block, a
+    // float, ...): its margins never collapse with its children's.
+    let clipping = resolve::clips(style) || ctx.establishes_bfc(node, style);
     let top_open = border.top == 0.0 && padding.top == 0.0 && !clipping;
     let bottom_open = border.bottom == 0.0
         && padding.bottom == 0.0
@@ -138,6 +138,10 @@ fn leading_margin(ctx: &Ctx<'_>, node: NodeId, own: f32, content_width: f32) -> 
             continue;
         }
         if ctx.is_text(child) || ctx.is_inline_level(child) {
+            // A block at the very start of an inline element still adjoins.
+            if let Some(block) = edge_block(ctx, child, true) {
+                margin = collapse(margin, effective_margins(ctx, block, content_width).top);
+            }
             break;
         }
         let child_margin = effective_margins(ctx, child, content_width);
@@ -157,6 +161,9 @@ fn trailing_margin(ctx: &Ctx<'_>, node: NodeId, own: f32, content_width: f32) ->
             continue;
         }
         if ctx.is_text(child) || ctx.is_inline_level(child) {
+            if let Some(block) = edge_block(ctx, child, false) {
+                margin = collapse(margin, effective_margins(ctx, block, content_width).bottom);
+            }
             break;
         }
         let child_margin = effective_margins(ctx, child, content_width);
@@ -166,6 +173,69 @@ fn trailing_margin(ctx: &Ctx<'_>, node: NodeId, own: f32, content_width: f32) ->
         }
     }
     margin
+}
+
+/// What an inline element's content starts (or ends) with, for margins.
+enum Edge {
+    /// A block inside it, with nothing on a line before (after) it.
+    Block(NodeId),
+    /// Nothing at all: white space and empty, edgeless inline elements.
+    Empty,
+    /// Line content: text, an atomic inline, a break, or an inline's edges.
+    Content,
+}
+
+/// The block at the start (`from_start`) or end of inline element `node`,
+/// when nothing that makes a line comes before (after) it: its margins then
+/// adjoin the container's, as CSS 2 §9.2.1.1's anonymous blocks around it
+/// are empty.
+pub(crate) fn edge_block(ctx: &Ctx<'_>, node: NodeId, from_start: bool) -> Option<NodeId> {
+    match inline_edge(ctx, node, from_start) {
+        Edge::Block(block) => Some(block),
+        Edge::Empty | Edge::Content => None,
+    }
+}
+
+fn inline_edge(ctx: &Ctx<'_>, node: NodeId, from_start: bool) -> Edge {
+    if ctx.is_text(node) || crate::is_atomic_inline(ctx.style(node).display) {
+        return Edge::Content;
+    }
+    if ctx.document.element(node).is_some_and(|e| e.name == "br") {
+        return Edge::Content;
+    }
+    let style = ctx.style(node);
+    let padding = resolve::paddings(&style.padding, 0.0);
+    let border = resolve::borders(style);
+    let margin = resolve::margins(&style.margin, 0.0);
+    if padding.left + padding.right + padding.top + padding.bottom != 0.0
+        || border.left + border.right + border.top + border.bottom != 0.0
+        || margin.left + margin.right != 0.0
+    {
+        return Edge::Content;
+    }
+    let mut children = child_nodes(ctx.document, node);
+    if !from_start {
+        children.reverse();
+    }
+    for child in children {
+        if ctx.is_hidden(child) || ctx.is_out_of_flow(child) || ctx.is_float(child) {
+            continue;
+        }
+        if ctx.is_text(child) {
+            if ctx.document.text_content(child).trim().is_empty() {
+                continue;
+            }
+            return Edge::Content;
+        }
+        if !ctx.is_inline_level(child) {
+            return Edge::Block(child);
+        }
+        match inline_edge(ctx, child, from_start) {
+            Edge::Empty => {}
+            edge => return edge,
+        }
+    }
+    Edge::Empty
 }
 
 /// Whether a box's top and bottom margins are adjoining: no border, padding,
@@ -190,6 +260,7 @@ fn compute_is_collapse_through(ctx: &Ctx<'_>, node: NodeId, width: f32) -> bool 
         || padding.bottom != 0.0
         || !matches!(style.height, Dimension::Auto)
         || resolve::clips(style)
+        || ctx.establishes_bfc(node, style)
     {
         return false;
     }
