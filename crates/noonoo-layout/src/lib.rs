@@ -74,6 +74,7 @@ mod block;
 mod flex;
 mod float;
 mod grid;
+pub mod image;
 mod margin;
 mod resolve;
 mod runs;
@@ -1660,6 +1661,8 @@ pub(crate) fn child_nodes(document: &Document, node: NodeId) -> Vec<NodeId> {
 
 /// The version of this crate, taken from the workspace.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+pub use image::{EncodedImage, Image, ImageFormat, Images};
 
 #[cfg(test)]
 thread_local! {

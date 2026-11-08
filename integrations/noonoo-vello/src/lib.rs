@@ -259,6 +259,10 @@ fn decode(image: &noonoo_paint::EncodedImage) -> Option<ImageData> {
     }
     let decoded = match image.format {
         noonoo_paint::ImageFormat::Png => decode_png(&image.data),
+        // Sized by layout from their headers, but not decoded here yet.
+        noonoo_paint::ImageFormat::Jpeg
+        | noonoo_paint::ImageFormat::Gif
+        | noonoo_paint::ImageFormat::Webp => None,
     };
     cache.insert(image.data.clone(), decoded.clone());
     decoded

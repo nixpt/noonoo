@@ -59,32 +59,7 @@ pub enum GradientGeometry {
     },
 }
 
-/// How an [`EncodedImage`]'s bytes are encoded.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum ImageFormat {
-    /// PNG (as colour emoji fonts store their glyphs).
-    Png,
-}
-
-/// An image as its codec reads it, not yet decoded: decoding is the
-/// backend's job (image codecs are bought, not owned).
-#[derive(Clone, PartialEq, Debug)]
-pub struct EncodedImage {
-    /// The encoding.
-    pub format: ImageFormat,
-    /// The encoded bytes, shared without copying.
-    pub data: std::sync::Arc<[u8]>,
-}
-
-impl EncodedImage {
-    /// A PNG image from its bytes.
-    pub fn png(data: impl Into<std::sync::Arc<[u8]>>) -> Self {
-        Self {
-            format: ImageFormat::Png,
-            data: data.into(),
-        }
-    }
-}
+pub use noonoo_layout::image::{EncodedImage, ImageFormat};
 
 /// A single drawing instruction.
 #[derive(Clone, PartialEq, Debug)]
@@ -776,15 +751,7 @@ fn command_json(command: &Command) -> Json {
         Command::DrawImage { rect, image } => object(vec![
             ("op", Json::String("draw-image".into())),
             ("rect", rect_json(*rect)),
-            (
-                "format",
-                Json::String(
-                    match image.format {
-                        ImageFormat::Png => "png",
-                    }
-                    .into(),
-                ),
-            ),
+            ("format", Json::String(image.format.name().into())),
             ("bytes", Json::Number(image.data.len() as f64)),
         ]),
         Command::BoxShadow {
