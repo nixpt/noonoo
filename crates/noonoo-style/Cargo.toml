@@ -18,6 +18,7 @@ noonoo-text.workspace = true
 noonoo-css.workspace = true
 noonoo-dom.workspace = true
 noonoo-selectors.workspace = true
+noonoo-query.workspace = true
 
 [dev-dependencies]
 noonoo-html.workspace = true

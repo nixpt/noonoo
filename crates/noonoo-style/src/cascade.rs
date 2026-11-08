@@ -11,7 +11,8 @@ use crate::Interaction;
 use noonoo_css::value::Value;
 use noonoo_css::{Declaration, Property, Stylesheet, parse_declaration, parse_declarations};
 use noonoo_dom::{Document, NodeId};
-use noonoo_selectors::{Element, MatchContext, SelectorList};
+use noonoo_query::ElementRef;
+use noonoo_selectors::{MatchContext, SelectorList};
 
 use crate::Viewport;
 use crate::apply::{apply, resolve_font_size};
@@ -59,88 +60,6 @@ struct Rule {
 struct Candidate {
     key: Key,
     values: Vec<Value>,
-}
-
-/// A read-only element view over a [`Document`], for selector matching.
-#[derive(Clone, Copy)]
-struct DomView<'a> {
-    doc: &'a Document,
-    id: NodeId,
-}
-
-impl<'a> DomView<'a> {
-    fn element_children(&self, id: NodeId) -> Vec<NodeId> {
-        self.doc
-            .tree()
-            .children(id)
-            .iter()
-            .copied()
-            .filter(|&child| self.doc.element(child).is_some())
-            .collect()
-    }
-}
-
-impl Element for DomView<'_> {
-    fn tag_name(&self) -> String {
-        self.doc
-            .element(self.id)
-            .map(|element| element.name.clone())
-            .unwrap_or_default()
-    }
-    fn id(&self) -> Option<String> {
-        self.doc
-            .element(self.id)
-            .and_then(|element| element.id().map(str::to_owned))
-    }
-    fn classes(&self) -> Vec<String> {
-        self.doc
-            .element(self.id)
-            .map(|element| element.classes().map(str::to_owned).collect())
-            .unwrap_or_default()
-    }
-    fn attr(&self, name: &str) -> Option<String> {
-        self.doc
-            .element(self.id)
-            .and_then(|element| element.attr(name).map(str::to_owned))
-    }
-    fn parent(&self) -> Option<Self> {
-        let parent = self.doc.tree().parent(self.id)?;
-        self.doc.element(parent).is_some().then_some(DomView {
-            doc: self.doc,
-            id: parent,
-        })
-    }
-    fn previous_siblings(&self) -> Vec<Self> {
-        let Some(parent) = self.doc.tree().parent(self.id) else {
-            return Vec::new();
-        };
-        let mut out = Vec::new();
-        for child in self.element_children(parent) {
-            if child == self.id {
-                break;
-            }
-            out.push(DomView {
-                doc: self.doc,
-                id: child,
-            });
-        }
-        out
-    }
-    fn sibling_index(&self) -> usize {
-        let Some(parent) = self.doc.tree().parent(self.id) else {
-            return 0;
-        };
-        self.element_children(parent)
-            .iter()
-            .position(|&child| child == self.id)
-            .unwrap_or(0)
-    }
-    fn sibling_count(&self) -> usize {
-        let Some(parent) = self.doc.tree().parent(self.id) else {
-            return 1;
-        };
-        self.element_children(parent).len()
-    }
 }
 
 /// Build the rule list: the UA sheet, then the author stylesheets. A
@@ -233,7 +152,9 @@ fn winners_for(
     rules: &[Rule],
     interaction: Interaction,
 ) -> HashMap<Property, Candidate> {
-    let view = DomView { doc, id };
+    let Some(view) = ElementRef::new(doc, id) else {
+        return HashMap::new(); // Not an element: no rule applies.
+    };
     // Dynamic pseudo-classes describe *this* element: `:hover` matches only
     // the hovered node, not its ancestors or the whole tree.
     let ctx = MatchContext {

@@ -191,6 +191,16 @@ name = "noonoo-parse"
 version = "0.20.0"
 
 [[package]]
+name = "noonoo-query"
+version = "0.20.0"
+dependencies = [
+ "noonoo-dom",
+ "noonoo-html",
+ "noonoo-parse",
+ "noonoo-selectors",
+]
+
+[[package]]
 name = "noonoo-selectors"
 version = "0.20.0"
 dependencies = [
@@ -220,6 +230,7 @@ dependencies = [
  "noonoo-css",
  "noonoo-dom",
  "noonoo-html",
+ "noonoo-query",
  "noonoo-selectors",
  "noonoo-text",
 ]

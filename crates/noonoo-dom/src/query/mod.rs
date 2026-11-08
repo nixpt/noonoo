@@ -2,9 +2,10 @@
 //!
 //! Reads are separated from writes on purpose: a query never mutates, so it is
 //! total and panic-free. The matcher here is a deliberately minimal compound
-//! subset (`tag`, `#id`, `.class`) with no dependencies. The full selector
-//! engine — combinators, attributes, pseudo-classes, specificity — lives in
-//! `noonoo-selectors` (`SelectorList`); this keeps `noonoo-dom` a leaf.
+//! subset (`tag`, `#id`, `.class`) with no dependencies, which keeps
+//! `noonoo-dom` a leaf. Queries with full selectors (combinators,
+//! attributes, pseudo-classes, selector lists) and element-scoped queries
+//! are in `noonoo-query`, over the `noonoo-selectors` engine.
 
 use crate::node::ElementData;
 

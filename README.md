@@ -29,6 +29,7 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | [`noonoo-json`](crates/noonoo-json) | JSON parser, value model, and writer |
 | [`noonoo-css`](crates/noonoo-css) | CSS: tokenizer, rule splitter, value/property model (incl. grouping), shorthand expansion, `@font-face` descriptors |
 | [`noonoo-selectors`](crates/noonoo-selectors) | CSS selectors: parse, specificity, matching |
+| [`noonoo-query`](crates/noonoo-query) | Full-selector and element-scoped DOM queries |
 | [`noonoo-caison`](crates/noonoo-caison) | CAISON parse and its JSON projection |
 | [`noonoo-html`](crates/noonoo-html) | HTML tokenizer and tree builder into `noonoo-dom` |
 | [`noonoo-dom`](crates/noonoo-dom) | The tree, stable `NodeId`s, checked mutation, queries |

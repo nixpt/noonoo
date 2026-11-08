@@ -12,6 +12,7 @@ members = [
     "crates/noonoo-json",
     "crates/noonoo-css",
     "crates/noonoo-selectors",
+    "crates/noonoo-query",
     "crates/noonoo-caison",
     "crates/noonoo-html",
     "crates/noonoo-markdown",
@@ -70,6 +71,7 @@ noonoo-parse = { path = "crates/noonoo-parse", version = "0.20.0" }
 noonoo-json = { path = "crates/noonoo-json", version = "0.20.0" }
 noonoo-css = { path = "crates/noonoo-css", version = "0.20.0" }
 noonoo-selectors = { path = "crates/noonoo-selectors", version = "0.20.0" }
+noonoo-query = { path = "crates/noonoo-query", version = "0.20.0" }
 noonoo-caison = { path = "crates/noonoo-caison", version = "0.20.0" }
 noonoo-dom = { path = "crates/noonoo-dom", version = "0.20.0" }
 noonoo-events = { path = "crates/noonoo-events", version = "0.20.0" }

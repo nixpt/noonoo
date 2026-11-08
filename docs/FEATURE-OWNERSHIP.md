@@ -13,7 +13,7 @@ it, that missing thing moves *into* Noonoo — not into the consumer's port.
 |---|---|---|
 | Document tree + stable node ids | `bliss-dom` (recyclable indices) | Ids consumers must be able to hold across mutations |
 | Checked mutation (`DocumentMutator`) | `bliss-dom` (infallible, silent no-op) | Silent no-ops forced consumers to delete their error types |
-| Queries + `query_selector*` | `bliss-dom` | |
+| Queries + `query_selector*` | `bliss-dom` | Full selectors in `noonoo-query`, so `noonoo-dom` stays a leaf; element-scoped queries were a surfer workaround (`querySelectorFrom`) |
 | `DomController` | `bliss-traits::dom_control` (separate grab-bag) | It is a thin DOM writer; it belongs with the DOM |
 | Style / cascade / incremental restyle | `bliss-dom` + `stylo_taffy` | Incremental must be the default, not a feature |
 | Layout | `bliss-dom` + `stylo_taffy` | One boundary (`noonoo-layout`) |

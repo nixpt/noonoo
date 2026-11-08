@@ -30,7 +30,7 @@ Noonoo's side of the same question.
 | Surfer need | Noonoo primitive | Where |
 | --- | --- | --- |
 | Canonical DOM, stable ids, checked mutation | `Document`, `NodeId` (never reused), `DocumentMutator` returning `Result` | `noonoo-dom` |
-| Queries | `get_element_by_id`, `get_elements_by_tag_name`, `query_selector[_all]`; selectors cover combinators, `:not`, `:is`, `:nth-child` | `noonoo-dom`, `noonoo-selectors` |
+| Queries | `get_element_by_id`, `get_elements_by_tag_name` (`noonoo-dom`); full-selector `query_selector[_all]`, element-scoped `query_selector[_all]_in` (`querySelectorFrom`), and `matches`, with combinators, attributes, `:not`, `:is`, `:nth-child` | `noonoo-query` over `noonoo-selectors` |
 | `text_content`, visible text | `Document::text_content` (surfer's skip-`<script>` wrapper stays host-side) | `noonoo-dom` |
 | Events | `dispatch` with bubbling + phases, `EventListener` | `noonoo-events` |
 | Style | [`noonoo-style`]: UA sheet + author sheets + inline `style`, vars/`calc()`, `:hover/:focus/:active` in the cascade | `noonoo-style` |
@@ -61,8 +61,9 @@ helpers surfer hand-rolled. Each is a small, headless-testable add.
    `set_inner_html(node, html)` (parse + clear children + append) and
    `insert_nodes_before/after`-shaped fragment parse, so `insertAdjacentHTML`
    has all four positions natively.
-3. **Scoped queries**: `query_selector_in(root, selector)` / `_all_in` with the
-   exclude-self semantics surfer's `querySelectorFrom` defines.
+3. **Scoped queries** (done, `noonoo-query`): `query_selector_in(root, selector)`
+   / `_all_in` with the exclude-self semantics surfer's `querySelectorFrom`
+   defines, matching against the whole document as the DOM does.
 4. **Mutation round-out**: `deep_clone`, `insert_after`/`replace_with`,
    `create_element` with attrs, attribute list iteration, `node_value`/comment
    access, and `remove_and_drop_children`.
