@@ -838,6 +838,16 @@ impl Ctx<'_> {
         self.floats.pop();
     }
 
+    /// A copy of `node`'s style on the heap. The layout functions that
+    /// recurse once per nesting level hold their style this way: a style
+    /// is large, and a copy in each of their frames would overflow the
+    /// stack on deep trees (out of line, so the copy's temporary lives in
+    /// this short frame instead).
+    #[inline(never)]
+    pub(crate) fn boxed_style(&self, node: NodeId) -> Box<ComputedStyle> {
+        Box::new(self.style(node).clone())
+    }
+
     pub fn style(&self, node: NodeId) -> &ComputedStyle {
         self.styles
             .get(node)
@@ -1137,7 +1147,7 @@ impl Ctx<'_> {
     ) -> f32 {
         #[cfg(test)]
         LAYOUTS.with(|count| count.set(count.get() + 1));
-        let style = self.style(node).clone();
+        let style = self.boxed_style(node);
         if style.display == Display::None {
             return 0.0;
         }
@@ -1447,7 +1457,7 @@ impl Ctx<'_> {
     /// containing block, and attach it to the box tree so it paints and
     /// hit-tests alongside its siblings.
     pub fn layout_out_of_flow(&mut self, node: NodeId) -> Option<usize> {
-        let style = self.style(node).clone();
+        let style = self.boxed_style(node);
         if style.display == Display::None {
             return None;
         }

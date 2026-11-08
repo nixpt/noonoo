@@ -85,36 +85,16 @@ pub(crate) fn layout_block_children(
         }
 
         if is_table_part(ctx, child) {
-            // Table parts outside a table (CSS 2 §17.2.1): a run of them,
-            // with the whitespace between, is wrapped in an anonymous
-            // shrink-to-fit table, so cells sit side by side in one row.
-            let mut run = Vec::new();
-            while i < children.len() {
-                let candidate = children[i];
-                if is_display_none(ctx, candidate) || is_blank_text(ctx, candidate) {
-                    i += 1;
-                    continue;
-                }
-                if !is_table_part(ctx, candidate) {
-                    break;
-                }
-                run.push(candidate);
-                i += 1;
-            }
             if let Some(margin) = pending.take() {
                 cursor += margin;
             }
-            let anonymous = ComputedStyle::default();
-            let (mut placed, height) = crate::table::layout_table_children(
+            cursor += layout_anonymous_table(
                 ctx,
-                &anonymous,
-                &run,
-                content_x,
-                cursor,
-                content_width,
+                children,
+                &mut i,
+                (content_x, cursor, content_width),
+                &mut indices,
             );
-            indices.append(&mut placed);
-            cursor += height;
             has_content = true;
             continue;
         }
@@ -473,6 +453,42 @@ pub(crate) fn layout_inline_run(
     // placing it enqueued them again.
     ctx.prune_pending();
     (indices, cursor_y - y)
+}
+
+/// Table parts outside a table (CSS 2 §17.2.1): the run of them from
+/// `children[*i]`, with the whitespace between, is wrapped in an anonymous
+/// shrink-to-fit table at `(x, y)` in `width`, so cells sit side by side in
+/// one row. Advances `*i` past the run, appends its boxes to `indices` and
+/// returns its height.
+///
+/// Kept out of [`layout_block_children`], which recurses once per nesting
+/// level: the run and the (large) default style in its frame would cost
+/// stack at every level, and deep trees overflow it.
+#[inline(never)]
+fn layout_anonymous_table(
+    ctx: &mut Ctx<'_>,
+    children: &[NodeId],
+    i: &mut usize,
+    (x, y, width): (f32, f32, f32),
+    indices: &mut Vec<usize>,
+) -> f32 {
+    let mut run = Vec::new();
+    while let Some(&candidate) = children.get(*i) {
+        if is_display_none(ctx, candidate) || is_blank_text(ctx, candidate) {
+            *i += 1;
+            continue;
+        }
+        if !is_table_part(ctx, candidate) {
+            break;
+        }
+        run.push(candidate);
+        *i += 1;
+    }
+    let anonymous = Box::new(ComputedStyle::default());
+    let (mut placed, height) =
+        crate::table::layout_table_children(ctx, &anonymous, &run, x, y, width);
+    indices.append(&mut placed);
+    height
 }
 
 /// Whether `node` is a table part (a cell, row or row group), which needs a
