@@ -81,7 +81,9 @@ use std::collections::{HashMap, HashSet};
 
 use noonoo_dom::{Document, NodeData, NodeId};
 use noonoo_geometry::{Point, Rect, Size};
-use noonoo_style::{BoxSizing, ComputedStyle, Dimension, Display, Edges, Position, Styles, ZIndex};
+use noonoo_style::{
+    BoxSizing, ComputedStyle, Dimension, Display, Edges, Position, PseudoElement, Styles, ZIndex,
+};
 
 pub use noonoo_text::{Align, MetricShaper, Shaper};
 
@@ -193,6 +195,9 @@ pub struct LayoutTree {
     boxes: Vec<LayoutBox>,
     index: HashMap<NodeId, usize>,
     roots: Vec<usize>,
+    /// Generated (`::before`/`::after`) element and text ids → the element
+    /// they belong to.
+    generated: HashMap<NodeId, NodeId>,
 }
 
 impl LayoutTree {
@@ -236,7 +241,9 @@ impl LayoutTree {
         for root in roots {
             self.hit_box(root, point, 0, None, Point::ZERO, &mut best);
         }
-        best.map(|(_, node)| node)
+        // Generated content isn't in the DOM; a hit on it is a hit on its
+        // element, as in a browser.
+        best.map(|(_, node)| self.generated.get(&node).copied().unwrap_or(node))
     }
 
     fn hit_box(
@@ -415,12 +422,18 @@ impl LayoutTree {
 }
 
 /// Lay out `document` for the given `viewport`.
+///
+/// `::before`/`::after` boxes with content ([`Styles::generated`]) are laid
+/// out from a copy of the document that holds them as real nodes; the
+/// document itself is untouched.
 pub fn layout(
     document: &Document,
     styles: &Styles,
     viewport: Size,
     shaper: &dyn Shaper,
 ) -> LayoutTree {
+    let with_generated = with_generated_content(document, styles);
+    let document = with_generated.as_ref().unwrap_or(document);
     let mut ctx = Ctx {
         document,
         styles,
@@ -464,7 +477,44 @@ pub fn layout(
     }
 
     ctx.pop_bfc();
+    for generated in styles.generated() {
+        ctx.tree
+            .generated
+            .insert(generated.element, generated.owner);
+        ctx.tree.generated.insert(generated.text, generated.owner);
+    }
     ctx.tree
+}
+
+/// A copy of `document` with each generated box inserted where its
+/// pseudo-element goes: an element holding one text node, first (`::before`)
+/// or last (`::after`) in its owner. `None` when there is nothing to insert,
+/// or when `styles` was computed for another document (the reserved ids
+/// don't line up).
+fn with_generated_content(document: &Document, styles: &Styles) -> Option<Document> {
+    let generated = styles.generated();
+    if generated.is_empty() {
+        return None;
+    }
+    let mut copy = document.clone();
+    for item in generated {
+        let element = copy.create_element(match item.pseudo {
+            PseudoElement::Before => "::before",
+            PseudoElement::After => "::after",
+        });
+        let text = copy.create_text(item.content.clone());
+        if element != item.element || text != item.text || copy.element(item.owner).is_none() {
+            return None;
+        }
+        let mut mutate = copy.mutate();
+        mutate.append_child(element, text).ok()?;
+        let first = mutate.tree().children(item.owner).first().copied();
+        match (item.pseudo, first) {
+            (PseudoElement::Before, Some(first)) => mutate.insert_before(first, element).ok()?,
+            _ => mutate.append_child(item.owner, element).ok()?,
+        }
+    }
+    Some(copy)
 }
 
 /// Shared layout state.
@@ -605,6 +655,39 @@ impl Ctx<'_> {
         self.styles
             .get(node)
             .is_some_and(|style| style.display == Display::None)
+    }
+
+    /// The text an inline element shows in flow: its descendants' text in
+    /// order, leaving out `display: none` subtrees and positioned
+    /// (out-of-flow) ones. Those are pushed to `out_of_flow`, to be laid
+    /// out as boxes of their own.
+    pub(crate) fn flow_text(&self, node: NodeId, out_of_flow: &mut Vec<NodeId>) -> String {
+        let mut text = String::new();
+        let mut stack: Vec<NodeId> = self
+            .document
+            .tree()
+            .children(node)
+            .iter()
+            .rev()
+            .copied()
+            .collect();
+        while let Some(current) = stack.pop() {
+            match self.document.node(current) {
+                Some(NodeData::Text(chunk)) => text.push_str(chunk),
+                Some(NodeData::Element(_)) => {
+                    if self.is_hidden(current) {
+                        continue;
+                    }
+                    if self.is_out_of_flow(current) {
+                        out_of_flow.push(current);
+                        continue;
+                    }
+                    stack.extend(self.document.tree().children(current).iter().rev().copied());
+                }
+                _ => {}
+            }
+        }
+        text
     }
 
     /// Whether `node` is taken out of normal flow (`position: absolute`/`fixed`).
@@ -769,7 +852,9 @@ impl Ctx<'_> {
         // whole subtree, but leaves the box's flow position — and thus its
         // siblings — untouched.
         if matches!(style.position, Position::Relative | Position::Sticky) {
-            let inset = resolve::insets(&style.inset, available_width);
+            // The containing block's height isn't known in flow; keep
+            // resolving vertical percentages against the width, as before.
+            let inset = resolve::insets(&style.inset, available_width, available_width);
             border_x += inset
                 .left
                 .or(inset.right.map(|right| -right))
@@ -989,6 +1074,16 @@ impl Ctx<'_> {
         self.pending.retain(|node| seen.insert(*node));
     }
 
+    /// Move box `index` and every box under it by `(dx, dy)`.
+    fn shift_subtree(&mut self, index: usize, dx: f32, dy: f32) {
+        let mut stack = vec![index];
+        while let Some(i) = stack.pop() {
+            let b = &mut self.tree.boxes[i];
+            b.rect = b.rect.translate(dx, dy);
+            stack.extend(b.children.iter().copied());
+        }
+    }
+
     /// Lay out an out-of-flow box (`position: absolute`/`fixed`) against its
     /// containing block, and attach it to the box tree so it paints and
     /// hit-tests alongside its siblings.
@@ -1007,7 +1102,7 @@ impl Ctx<'_> {
         let border = resolve::borders(&style);
         let horizontal = padding.left + padding.right + border.left + border.right;
         let vertical = padding.top + padding.bottom + border.top + border.bottom;
-        let inset = resolve::insets(&style.inset, cb_width);
+        let inset = resolve::insets(&style.inset, cb_width, cb_height);
 
         // Width: an explicit width, or stretched between `left`+`right`, or
         // shrink-to-fit against the available space.
@@ -1110,14 +1205,39 @@ impl Ctx<'_> {
                     .map(|&child| self.tree.boxes[child].rect.right())
                     .fold(content_x, f32::max)
                     - content_x;
-                used.clamp(0.0, available) + horizontal
+                // Shrink-to-fit: the content was laid out in the available
+                // width, so it only reaches past it where it can't wrap (a
+                // `nowrap` run, a wide child) — and then the box grows to it.
+                used.max(0.0) + horizontal
             }
         };
 
-        let border_height = match resolve::dimension(style.height.clone(), cb_height) {
+        let definite_height = resolve::dimension(style.height.clone(), cb_height);
+        let border_height = match definite_height {
             Some(height) => height + vertical,
             None => content_height + vertical,
         };
+
+        // `right`/`bottom` against an auto size: now that the box is
+        // measured, move it (and what it laid out) into place.
+        let dx = match (inset.left, inset.right, definite_width) {
+            (None, Some(right), None) => {
+                containing.right() - right - margin.right - border_width - border_x
+            }
+            _ => 0.0,
+        };
+        let dy = match (inset.top, inset.bottom, definite_height) {
+            (None, Some(bottom), None) => {
+                containing.bottom() - bottom - margin.bottom - border_height - border_y
+            }
+            _ => 0.0,
+        };
+        if dx != 0.0 || dy != 0.0 {
+            for &child in &child_indices {
+                self.shift_subtree(child, dx, dy);
+            }
+        }
+        let (border_x, border_y) = (border_x + dx, border_y + dy);
 
         let padding_box = Rect::new(
             border_x + border.left,

@@ -1551,3 +1551,151 @@ fn text_transform_measures_the_transformed_text() {
         16.0
     );
 }
+
+fn text_box<'t>(tree: &'t LayoutTree, text: &str) -> &'t LayoutBox {
+    tree.boxes()
+        .iter()
+        .find(|b| b.text.as_deref() == Some(text))
+        .unwrap_or_else(|| panic!("no text box {text:?}"))
+}
+
+#[test]
+fn before_and_after_lay_out_around_the_content() {
+    let (_, tree) = page(
+        r#"<p id="p">mid</p>"#,
+        r#"p::before { content: "<<" } p::after { content: ">>"; display: block }"#,
+        800.0,
+    );
+    let before = text_box(&tree, "<<");
+    let mid = text_box(&tree, "mid");
+    let after = text_box(&tree, ">>");
+    assert_eq!(before.rect.y, mid.rect.y);
+    assert!(before.rect.x < mid.rect.x, "{before:?} {mid:?}");
+    // A block ::after starts its own line.
+    assert!(after.rect.y > mid.rect.y);
+    assert_eq!(after.rect.x, 0.0);
+}
+
+/// arniko's status dot: an empty inline-block with a size, as the first
+/// item of an inline-flex badge.
+#[test]
+fn an_empty_content_box_takes_its_size() {
+    let (doc, tree) = page(
+        r#"<div><span id="s">ok</span></div>"#,
+        r#"#s { display: inline-flex; gap: 6px }
+           #s::before { content: ""; display: inline-block; width: 6px; height: 6px }"#,
+        800.0,
+    );
+    let s = tree.get(id(&doc, "s")).unwrap();
+    let dot = tree
+        .boxes()
+        .iter()
+        .find(|b| b.rect.width == 6.0 && b.rect.height == 6.0)
+        .unwrap_or_else(|| panic!("{:#?}", tree.boxes()));
+    assert_eq!(dot.rect.x, s.rect.x);
+    // The dot, the gap, then the text.
+    assert_eq!(text_box(&tree, "ok").rect.x, s.rect.x + 12.0);
+}
+
+/// arniko's tooltip: an absolutely positioned ::after showing an attribute.
+#[test]
+fn a_positioned_after_shows_its_attribute() {
+    let (doc, tree) = page(
+        r#"<div id="t" data-tip="hello" style="position: relative; margin-top: 100px">x</div>"#,
+        r#"#t::after { content: attr(data-tip); position: absolute; left: 0; bottom: 100% }"#,
+        800.0,
+    );
+    let tip = text_box(&tree, "hello");
+    let t = tree.get(id(&doc, "t")).unwrap();
+    assert!(tip.rect.y < t.rect.y, "{tip:?} above {t:?}");
+}
+
+/// Clicking generated content clicks the element it belongs to.
+#[test]
+fn hit_testing_generated_content_finds_its_element() {
+    let (doc, tree) = page(
+        r#"<div id="d"></div>"#,
+        r#"#d::before { content: "x"; display: block; height: 20px }"#,
+        800.0,
+    );
+    let hit = tree.hit_test(Point::new(2.0, 5.0)).unwrap();
+    let d = id(&doc, "d");
+    assert!(hit == d || doc.tree().parent(hit) == Some(d), "{hit:?}");
+    assert!(doc.node(hit).is_some(), "a hit is always a real DOM node");
+}
+
+/// `bottom`/`right` with an auto height/width place the box by its
+/// measured size.
+#[test]
+fn bottom_and_right_insets_place_an_auto_sized_absolute_box() {
+    let (doc, tree) = page(
+        r#"<div id="c" style="position: relative; margin-top: 100px; height: 50px; width: 400px">
+             <div id="a" style="position: absolute; left: 0; bottom: 100%">hello</div>
+             <div id="b" style="position: absolute; right: 0; bottom: 0"><span>abcd</span></div>
+           </div>"#,
+        "",
+        800.0,
+    );
+    let a = tree.get(id(&doc, "a")).unwrap().rect;
+    let b = tree.get(id(&doc, "b")).unwrap().rect;
+    // "hello": 40 x 19.2, its bottom at the container's top (y = 100).
+    assert!((a.bottom() - 100.0).abs() < 1e-3, "{a:?}");
+    assert!((b.bottom() - 150.0).abs() < 1e-3, "{b:?}");
+    assert!((b.right() - 400.0).abs() < 1e-3, "{b:?}");
+    assert_eq!(b.width, 32.0);
+    // The content moves with its box.
+    let hello = text_box(&tree, "hello").rect;
+    assert!((hello.y - a.y).abs() < 1e-3, "{hello:?} {a:?}");
+    let abcd = text_box(&tree, "abcd").rect;
+    assert!((abcd.x - b.x).abs() < 1e-3, "{abcd:?} {b:?}");
+}
+
+/// A row flex container shrink-wraps to its items side by side plus the
+/// gaps between them; a column one to its widest item.
+#[test]
+fn a_shrink_wrapped_flex_container_counts_items_and_gaps() {
+    let (doc, tree) = page(
+        r#"<div><span id="r"><i></i><i style="width: 20px"></i>ab</span></div>
+           <div><span id="c"><i></i><i style="width: 20px"></i></span></div>"#,
+        r#"#r { display: inline-flex; gap: 6px }
+           #c { display: inline-flex; flex-direction: column; gap: 6px }
+           i { display: block; width: 10px; height: 4px }"#,
+        800.0,
+    );
+    // 10 + 6 + 20 + 6 + 16 ("ab").
+    assert_eq!(tree.get(id(&doc, "r")).unwrap().rect.width, 58.0);
+    assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.width, 20.0);
+    assert_eq!(text_box(&tree, "ab").rect.width, 16.0);
+}
+
+/// An inline element shows only its in-flow text; a positioned descendant
+/// is laid out as its own box.
+#[test]
+fn an_inline_elements_positioned_descendant_leaves_its_text() {
+    let (doc, tree) = page(
+        r#"<p>a <span id="s" style="position: relative">b<i id="i" style="position: absolute; top: 20px; left: 0">c</i><em style="display: none">d</em></span></p>"#,
+        "",
+        800.0,
+    );
+    let s = tree.get(id(&doc, "s")).unwrap();
+    assert_eq!(s.text.as_deref(), Some("b"));
+    let i = tree.get(id(&doc, "i")).unwrap();
+    assert_eq!(i.rect.y, s.rect.y + 20.0);
+    assert_eq!(i.rect.x, s.rect.x);
+}
+
+/// Shrink-to-fit never makes an absolute box narrower than content that
+/// can't wrap: a `nowrap` tooltip in a tiny containing block is as wide as
+/// its text.
+#[test]
+fn an_absolute_box_is_as_wide_as_its_unwrappable_content() {
+    let (doc, tree) = page(
+        r#"<div style="position: relative; width: 8px; height: 8px">
+             <div id="t" style="position: absolute; left: 0; top: 0; white-space: nowrap; padding: 0 4px">hello world</div>
+           </div>"#,
+        "",
+        800.0,
+    );
+    // "hello world" is 11 characters (88px) plus 8px of padding.
+    assert_eq!(tree.get(id(&doc, "t")).unwrap().rect.width, 96.0);
+}

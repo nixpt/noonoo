@@ -14,7 +14,7 @@
 
 use noonoo_dom::NodeId;
 use noonoo_geometry::Rect;
-use noonoo_style::{BoxSizing, Clear, ComputedStyle, Float};
+use noonoo_style::{BoxSizing, Clear, ComputedStyle, Display, FlexDirection, Float};
 
 use crate::resolve;
 use crate::{Ctx, child_nodes};
@@ -234,12 +234,60 @@ fn compute_preferred_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
     inner + edges
 }
 
+/// A flex container's max-content width: in a row, its items side by side
+/// with `column-gap` between them; in a column, the widest item. Adjacent
+/// text children form one item, as in [`crate::flex`].
+fn preferred_flex_content(ctx: &Ctx<'_>, node: NodeId, style: &ComputedStyle) -> f32 {
+    let children = child_nodes(ctx.document, node);
+    let mut widths = Vec::new();
+    let mut index = 0;
+    while index < children.len() {
+        let child = children[index];
+        if ctx.is_hidden(child) || ctx.is_out_of_flow(child) {
+            index += 1;
+            continue;
+        }
+        if ctx.is_text(child) {
+            let mut text = String::new();
+            while index < children.len() && ctx.is_text(children[index]) {
+                let chunk = ctx.document.text_content(children[index]);
+                let chunk = chunk.trim();
+                if !chunk.is_empty() {
+                    if !text.is_empty() {
+                        text.push(' ');
+                    }
+                    text.push_str(chunk);
+                }
+                index += 1;
+            }
+            if !text.is_empty() {
+                widths.push(text_width(ctx, &text, style));
+            }
+            continue;
+        }
+        let margins = resolve::margins(&ctx.style(child).margin, 0.0);
+        widths.push(preferred_width(ctx, child) + margins.left + margins.right);
+        index += 1;
+    }
+    match style.flex_direction {
+        FlexDirection::Row | FlexDirection::RowReverse => {
+            widths.iter().sum::<f32>() + style.column_gap * widths.len().saturating_sub(1) as f32
+        }
+        FlexDirection::Column | FlexDirection::ColumnReverse => {
+            widths.into_iter().fold(0.0, f32::max)
+        }
+    }
+}
+
 /// The max-content width of a box's contents: block children stack (take the
 /// widest), inline content flows on one unwrapped line (take the sum).
 fn preferred_content(ctx: &Ctx<'_>, node: NodeId) -> f32 {
     let style = ctx.style(node);
     if let Some(text) = ctx.placeholder(node) {
         return text_width(ctx, &text, style);
+    }
+    if matches!(style.display, Display::Flex | Display::InlineFlex) {
+        return preferred_flex_content(ctx, node, style);
     }
     let mut widest = 0.0f32;
     let mut run = 0.0f32;

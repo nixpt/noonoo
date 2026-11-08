@@ -307,7 +307,9 @@ pub(crate) fn layout_inline_run(
                 // Replaced content (`<img alt>`, `<input value>`) shows its
                 // placeholder text, like a browser while the source is
                 // missing; otherwise an element is just its own text.
-                let content = ctx.document.text_content(node);
+                let mut positioned = Vec::new();
+                let content = ctx.flow_text(node, &mut positioned);
+                ctx.pending.extend(positioned);
                 let content = if content.is_empty() {
                     element.placeholder_text().to_owned()
                 } else {
