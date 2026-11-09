@@ -124,18 +124,20 @@ pub(crate) fn layout_block_children(
             // the run's start or end still adjoins the flow's margins.
             // A run of white space alone makes no box: the margins on
             // either side of it still collapse.
-            if run.iter().all(|&node| ctx.is_collapsible_blank(node)) {
+            // So does a phantom line (CSS 2 §9.4.2): empty, edgeless
+            // inline elements.
+            if run.iter().all(|&node| margin::is_phantom(ctx, node)) {
                 continue;
             }
-            // Its edge blocks, past the white space around them.
+            // Its edge blocks, past the phantoms around them.
             let first = run
                 .iter()
                 .copied()
-                .find(|&node| !ctx.is_collapsible_blank(node));
+                .find(|&node| !margin::is_phantom(ctx, node));
             let last = run
                 .iter()
                 .copied()
-                .rfind(|&node| !ctx.is_collapsible_blank(node));
+                .rfind(|&node| !margin::is_phantom(ctx, node));
             if !run.is_empty() {
                 let at_top = !has_content && collapse_top;
                 let margins = RunMargins {

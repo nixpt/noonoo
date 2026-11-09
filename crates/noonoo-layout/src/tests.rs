@@ -3408,3 +3408,50 @@ fn a_flex_rows_min_content_has_no_phantom_gaps() {
     );
     assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.width, 64.0);
 }
+
+/// CSS 2 §9.4.2: a line with no text, no preserved white space and no
+/// inline element with edges is a phantom: it takes no height and margins
+/// collapse past it, out of the container as if it weren't there.
+#[test]
+fn an_empty_inline_run_does_not_stop_margin_collapsing() {
+    // The div's height is the p's line alone: both p margins collapse out.
+    for html in [
+        "<div id=d><span></span><p>e</p></div>",
+        "<div id=d><p>e</p><span></span></div>",
+        "<div id=d><b> </b><p>e</p></div>",
+        "<div id=d><a name=top></a>\n<p>e</p></div>",
+        "<div id=d><span><i></i> </span> <p>e</p> <em></em></div>",
+    ] {
+        let (doc, tree) = page(html, "p { margin: 16px 0 }", 400.0);
+        let d = tree.get(id(&doc, "d")).unwrap().rect;
+        assert_eq!((d.y, d.height), (16.0, 19.2), "{html}");
+    }
+}
+
+/// Content that does make a line still stops collapsing: an image, a
+/// `<br>`, an inline with padding.
+#[test]
+fn a_line_with_content_still_stops_margin_collapsing() {
+    for html in [
+        "<div id=d><img><p>e</p></div>",
+        "<div id=d><br><p>e</p></div>",
+        "<div id=d><span style='padding-left:1px'></span><p>e</p></div>",
+    ] {
+        let (doc, tree) = page(html, "p { margin: 16px 0 }", 400.0);
+        let d = tree.get(id(&doc, "d")).unwrap().rect;
+        assert_eq!(d.y, 0.0, "{html}");
+    }
+}
+
+/// `white-space: pre-line` collapses spaces too: spaces alone between
+/// blocks make no line. A newline in it is a line break.
+#[test]
+fn pre_line_spaces_between_blocks_make_no_line() {
+    let (doc, tree) = page(
+        "<div id=d><p>a</p>   <p>b</p></div>",
+        "#d { white-space: pre-line } p { margin: 16px 0 }",
+        400.0,
+    );
+    let d = tree.get(id(&doc, "d")).unwrap().rect;
+    assert_eq!((d.y, d.height), (16.0, 2.0 * 19.2 + 16.0));
+}

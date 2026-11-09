@@ -994,20 +994,21 @@ impl Ctx<'_> {
         if !self.is_text(node) {
             return false;
         }
-        let collapses = self
+        let white_space = self
             .document
             .tree()
             .parent(node)
             .and_then(|parent| self.styles.get(parent))
-            .is_none_or(|style| {
-                matches!(style.white_space, WhiteSpace::Normal | WhiteSpace::NoWrap)
-            });
-        collapses
-            && self
-                .document
-                .text_content(node)
+            .map(|style| style.white_space);
+        let text = self.document.text_content(node);
+        match white_space {
+            None | Some(WhiteSpace::Normal | WhiteSpace::NoWrap) => text
                 .chars()
-                .all(|c| matches!(c, ' ' | '\t' | '\n' | '\r' | '\u{c}'))
+                .all(|c| matches!(c, ' ' | '\t' | '\n' | '\r' | '\u{c}')),
+            // `pre-line` collapses spaces but keeps newlines, which break.
+            Some(WhiteSpace::PreLine) => text.chars().all(|c| matches!(c, ' ' | '\t' | '\u{c}')),
+            Some(_) => false,
+        }
     }
 
     /// Whether `node` is taken out of normal flow (`position: absolute`/`fixed`).

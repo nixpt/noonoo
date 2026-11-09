@@ -92,8 +92,7 @@ fn compute_effective_margins(ctx: &Ctx<'_>, node: NodeId, width: f32) -> Vertica
         // collapses into one.
         let mut through = collapse(margin.top, margin.bottom);
         for child in child_nodes(ctx.document, node) {
-            if ctx.is_hidden(child) || ctx.is_out_of_flow(child) || ctx.is_collapsible_blank(child)
-            {
+            if ctx.is_hidden(child) || ctx.is_out_of_flow(child) || is_phantom(ctx, child) {
                 continue;
             }
             let child_margin = effective_margins(ctx, child, content_width);
@@ -135,7 +134,7 @@ fn compute_effective_margins(ctx: &Ctx<'_>, node: NodeId, width: f32) -> Vertica
 fn leading_margin(ctx: &Ctx<'_>, node: NodeId, own: f32, content_width: f32) -> f32 {
     let mut margin = own;
     for child in child_nodes(ctx.document, node) {
-        if ctx.is_hidden(child) || ctx.is_out_of_flow(child) || ctx.is_collapsible_blank(child) {
+        if ctx.is_hidden(child) || ctx.is_out_of_flow(child) || is_phantom(ctx, child) {
             continue;
         }
         if ctx.is_text(child) || ctx.is_inline_level(child) {
@@ -158,7 +157,7 @@ fn leading_margin(ctx: &Ctx<'_>, node: NodeId, own: f32, content_width: f32) -> 
 fn trailing_margin(ctx: &Ctx<'_>, node: NodeId, own: f32, content_width: f32) -> f32 {
     let mut margin = own;
     for child in child_nodes(ctx.document, node).into_iter().rev() {
-        if ctx.is_hidden(child) || ctx.is_out_of_flow(child) || ctx.is_collapsible_blank(child) {
+        if ctx.is_hidden(child) || ctx.is_out_of_flow(child) || is_phantom(ctx, child) {
             continue;
         }
         if ctx.is_text(child) || ctx.is_inline_level(child) {
@@ -197,11 +196,44 @@ pub(crate) fn edge_block(ctx: &Ctx<'_>, node: NodeId, from_start: bool) -> Optio
     }
 }
 
+/// Whether `node` is nothing a line box is made of (CSS 2 §9.4.2): blank
+/// collapsible text, or a plain inline element holding only such — no text,
+/// no atomic or replaced box, no `<br>`, no padding, border or horizontal
+/// margin. A line of phantoms takes no height and margins collapse past it.
+pub(crate) fn is_phantom(ctx: &Ctx<'_>, node: NodeId) -> bool {
+    if ctx.is_text(node) {
+        return ctx.is_collapsible_blank(node);
+    }
+    ctx.style(node).display == Display::Inline
+        && matches!(inline_edge(ctx, node, true), Edge::Empty)
+}
+
+/// An element that draws something of its own, children or not.
+fn is_replaced(ctx: &Ctx<'_>, node: NodeId) -> bool {
+    ctx.document.element(node).is_some_and(|e| {
+        matches!(
+            e.name.as_str(),
+            "br" | "img"
+                | "input"
+                | "textarea"
+                | "select"
+                | "button"
+                | "svg"
+                | "canvas"
+                | "video"
+                | "audio"
+                | "iframe"
+                | "object"
+                | "embed"
+        )
+    })
+}
+
 fn inline_edge(ctx: &Ctx<'_>, node: NodeId, from_start: bool) -> Edge {
     if ctx.is_text(node) || crate::is_atomic_inline(ctx.style(node).display) {
         return Edge::Content;
     }
-    if ctx.document.element(node).is_some_and(|e| e.name == "br") {
+    if is_replaced(ctx, node) {
         return Edge::Content;
     }
     let style = ctx.style(node);
@@ -223,7 +255,7 @@ fn inline_edge(ctx: &Ctx<'_>, node: NodeId, from_start: bool) -> Edge {
             continue;
         }
         if ctx.is_text(child) {
-            if ctx.is_collapsible_blank(child) {
+            if is_phantom(ctx, child) {
                 continue;
             }
             return Edge::Content;
@@ -276,7 +308,7 @@ fn compute_is_collapse_through(ctx: &Ctx<'_>, node: NodeId, width: f32) -> bool 
         }
         // White space between blocks is nothing; in a flex container it
         // makes no item either.
-        if ctx.is_collapsible_blank(child) {
+        if is_phantom(ctx, child) {
             continue;
         }
         // A flex item is content, whatever its own size.
