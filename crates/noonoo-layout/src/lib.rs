@@ -1241,6 +1241,10 @@ impl Ctx<'_> {
                     available_width
                 };
                 let mut width = specified.unwrap_or_else(|| auto.max(0.0));
+                // A table is never narrower than its columns' minimums.
+                if style.display == Display::Table {
+                    width = width.max(float::min_content_of_contents(self, node));
+                }
                 if let Some(maximum) = maximum {
                     width = width.min(maximum);
                 }

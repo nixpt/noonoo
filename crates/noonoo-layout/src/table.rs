@@ -65,15 +65,8 @@ pub(crate) fn layout_table_children(
     if rows.is_empty() {
         return (Vec::new(), 0.0);
     }
-    let mut columns = column_demands(ctx, &rows, content_width);
-
-    // Fit within the table's content box: an over-wide column set shrinks
-    // proportionally, and a table wider than its columns shares the
-    // leftover space proportionally (like the spec's §17.5.2 distribution).
-    let max_content = columns.iter().sum::<f32>();
-    if max_content > content_width || fill {
-        distribute(&mut columns, content_width, max_content);
-    }
+    let demands = column_demands(ctx, &rows, content_width);
+    let columns = fit_columns(&demands, content_width, fill);
 
     // Place the rows. Measure first, so every cell can stretch to its row's
     // height: the measurement is real layout, thrown away.
@@ -85,13 +78,17 @@ pub(crate) fn layout_table_children(
         for cell in &row.cells {
             let cell_width = span_width(&columns, cell.column, cell.span);
             let margin = resolve::margins(&ctx.style(cell.node).margin, content_width);
+            let border_box = (cell_width - margin.left - margin.right).max(0.0);
+            // The cell fills its column: its own `width` already sized it.
+            ctx.flexed_width = Some((cell.node, border_box));
             let height = ctx.measure_height(
                 cell.node,
                 content_x + column_start(&columns, cell.column) + margin.left,
                 cursor_y,
-                (cell_width - margin.left - margin.right).max(0.0),
+                border_box,
                 None,
             );
+            ctx.flexed_width = None;
             measured.push(height + margin.top + margin.bottom);
         }
         ctx.prune_pending();
@@ -100,11 +97,13 @@ pub(crate) fn layout_table_children(
         for (cell, height) in row.cells.iter().zip(&measured) {
             let cell_width = span_width(&columns, cell.column, cell.span);
             let margin = resolve::margins(&ctx.style(cell.node).margin, content_width);
+            let border_box = (cell_width - margin.left - margin.right).max(0.0);
+            ctx.flexed_width = Some((cell.node, border_box));
             let _height = ctx.layout_element(
                 cell.node,
                 content_x + column_start(&columns, cell.column) + margin.left,
                 cursor_y + margin.top,
-                (cell_width - margin.left - margin.right).max(0.0),
+                border_box,
                 // The cell stretches to its row's height, so a background
                 // fills it even when the neighbours are taller.
                 Some(
@@ -112,6 +111,7 @@ pub(crate) fn layout_table_children(
                         .max(*height - margin.top - margin.bottom),
                 ),
             );
+            ctx.flexed_width = None;
             if let Some(index) = ctx.tree_index(cell.node) {
                 indices.push(index);
                 if collapse {
@@ -128,46 +128,120 @@ pub(crate) fn layout_table_children(
 /// A table's max-content content width: its columns' widest demands.
 pub(crate) fn max_content_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
     let rows = collect_rows(ctx, &crate::child_nodes(ctx.document, node));
-    column_demands(ctx, &rows, 0.0).iter().sum()
+    column_demands(ctx, &rows, 0.0).maximums.iter().sum()
 }
 
-/// Each column's width demand: every cell demands its max-content
-/// border-box width (plus its margins, as track sizing counts outer boxes);
-/// a spanning cell spreads its demand evenly across the columns it covers.
-fn column_demands(ctx: &Ctx<'_>, rows: &[Row], content_width: f32) -> Vec<f32> {
+/// A table's min-content content width: its columns' minimums side by side.
+pub(crate) fn min_content_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
+    let rows = collect_rows(ctx, &crate::child_nodes(ctx.document, node));
+    column_demands(ctx, &rows, 0.0).minimums.iter().sum()
+}
+
+/// What the columns ask for.
+struct Demands {
+    minimums: Vec<f32>,
+    maximums: Vec<f32>,
+    /// Whether a cell of the column (spanning it alone) has a pixel width:
+    /// such a column keeps its width when the table has room to spare.
+    fixed: Vec<bool>,
+}
+
+/// Each column's width demands: a cell demands its min-content and
+/// max-content border-box widths (plus its margins, as track sizing counts
+/// outer boxes); a spanning cell spreads its demands evenly across the
+/// columns it covers. A column's maximum is never below its minimum.
+fn column_demands(ctx: &Ctx<'_>, rows: &[Row], content_width: f32) -> Demands {
     let column_count = rows
         .iter()
         .map(|row| row.cells.iter().map(|cell| cell.span).sum::<usize>())
         .max()
         .unwrap_or(0);
-    let mut columns = vec![0.0_f32; column_count];
+    let mut minimums = vec![0.0_f32; column_count];
+    let mut maximums = vec![0.0_f32; column_count];
+    let mut fixed = vec![false; column_count];
     for row in rows {
         for cell in &row.cells {
             let cell_style = ctx.style(cell.node);
             let margin = resolve::margins(&cell_style.margin, content_width);
-            let demand = float::preferred_width(ctx, cell.node) + margin.left + margin.right;
-            let share = demand / cell.span as f32;
+            let outer = margin.left + margin.right;
+            let span = cell.span as f32;
+            let minimum = (float::min_content_of_contents(ctx, cell.node) + outer) / span;
+            let maximum = (float::preferred_width(ctx, cell.node) + outer) / span;
+            if cell.span == 1
+                && matches!(cell_style.width, noonoo_style::Dimension::Px(_))
+                && let Some(column) = fixed.get_mut(cell.column)
+            {
+                *column = true;
+            }
             let end = (cell.column + cell.span).min(column_count);
-            for column_index in cell.column..end.max(cell.column) {
-                if let Some(column) = columns.get_mut(column_index) {
-                    *column = column.max(share);
+            for column in cell.column..end.max(cell.column) {
+                if column < column_count {
+                    minimums[column] = minimums[column].max(minimum);
+                    maximums[column] = maximums[column].max(maximum);
                 }
             }
         }
     }
-    columns
+    for (maximum, &minimum) in maximums.iter_mut().zip(&minimums) {
+        *maximum = maximum.max(minimum);
+    }
+    Demands {
+        minimums,
+        maximums,
+        fixed,
+    }
 }
 
-/// Redistribute `columns` so their sum equals `target`, proportionally to
-/// their current sizes. A zero-sized set cannot be scaled: leave it.
-fn distribute(columns: &mut [f32], target: f32, current: f32) {
-    if columns.is_empty() || current <= f32::EPSILON || target <= f32::EPSILON {
-        return;
+/// The columns' widths in a content box `target` wide (CSS 2 §17.5.2.2):
+/// - wider than their maximums, a table that `fill`s shares the extra
+///   among the columns without a pixel width (all of them, if every one
+///   has one) in proportion to their maximums; otherwise they stay at
+///   their maximums;
+/// - between minimums and maximums, each gets its minimum plus a share of
+///   what's left in proportion to how much wider it would like to be;
+/// - narrower than the minimums, they keep their minimums and overflow.
+fn fit_columns(demands: &Demands, target: f32, fill: bool) -> Vec<f32> {
+    let (minimums, maximums) = (&demands.minimums, &demands.maximums);
+    let (least, most): (f32, f32) = (minimums.iter().sum(), maximums.iter().sum());
+    if target >= most {
+        let mut columns = maximums.to_vec();
+        if fill {
+            let growing: Vec<bool> = if demands.fixed.iter().all(|&fixed| fixed) {
+                vec![true; columns.len()]
+            } else {
+                demands.fixed.iter().map(|&fixed| !fixed).collect()
+            };
+            let wanted: f32 = columns
+                .iter()
+                .zip(&growing)
+                .filter(|(_, grows)| **grows)
+                .map(|(width, _)| width)
+                .sum();
+            let extra = target - most;
+            let count = growing.iter().filter(|&&grows| grows).count().max(1) as f32;
+            for (column, grows) in columns.iter_mut().zip(&growing) {
+                if *grows {
+                    // In proportion to what each wants; evenly if none
+                    // wants anything.
+                    *column += if wanted > f32::EPSILON {
+                        extra * *column / wanted
+                    } else {
+                        extra / count
+                    };
+                }
+            }
+        }
+        return columns;
     }
-    let scale = target / current;
-    for column in columns {
-        *column = (*column * scale).max(0.0);
+    if target <= least || most - least <= f32::EPSILON {
+        return minimums.to_vec();
     }
+    let share = (target - least) / (most - least);
+    minimums
+        .iter()
+        .zip(maximums)
+        .map(|(&minimum, &maximum)| minimum + (maximum - minimum) * share)
+        .collect()
 }
 
 /// The x of `column`'s left edge inside the table's content box (there is no

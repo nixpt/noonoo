@@ -433,6 +433,9 @@ fn min_content(ctx: &Ctx<'_>, node: NodeId, style: &ComputedStyle) -> f32 {
     if let Some(text) = ctx.placeholder(node) {
         return text_min_width(ctx, &text, style);
     }
+    if style.display == Display::Table {
+        return crate::table::min_content_width(ctx, node);
+    }
     let side_by_side = matches!(style.display, Display::Flex | Display::InlineFlex)
         && matches!(
             style.flex_direction,

@@ -3085,3 +3085,87 @@ fn a_no_break_space_holds_together_in_min_content() {
     );
     assert_eq!(tree.get(id(&doc, "t")).unwrap().rect.width, 24.0);
 }
+
+/// A table too narrow for its columns' max-content gives each column its
+/// min-content first and shares the rest by how much more each wants
+/// (CSS 2 §17.5.2.2): a no-wrap column keeps its text whole, as Wikipedia's
+/// navbox groups do. MetricShaper: 8px a character.
+#[test]
+fn table_columns_never_shrink_below_their_min_content() {
+    let (doc, tree) = page(
+        r#"<table id="t" style="width: 400px" cellpadding="0"><tr><td id="g" style="white-space: nowrap">Features here</td><td id="l">one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty</td></tr></table>"#,
+        "",
+        400.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert_eq!(rect("g").width, 104.0);
+    assert_eq!(rect("l").width, 296.0);
+}
+
+/// Between min- and max-content, each column gets its minimum plus a share
+/// of the space left in proportion to how much wider it would like to be.
+#[test]
+fn table_columns_share_the_space_above_their_minimums() {
+    let (doc, tree) = page(
+        // Column a: min 16 ("aa"), max 64 ("aa bb cc"); column b: min and
+        // max 8. The minimums take 24 of 40; a alone wants more, so it
+        // gets all 16 left: 16 + 48 * 16 / 48 = 32.
+        r#"<table id="t" style="width: 40px" cellpadding="0"><tr><td id="a">aa bb cc</td><td id="b">d</td></tr></table>"#,
+        "",
+        400.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert_eq!(rect("a").width, 32.0);
+    assert_eq!(rect("b").width, 8.0);
+}
+
+/// A table is never narrower than its columns' minimums: a set width too
+/// small grows, and its min-content is the sum of its columns'.
+#[test]
+fn a_table_is_at_least_its_min_content_wide() {
+    let (doc, tree) = page(
+        r#"<table id="t" style="width: 50px" cellpadding="0"><tr><td>abcdefgh ij</td></tr></table><div style="width: 10px"><table id="u" cellpadding="0"><tr><td>abc d</td><td>ef</td></tr></table></div>"#,
+        "",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "t")).unwrap().rect.width, 64.0);
+    assert_eq!(tree.get(id(&doc, "u")).unwrap().rect.width, 40.0);
+}
+
+/// A cell fills its column: its own `width` (Wikipedia's `width: 1%` group
+/// cells) only informed the column sizing, and isn't resolved again inside.
+#[test]
+fn a_cell_fills_its_column_whatever_its_width() {
+    let (doc, tree) = page(
+        r#"<table style="width: 400px" cellpadding="0"><tr><td id="g" style="width: 1%; white-space: nowrap">Features here</td><td id="l" style="width: 100%">one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty</td></tr></table>"#,
+        "",
+        400.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert_eq!(rect("g").width, 104.0);
+    assert_eq!((rect("l").x, rect("l").width), (104.0, 296.0));
+}
+
+/// Space beyond the columns' max-content goes to the auto columns: a column
+/// with a pixel width keeps it (HN's 18px logo column).
+#[test]
+fn a_fixed_width_column_keeps_its_width_in_a_wider_table() {
+    let (doc, tree) = page(
+        r#"<table style="width: 400px" cellpadding="0"><tr><td id="a" style="width: 20px">a</td><td id="b">bb</td><td id="c">cccc</td></tr></table>"#,
+        "",
+        400.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert_eq!(rect("a").width, 20.0);
+    // The auto columns share the other 380 by their max-content, 16 : 32.
+    assert!(
+        (rect("b").width - 380.0 / 3.0).abs() < 0.01,
+        "{}",
+        rect("b").width
+    );
+    assert!(
+        (rect("c").width - 760.0 / 3.0).abs() < 0.01,
+        "{}",
+        rect("c").width
+    );
+}
