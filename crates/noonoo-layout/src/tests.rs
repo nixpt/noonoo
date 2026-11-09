@@ -2303,7 +2303,8 @@ fn nested_percentage_tables_stay_finite() {
 fn a_text_field_is_as_wide_as_its_size() {
     let (doc, tree) = page(
         r#"<p><input id="a"> <input id="b" size="5" value="a much longer value than five"> <input id="c" style="width: 50px"> <input id="d" type="checkbox"></p>"#,
-        "input { padding: 0; border: 0 }",
+        // Controls default to a 13.33px font: set 16px for round numbers.
+        "input { padding: 0; border: 0; font-size: 16px }",
         400.0,
     );
     let width = |name: &str| tree.get(id(&doc, name)).unwrap().content_box().width;
@@ -2996,7 +2997,11 @@ fn every_break_but_a_trailing_one_makes_a_line() {
 /// that holds it grows to fit. MetricShaper: `size` 2 is 16px of content.
 #[test]
 fn a_text_field_has_padding_and_a_border() {
-    let (doc, tree) = page(r#"<div id="d"><input id="i" size="2"></div>"#, "", 400.0);
+    let (doc, tree) = page(
+        r#"<div id="d"><input id="i" size="2"></div>"#,
+        "input { font-size: 16px }",
+        400.0,
+    );
     let input = tree.get(id(&doc, "i")).unwrap().rect;
     assert_eq!(input.width, 24.0);
     assert!((input.height - 25.2).abs() < 0.01, "{}", input.height);

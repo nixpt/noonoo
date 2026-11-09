@@ -179,3 +179,24 @@ fn text_fields_have_an_inset_border_and_padding() {
     }
     assert_eq!(by_id("c").border_width.top, 0.0);
 }
+
+#[test]
+fn form_controls_use_the_small_control_font() {
+    let doc = noonoo_html::parse(
+        "<!doctype html><div><input id=i><textarea id=t></textarea><select id=s></select><button id=b>x</button></div>",
+    );
+    let sheet = Stylesheet::parse(
+        "div { font-size: 30px; font-weight: bold; font-style: italic; line-height: 3 }",
+    )
+    .unwrap();
+    let styles = compute(&doc, &[sheet]);
+    for id in ["i", "t", "s", "b"] {
+        let style = styles.get(doc.get_element_by_id(id).unwrap()).unwrap();
+        // `font: -webkit-small-control`: 13.33px, and the shorthand resets
+        // what the page set on the control's ancestors.
+        assert!((style.font_size - 40.0 / 3.0).abs() < 0.01, "{id}");
+        assert_eq!(style.font_weight, 400, "{id}");
+        assert_eq!(style.font_style, FontStyle::Normal, "{id}");
+        assert_eq!(style.line_height, None, "{id}");
+    }
+}
