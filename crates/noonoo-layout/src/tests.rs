@@ -4407,3 +4407,19 @@ fn clearance_absorbs_the_margins_above_it() {
         second + 117.2
     );
 }
+
+/// A text control counts whole-pixel average characters, as Chromium rounds
+/// the font's average width (Hacker News's 13.33px search field was 4px
+/// narrow).
+#[test]
+fn a_text_controls_average_character_is_whole_pixels() {
+    let (doc, tree) = page(
+        r#"<p><input id="a"><textarea id="t" cols="10"></textarea></p>"#,
+        // MetricShaper: a 13.4px "0" is 6.7px wide, counted as 7.
+        "input, textarea { padding: 0; border: 0; font-size: 13.4px }",
+        400.0,
+    );
+    let width = |name: &str| tree.get(id(&doc, name)).unwrap().content_box().width;
+    assert!(near(width("a"), 140.0), "{}", width("a"));
+    assert!(near(width("t"), 85.0), "{}", width("t"));
+}

@@ -1038,9 +1038,7 @@ impl Ctx<'_> {
     pub(crate) fn text_field_width(&self, node: NodeId, style: &ComputedStyle) -> Option<f32> {
         let element = self.document.element(node)?;
         if element.name == "textarea" {
-            let (average, _) = self
-                .shaper
-                .char_widths(style.font_request(), style.font_size);
+            let (average, _) = self.control_char_widths(style);
             let cols = positive_attribute(element, "cols").unwrap_or(20);
             return Some(cols as f32 * average + SCROLLBAR_WIDTH);
         }
@@ -1048,10 +1046,17 @@ impl Ctx<'_> {
             return None;
         }
         let size = positive_attribute(element, "size").unwrap_or(20);
+        let (average, widest) = self.control_char_widths(style);
+        Some(size as f32 * average + (widest - average).max(0.0))
+    }
+
+    /// The average and widest character advances a text control counts:
+    /// the average rounded to whole pixels, as Chromium takes it.
+    fn control_char_widths(&self, style: &ComputedStyle) -> (f32, f32) {
         let (average, widest) = self
             .shaper
             .char_widths(style.font_request(), style.font_size);
-        Some(size as f32 * average + (widest - average).max(0.0))
+        (average.round(), widest)
     }
 
     /// The content height of a control or of media that hasn't loaded,
