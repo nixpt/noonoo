@@ -916,3 +916,34 @@ fn outline_glyphs_report_the_fonts_rounded_ascent_and_descent() {
         (14.0, 4.0)
     );
 }
+
+/// A face registered under the empty family is the host's universal
+/// fallback: a family list that names nothing registered gets it, so
+/// `font-family: monospace` doesn't drop to made-up metrics.
+#[test]
+fn a_universal_face_answers_unknown_families() {
+    let named = Font::parse(&minimal_font_with_em(1000)).unwrap();
+    let universal = Font::parse(&minimal_font_with_em(2000)).unwrap();
+    let mut set = FontSet::new();
+    set.add("Demo", 400, false, &named);
+    set.add("", 400, false, &universal);
+    let em = |families: &[&str]| {
+        let families: Vec<String> = families.iter().map(|f| (*f).to_owned()).collect();
+        set.select_best(&families, 400, false)
+            .map(Font::units_per_em)
+    };
+    assert_eq!(em(&["monospace"]), Some(2000));
+    // A named family still wins.
+    assert_eq!(em(&["monospace", "Demo"]), Some(1000));
+    let shaper = FontSetShaper::new(&set);
+    let monospace = ["monospace".to_owned()];
+    let request = FontRequest {
+        families: &monospace,
+        weight: 400,
+        italic: false,
+    };
+    assert_eq!(
+        shaper.line_height(request, 20.0),
+        FontShaper::new(&universal).line_height(request, 20.0)
+    );
+}

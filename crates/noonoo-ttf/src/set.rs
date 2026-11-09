@@ -74,7 +74,9 @@ impl<'a> FontSet<'a> {
 
     /// The best face for a request across a family *list*: the first family
     /// with any registered face wins, matching style preferred, then nearest
-    /// weight (as [`FontSet::select`]). An empty list means "any face".
+    /// weight (as [`FontSet::select`]). An empty list means "any face"; a
+    /// list naming nothing registered gets a face registered under the
+    /// empty family, if any.
     pub fn select_best(&self, families: &[String], weight: u16, italic: bool) -> Option<&'a Font> {
         if families.is_empty() {
             return self.select("", weight, italic);
@@ -82,6 +84,22 @@ impl<'a> FontSet<'a> {
         families
             .iter()
             .find_map(|family| self.select(family, weight, italic))
+            .or_else(|| self.select_universal(weight, italic))
+    }
+
+    /// The best face registered under the empty family name: the host's
+    /// universal fallback, for a family list that names nothing registered.
+    fn select_universal(&self, weight: u16, italic: bool) -> Option<&'a Font> {
+        self.faces
+            .iter()
+            .filter(|face| face.family.trim().is_empty())
+            .min_by_key(|face| {
+                (
+                    face.italic != italic,
+                    (i32::from(face.weight) - i32::from(weight)).abs(),
+                )
+            })
+            .map(|face| face.font)
     }
 
     /// Register `font` as a fallback: tried, after any fallback registered
