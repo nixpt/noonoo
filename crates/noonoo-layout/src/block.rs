@@ -226,14 +226,22 @@ pub(crate) fn layout_block_children(
         cursor += margin;
     }
 
-    // Floats count toward the container's auto height even though block
-    // siblings flow right past them — but only this container's own floats,
-    // not ones inherited from the surrounding formatting context.
+    // A formatting context root's auto height holds its floats, nested ones
+    // included (CSS 2 §10.6.7); block siblings flow right past them, and a
+    // plain block's height is its in-flow content alone. The root element
+    // is the initial context's root.
     let flow_height = cursor - content_y;
-    (
-        indices,
-        flow_height.max(ctx.floats().depth_since(float_base, content_y)),
-    )
+    let document = ctx.document;
+    let is_root = parent_node == document.root()
+        || document.tree().parent(parent_node) == Some(document.root());
+    if is_root || ctx.establishes_bfc(parent_node, parent_style) {
+        (
+            indices,
+            flow_height.max(ctx.floats().depth_since(float_base, content_y)),
+        )
+    } else {
+        (indices, flow_height)
+    }
 }
 
 /// A word or atomic inline box, ready to be wrapped onto a line.

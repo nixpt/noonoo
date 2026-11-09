@@ -1491,7 +1491,8 @@ impl Ctx<'_> {
             || matches!(style.position, Position::Absolute | Position::Fixed)
             || matches!(
                 style.display,
-                Display::Flex
+                Display::FlowRoot
+                    | Display::Flex
                     | Display::InlineFlex
                     | Display::Grid
                     | Display::InlineGrid

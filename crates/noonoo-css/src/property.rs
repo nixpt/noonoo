@@ -502,6 +502,7 @@ fn is_display(values: &[Value]) -> bool {
         keyword.to_ascii_lowercase().as_str(),
         "none"
             | "block"
+            | "flow-root"
             | "inline"
             | "inline-block"
             | "flex"

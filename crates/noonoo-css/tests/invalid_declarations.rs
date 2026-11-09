@@ -18,6 +18,7 @@ fn display_takes_only_the_keywords_layout_knows() {
         "block",
         "inline",
         "inline-block",
+        "flow-root",
         "flex",
         "inline-flex",
         "grid",
@@ -37,7 +38,7 @@ fn display_takes_only_the_keywords_layout_knows() {
             "{keyword}"
         );
     }
-    for keyword in ["flow-root", "contents", "cnn", "block flex"] {
+    for keyword in ["contents", "cnn", "block flex"] {
         assert!(
             parse_declaration("display", keyword, false).is_err(),
             "{keyword}"

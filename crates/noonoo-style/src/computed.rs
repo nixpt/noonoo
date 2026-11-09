@@ -21,6 +21,8 @@ pub enum Display {
     None,
     /// `block`.
     Block,
+    /// `flow-root`: a block box that is its own block formatting context.
+    FlowRoot,
     /// `inline`.
     Inline,
     /// `inline-block`.

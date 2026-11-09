@@ -252,6 +252,7 @@ pub(crate) fn apply(
                 style.display = match k {
                     "none" => Display::None,
                     "block" => Display::Block,
+                    "flow-root" => Display::FlowRoot,
                     "inline" => Display::Inline,
                     "inline-block" => Display::InlineBlock,
                     "flex" => Display::Flex,

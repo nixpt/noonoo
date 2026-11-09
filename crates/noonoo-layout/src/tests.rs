@@ -114,9 +114,10 @@ fn a_float_leaves_normal_flow_but_shapes_its_container() {
     // A block sibling flows right past it: full width, unchanged position.
     let b = tree.get(id(&doc, "b")).unwrap();
     assert_eq!((b.rect.x, b.rect.y, b.rect.width), (0.0, 0.0, 400.0));
-    // …but the container's auto height includes the float's bottom.
+    // …and the container, no formatting context root, is as tall as its
+    // in-flow content alone (CSS 2 §10.6.3).
     let parent = tree.get(id(&doc, "parent")).unwrap();
-    assert_eq!(parent.rect.height, 50.0);
+    assert_eq!(parent.rect.height, 20.0);
 }
 
 #[test]
@@ -3454,4 +3455,50 @@ fn pre_line_spaces_between_blocks_make_no_line() {
     );
     let d = tree.get(id(&doc, "d")).unwrap().rect;
     assert_eq!((d.y, d.height), (16.0, 2.0 * 19.2 + 16.0));
+}
+
+/// Only a block formatting context root grows to hold its floats (CSS 2
+/// §10.6.7); a plain block's height is its in-flow content alone.
+#[test]
+fn a_plain_block_does_not_grow_to_hold_its_floats() {
+    let (doc, tree) = page(
+        "<div id=p><div id=f></div></div><div id=n>x</div>",
+        "#f { float: left; width: 10px; height: 50px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "p")).unwrap().rect.height, 0.0);
+    // The next block starts at the top; its line flows beside the float.
+    let n = tree.get(id(&doc, "n")).unwrap().rect;
+    assert_eq!(n.y, 0.0);
+}
+
+/// A BFC root holds its floats, nested ones too: `flow-root`, a clipping
+/// box, an inline-block.
+#[test]
+fn a_bfc_root_grows_to_hold_its_floats() {
+    for root in [
+        "display: flow-root",
+        "overflow: hidden",
+        "display: inline-block",
+    ] {
+        let (doc, tree) = page(
+            "<div id=r><div><div id=f></div></div></div>",
+            &format!("#r {{ {root} }} #f {{ float: left; width: 10px; height: 50px }}"),
+            400.0,
+        );
+        assert_eq!(tree.get(id(&doc, "r")).unwrap().rect.height, 50.0, "{root}");
+    }
+}
+
+/// `display: flow-root` is a block box: full width, its own context, so
+/// its children's margins stay inside.
+#[test]
+fn flow_root_is_a_block_that_keeps_child_margins() {
+    let (doc, tree) = page(
+        "<div id=r><p>x</p></div>",
+        "#r { display: flow-root } p { margin: 10px 0 }",
+        400.0,
+    );
+    let r = tree.get(id(&doc, "r")).unwrap().rect;
+    assert_eq!((r.y, r.width, r.height), (0.0, 400.0, 39.2));
 }
