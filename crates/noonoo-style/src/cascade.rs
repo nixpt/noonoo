@@ -456,6 +456,16 @@ fn presentational_hints(
     {
         hints.push(("border-spacing", format!("{spacing}px")));
     }
+    if matches!(
+        element.name.as_str(),
+        "thead" | "tbody" | "tfoot" | "tr" | "td" | "th" | "col" | "colgroup"
+    ) && let Some(valign) = element.attr("valign")
+    {
+        let valign = valign.to_ascii_lowercase();
+        if matches!(valign.as_str(), "top" | "middle" | "bottom" | "baseline") {
+            hints.push(("vertical-align", valign));
+        }
+    }
     if let Some(align) = element.attr("align") {
         hints.extend(align_hints(&element.name, &align.to_ascii_lowercase()));
     }

@@ -167,3 +167,20 @@ fn embedded_content_keeps_a_zero_size() {
     assert_eq!(width_of(html, "", "i"), Dimension::Px(0.0));
     assert_eq!(width_of(html, "", "t"), Dimension::Auto);
 }
+
+#[test]
+fn cells_centre_vertically_and_valign_moves_them() {
+    use noonoo_style::VerticalAlign;
+    let doc = noonoo_html::parse(
+        "<table><tr><td id=m>a<td id=t valign=TOP>b<td id=a>c</tr>\
+         <tr valign=bottom><td id=b>d<th id=h valign=baseline>e</tr></table>",
+    );
+    let sheet = Stylesheet::parse("#a { vertical-align: top }").unwrap();
+    let styles = compute(&doc, &[sheet]);
+    let of = |id: &str| styles.get(doc.get_element_by_id(id).unwrap()).unwrap();
+    assert_eq!(of("m").vertical_align, VerticalAlign::Middle);
+    assert_eq!(of("t").vertical_align, VerticalAlign::Top);
+    assert_eq!(of("a").vertical_align, VerticalAlign::Top);
+    assert_eq!(of("b").vertical_align, VerticalAlign::Bottom);
+    assert_eq!(of("h").vertical_align, VerticalAlign::Baseline);
+}

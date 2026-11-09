@@ -14,7 +14,8 @@ figure, figcaption, blockquote, pre, form, fieldset, ul, ol, dl, dt, dd,
 h1, h2, h3, h4, h5, h6, hr, address, center, details, summary,
 hgroup, legend, listing, menu, dir, plaintext, search, xmp, optgroup { display: block }
 table { display: table; border-spacing: 2px; box-sizing: border-box }
-thead, tbody, tfoot { display: table-row-group }
+thead, tbody, tfoot { display: table-row-group; vertical-align: middle }
+tr, td, th { vertical-align: inherit }
 tr { display: table-row }
 td, th { display: table-cell }
 colgroup { display: table-column-group }

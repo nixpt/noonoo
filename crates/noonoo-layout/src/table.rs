@@ -32,7 +32,7 @@
 //!   modelled; stray content contributes nothing.
 
 use noonoo_dom::NodeId;
-use noonoo_style::{BorderCollapse, ComputedStyle, Dimension, Display};
+use noonoo_style::{BorderCollapse, ComputedStyle, Dimension, Display, VerticalAlign};
 
 use crate::{Ctx, float, resolve};
 
@@ -124,6 +124,7 @@ pub(crate) fn layout_table_children(
             );
             ctx.flexed_width = None;
             if let Some(index) = ctx.tree_index(cell.node) {
+                align_cell_content(ctx, index, ctx.style(cell.node).vertical_align);
                 indices.push(index);
                 if collapse {
                     mask_collapsed_borders(ctx, index, cell, &rows, row_index);
@@ -134,6 +135,37 @@ pub(crate) fn layout_table_children(
     }
 
     (indices, cursor_y - content_y)
+}
+
+/// Move a laid-out cell's content down within its content box as its
+/// `vertical-align` says: `middle` centres it, `bottom` sinks it, anything
+/// else (`top`, `baseline` approximated) leaves it at the top. The cell's
+/// own box keeps filling the row.
+fn align_cell_content(ctx: &mut Ctx<'_>, index: usize, align: VerticalAlign) {
+    let share = match align {
+        VerticalAlign::Middle => 0.5,
+        VerticalAlign::Bottom => 1.0,
+        _ => return,
+    };
+    let cell = &ctx.tree.boxes[index];
+    let content = cell.content_box();
+    let children = cell.children.clone();
+    let Some(bottom) = children
+        .iter()
+        .map(|&child| {
+            let rect = ctx.tree.boxes[child].rect;
+            rect.y + rect.height
+        })
+        .reduce(f32::max)
+    else {
+        return;
+    };
+    let free = content.y + content.height - bottom.max(content.y);
+    if free > 0.0 {
+        for child in children {
+            ctx.shift_subtree(child, 0.0, free * share);
+        }
+    }
 }
 
 /// A table's `border-spacing`, `(horizontal, vertical)`: none when its

@@ -4058,3 +4058,20 @@ fn a_cell_stretches_to_its_row_past_its_own_height() {
     );
     assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.height, 20.0);
 }
+
+/// A cell's content sits in the middle of its row by default, or at the
+/// top or bottom as `vertical-align` (or `valign`) says; the cell's own
+/// box still fills the row.
+#[test]
+fn cell_content_aligns_vertically_in_its_row() {
+    let (doc, tree) = page(
+        r#"<table style="border-spacing: 0"><tr><td style="height: 40px">a</td><td id=m>mid</td><td valign=top>top</td><td style="vertical-align: bottom">bot</td></tr></table>"#,
+        "td { padding: 0 }",
+        400.0,
+    );
+    // MetricShaper: a line is 19.2px; the row 40px.
+    assert!(near(text_y(&tree, "mid"), 10.4), "{}", text_y(&tree, "mid"));
+    assert!(near(text_y(&tree, "top"), 0.0));
+    assert!(near(text_y(&tree, "bot"), 20.8), "{}", text_y(&tree, "bot"));
+    assert_eq!(tree.get(id(&doc, "m")).unwrap().rect.height, 40.0);
+}
