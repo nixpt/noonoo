@@ -30,6 +30,16 @@ pub trait Shaper {
 
     /// The natural line height for `font_size`, in a face matching `request`.
     fn line_height(&self, request: FontRequest, font_size: f32) -> f32;
+
+    /// The ascent and descent, in pixels, of the face `request` selects at
+    /// `font_size`: the content area an inline box wraps, and where its
+    /// baseline sits. The default splits the natural line height two
+    /// thirds above the baseline and one third below (0.8em and 0.4em of a
+    /// 1.2em line), as `noonoo-paint` does with no font to ask.
+    fn metrics(&self, request: FontRequest, font_size: f32) -> (f32, f32) {
+        let line = self.line_height(request, font_size);
+        (line * 2.0 / 3.0, line / 3.0)
+    }
 }
 
 /// A font request: the families to try, in preference order, plus weight and

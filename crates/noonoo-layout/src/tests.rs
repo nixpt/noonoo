@@ -1400,8 +1400,14 @@ fn an_inline_block_contains_its_floats() {
     // register the float outside), nor stretch the line's block.
     assert_eq!(tree.get(id(&doc, "ib")).unwrap().rect.x, 0.0);
     assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.x, 0.0);
+    // The line: the inline-block's 10px above the baseline, plus the 10px
+    // strut's 1.8px of descent below it (MetricShaper, 16px).
     let after = text_boxes(&doc, &tree, "after");
-    assert_eq!(after[0].y, 10.0, "the float escaped the inline-block");
+    assert!(
+        (after[0].y - 11.8).abs() < 0.01,
+        "the float escaped the inline-block: {}",
+        after[0].y
+    );
 }
 
 /// A table cell is its own block formatting context too: a float that
@@ -2467,13 +2473,22 @@ fn an_inline_elements_text_wraps_at_the_line_end() {
         .filter(|b| b.node == Some(span))
         .map(|b| b.rect)
         .collect();
-    assert_eq!(
-        fragments,
-        vec![
-            Rect::new(0.0, 0.0, 56.0, 20.0),
-            Rect::new(0.0, 20.0, 24.0, 20.0)
-        ]
-    );
+    // Each wraps its font's content area (19.2px) in a 20px line, half the
+    // leading (0.4px) below the line's top.
+    let expected = [
+        Rect::new(0.0, 0.4, 56.0, 19.2),
+        Rect::new(0.0, 20.4, 24.0, 19.2),
+    ];
+    assert_eq!(fragments.len(), 2);
+    for (got, want) in fragments.iter().zip(expected) {
+        assert!(
+            (got.x - want.x).abs() < 0.01
+                && (got.y - want.y).abs() < 0.01
+                && (got.width - want.width).abs() < 0.01
+                && (got.height - want.height).abs() < 0.01,
+            "{got:?} vs {want:?}"
+        );
+    }
 }
 
 #[test]
@@ -2652,9 +2667,24 @@ fn a_wrapped_inline_element_puts_its_start_edge_first_and_end_edge_last() {
     );
     let span = fragments(&doc, &tree, "s");
     assert_eq!(span.len(), 2);
-    assert_eq!(span[0].rect, Rect::new(0.0, 0.0, 29.0, 20.0));
+    // The content area (19.2px) half the leading (0.4px) into each line.
+    let near = |a: Rect, b: Rect| {
+        (a.x - b.x).abs() < 0.01
+            && (a.y - b.y).abs() < 0.01
+            && (a.width - b.width).abs() < 0.01
+            && (a.height - b.height).abs() < 0.01
+    };
+    assert!(
+        near(span[0].rect, Rect::new(0.0, 0.4, 29.0, 19.2)),
+        "{:?}",
+        span[0].rect
+    );
     assert_eq!((span[0].padding.left, span[0].padding.right), (5.0, 0.0));
-    assert_eq!(span[1].rect, Rect::new(0.0, 20.0, 29.0, 20.0));
+    assert!(
+        near(span[1].rect, Rect::new(0.0, 20.4, 29.0, 19.2)),
+        "{:?}",
+        span[1].rect
+    );
     assert_eq!((span[1].padding.left, span[1].padding.right), (0.0, 5.0));
 }
 
@@ -3570,4 +3600,85 @@ fn in_quirks_mode_a_cells_height_includes_its_padding() {
     assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.height, 50.0);
     let (doc, tree) = page(&format!("<!doctype html>{html}"), css, 400.0);
     assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.height, 70.0);
+}
+
+/// The y of the text box drawing `text`.
+fn text_y(tree: &LayoutTree, text: &str) -> f32 {
+    tree.boxes()
+        .iter()
+        .find(|b| b.kind == BoxKind::Text && b.text.as_deref() == Some(text))
+        .unwrap_or_else(|| panic!("no text box {text:?}"))
+        .rect
+        .y
+}
+
+// MetricShaper's default metrics: ascent 2/3 and descent 1/3 of its
+// 1.2em line, so 12.8 and 6.4 at 16px.
+
+/// CSS 2 §10.6.1: an inline's padding, border and background wrap its
+/// content area (the font's ascent + descent) around the baseline, not
+/// the line height.
+#[test]
+fn an_inline_box_wraps_the_content_area_not_the_line_height() {
+    let (doc, tree) = page(
+        "<div style='line-height:40px'><span id=s style='padding:2px'>x</span></div>",
+        "",
+        400.0,
+    );
+    // Half the 40px line's leading (10.4) sits above the content area.
+    let s = tree.get(id(&doc, "s")).unwrap().rect;
+    assert!(
+        (s.y - 8.4).abs() < 0.01 && (s.height - 23.2).abs() < 0.01,
+        "{s:?}"
+    );
+}
+
+/// Mixed font sizes share a baseline (CSS 2 §10.8).
+#[test]
+fn mixed_font_sizes_share_a_baseline() {
+    let (doc, tree) = page(
+        "<div id=d>a <span style='font-size:40px'>BIG</span> b</div>",
+        "",
+        400.0,
+    );
+    // BIG's 48px line: ascent 32 above the baseline, descent 16 below.
+    assert_eq!(text_y(&tree, "BIG"), 0.0);
+    assert!((text_y(&tree, "a") - 19.2).abs() < 0.01);
+    assert_eq!(tree.get(id(&doc, "d")).unwrap().rect.height, 48.0);
+}
+
+/// An inline-block with no lines sits on the baseline by its bottom
+/// margin edge, leaving the descent below it.
+#[test]
+fn an_empty_inline_block_sits_on_the_baseline() {
+    let (doc, tree) = page(
+        "<div id=d>x <span id=i></span> y</div>",
+        "#i { display: inline-block; width: 10px; height: 50px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "i")).unwrap().rect.y, 0.0);
+    assert!((text_y(&tree, "x") - 37.2).abs() < 0.01);
+    assert!((tree.get(id(&doc, "d")).unwrap().rect.height - 56.4).abs() < 0.01);
+}
+
+/// An inline-block with text aligns its last line's baseline; a clipping
+/// one uses its bottom margin edge.
+#[test]
+fn an_inline_block_aligns_its_last_lines_baseline() {
+    let (doc, tree) = page(
+        "<div id=d>x <span id=b>y</span></div>",
+        "#b { display: inline-block; padding: 5px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.y, 0.0);
+    assert!((text_y(&tree, "x") - 5.0).abs() < 0.01);
+    assert!((tree.get(id(&doc, "d")).unwrap().rect.height - 29.2).abs() < 0.01);
+
+    let (doc, tree) = page(
+        "<div id=d>x <span id=b>y</span></div>",
+        "#b { display: inline-block; padding: 5px; overflow: hidden }",
+        400.0,
+    );
+    // Bottom edge on the baseline: 29.2 above it, the strut's 6.4 below.
+    assert!((tree.get(id(&doc, "d")).unwrap().rect.height - 35.6).abs() < 0.01);
 }

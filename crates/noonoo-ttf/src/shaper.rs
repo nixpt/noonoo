@@ -95,6 +95,10 @@ impl Shaper for FontShaper<'_> {
     fn line_height(&self, _request: FontRequest, font_size: f32) -> f32 {
         line_height_px(self.font, font_size)
     }
+
+    fn metrics(&self, _request: FontRequest, font_size: f32) -> (f32, f32) {
+        ascent_descent_px(self.font, font_size)
+    }
 }
 
 /// A [`Shaper`] that selects a face from a [`FontSet`] per call.
@@ -132,6 +136,16 @@ impl Shaper for FontSetShaper<'_> {
         {
             Some(font) => line_height_px(font, font_size),
             None => font_size * 1.2,
+        }
+    }
+
+    fn metrics(&self, request: FontRequest, font_size: f32) -> (f32, f32) {
+        match self
+            .set
+            .select_best(request.families, request.weight, request.italic)
+        {
+            Some(font) => ascent_descent_px(font, font_size),
+            None => (font_size * 0.8, font_size * 0.4),
         }
     }
 }

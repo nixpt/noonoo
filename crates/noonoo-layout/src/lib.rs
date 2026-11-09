@@ -695,6 +695,7 @@ pub fn layout_with_images(
         tree: LayoutTree::default(),
         margins: Default::default(),
         measured: HashMap::new(),
+        baselines: HashMap::new(),
         measuring: 0,
         preferred: Default::default(),
         min_content: Default::default(),
@@ -810,6 +811,9 @@ pub(crate) struct Ctx<'a> {
     pub margins: crate::margin::Cache,
     /// Measured heights of block formatting context roots, by their inputs.
     pub measured: HashMap<MeasureKey, f32>,
+    /// Measured baselines of atomic inlines (from the border-box top), by
+    /// the same inputs: a cached height lays nothing out to read one from.
+    pub baselines: HashMap<MeasureKey, Option<f32>>,
     /// How many [`Ctx::measure_height`] calls are under way: their boxes
     /// are thrown away.
     pub measuring: usize,
@@ -967,6 +971,41 @@ impl Ctx<'_> {
 
     /// The line height `style` asks for: its own, or for `normal`, the
     /// font's natural one (ascent, descent and line gap) from the shaper.
+    /// The ascent and descent of `style`'s font: its content area.
+    pub(crate) fn font_metrics(&self, style: &ComputedStyle) -> (f32, f32) {
+        self.shaper.metrics(style.font_request(), style.font_size)
+    }
+
+    /// How far an inline box of `style` with line height `line_height`
+    /// reaches above and below its baseline: the content area plus half
+    /// the leading on each side (CSS 2 §10.8.1).
+    pub(crate) fn inline_box(&self, style: &ComputedStyle, line_height: f32) -> (f32, f32) {
+        let (ascent, descent) = self.font_metrics(style);
+        let half_leading = (line_height - (ascent + descent)) / 2.0;
+        (ascent + half_leading, descent + half_leading)
+    }
+
+    /// The baseline (as a y) of laid-out box `index`: its last line's, as
+    /// an inline-block's (CSS 2 §10.8.1), or `None` when it has no line or
+    /// clips (its bottom margin edge is the baseline then).
+    pub(crate) fn box_baseline(&self, index: usize) -> Option<f32> {
+        let b = &self.tree.boxes[index];
+        if b.clips {
+            return None;
+        }
+        if b.kind == BoxKind::Text && b.text.as_deref().is_some_and(|t| !t.is_empty()) {
+            let style = self.style(b.style_node);
+            // As paint places it: half the leading, then the ascent.
+            let line_height = style.line_height.unwrap_or(b.rect.height);
+            let (above, _) = self.inline_box(style, line_height);
+            return Some(b.rect.y + above);
+        }
+        b.children
+            .iter()
+            .rev()
+            .find_map(|&child| self.box_baseline(child))
+    }
+
     pub(crate) fn line_height_of(&self, style: &ComputedStyle) -> f32 {
         style.line_height.unwrap_or_else(|| {
             self.shaper
@@ -1213,6 +1252,54 @@ impl Ctx<'_> {
             self.measured.insert(key, height);
         }
         height
+    }
+
+    /// [`Ctx::layout_element`] for an atomic inline: also its baseline,
+    /// from its border-box top ([`Ctx::box_baseline`]), remembered with
+    /// its height while measuring.
+    pub(crate) fn layout_with_baseline(
+        &mut self,
+        node: NodeId,
+        border_x: f32,
+        border_y: f32,
+        available_width: f32,
+    ) -> (f32, Option<f32>) {
+        #[cfg(test)]
+        let reuse = REUSE_MEASURED.with(std::cell::Cell::get);
+        #[cfg(not(test))]
+        let reuse = true;
+        let key =
+            (reuse && self.measuring > 0).then(|| self.measure_key(node, available_width, None));
+        if let Some(key) = key
+            && let (Some(&height), Some(&baseline)) =
+                (self.measured.get(&key), self.baselines.get(&key))
+        {
+            return (height, baseline);
+        }
+        let height = self.layout_element_uncached(node, border_x, border_y, available_width, None);
+        let baseline = self
+            .tree_index(node)
+            .and_then(|index| self.box_baseline(index))
+            .map(|baseline| baseline - border_y)
+            .or_else(|| self.text_field_baseline(node));
+        if let Some(key) = key
+            && self.establishes_bfc(node, self.style(node))
+        {
+            self.measured.insert(key, height);
+            self.baselines.insert(key, baseline);
+        }
+        (height, baseline)
+    }
+
+    /// An empty text field's baseline, from its border-box top: where its
+    /// first line of text would sit, as browsers align one.
+    fn text_field_baseline(&self, node: NodeId) -> Option<f32> {
+        let style = self.style(node);
+        self.text_field_width(node, style)?;
+        let padding = resolve::paddings(&style.padding, 0.0);
+        let border = resolve::borders(style);
+        let (above, _) = self.inline_box(style, self.line_height_of(style));
+        Some(border.top + padding.top + above)
     }
 
     /// The inputs a block formatting context root's height depends on.

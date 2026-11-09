@@ -883,7 +883,6 @@ pub(crate) fn layout_inline_run(
 
             // Where each item's own box starts, inside its elements' edges.
             let mut cursor_x = band_left + offset.start + leading;
-            let mut line_h = line_height;
             let mut at = Vec::with_capacity(line.len());
             for (position, item) in line.iter().enumerate() {
                 if position > 0 {
@@ -895,13 +894,59 @@ pub(crate) fn layout_inline_run(
                 cursor_x += item.lead;
                 at.push(cursor_x);
                 cursor_x += item.width + item.trail;
-                line_h = line_h.max(item.height);
             }
+
+            // The line's baseline (CSS 2 §10.8): every inline box on it —
+            // the container's strut, each inline element's, each text
+            // run's — reaches its ascent plus half-leading above the
+            // baseline and the rest below; the line is the tallest reach
+            // up plus the tallest down. Atomic boxes are laid out first, at
+            // the line's top, to find their baselines (their last line's,
+            // or their bottom margin edge), then moved onto it.
+            let (mut up, mut down) = ctx.inline_box(parent_style, line_height);
+            let mut atomics: Vec<Option<usize>> = vec![None; line.len()];
+            let mut reach_up = Vec::with_capacity(line.len());
+            for (position, item) in line.iter().enumerate() {
+                let (above, below) = if let Some(atomic) = item.atomic {
+                    let node = item.node.expect("an atomic inline has a node");
+                    let (_, baseline) = ctx.layout_with_baseline(
+                        node,
+                        at[position] + atomic.margin_left,
+                        cursor_y + atomic.margin_top,
+                        atomic.available,
+                    );
+                    atomics[position] = ctx.tree_index(node);
+                    match baseline {
+                        Some(baseline) => {
+                            let above = atomic.margin_top + baseline;
+                            (above, item.height - above)
+                        }
+                        None => (item.height, 0.0),
+                    }
+                } else {
+                    let style = ctx.style(item.style_node);
+                    ctx.inline_box(style, ctx.line_height_of(style))
+                };
+                reach_up.push(above);
+                up = up.max(above);
+                down = down.max(below);
+            }
+            let fragments = line_fragments(line);
+            for fragment in &fragments {
+                let style = ctx.style(fragment.element);
+                let (above, below) = ctx.inline_box(style, ctx.line_height_of(style));
+                up = up.max(above);
+                down = down.max(below);
+            }
+            let line_h = up + down;
+            // How far below the line's top a box reaching `above` over the
+            // baseline starts (exactly 0 for the one that sets it).
+            let drop = |above: f32| up - above;
 
             // Each inline element's fragment on this line, outermost first so
             // it paints under what it holds, spanning its items and the edges
             // that start or end here.
-            for fragment in line_fragments(line) {
+            for fragment in fragments {
                 let element = fragment.element;
                 let edges = InlineEdges::of(ctx, element, width);
                 let (first, last) = (&line[fragment.first], &line[fragment.last]);
@@ -936,8 +981,7 @@ pub(crate) fn layout_inline_run(
                     } else {
                         0.0
                     };
-                let style = ctx.style(element);
-                let content_height = ctx.line_height_of(style);
+                let (ascent, descent) = ctx.font_metrics(ctx.style(element));
                 let padding = Edges {
                     top: edges.padding.top,
                     bottom: edges.padding.bottom,
@@ -950,9 +994,10 @@ pub(crate) fn layout_inline_run(
                     left: if opens { edges.border.left } else { 0.0 },
                     right: if closes { edges.border.right } else { 0.0 },
                 };
-                // Vertical padding and borders reach outside the line
-                // without making it taller.
-                let top = cursor_y - padding.top - border.top;
+                // The content area sits on the baseline; vertical padding
+                // and borders reach outside it without making the line
+                // taller (CSS 2 §10.6.1).
+                let top = cursor_y + drop(ascent) - padding.top - border.top;
                 let index = ctx.push(LayoutBox {
                     node: Some(element),
                     style_node: element,
@@ -961,7 +1006,12 @@ pub(crate) fn layout_inline_run(
                         left,
                         top,
                         (right - left).max(0.0),
-                        content_height + padding.top + padding.bottom + border.top + border.bottom,
+                        ascent
+                            + descent
+                            + padding.top
+                            + padding.bottom
+                            + border.top
+                            + border.bottom,
                     ),
                     text: None,
                     margin: no_edges(),
@@ -983,16 +1033,11 @@ pub(crate) fn layout_inline_run(
             // the line merge into one run.
             let mut open_run: Option<usize> = None;
             for (position, item) in line.iter().enumerate() {
-                if let Some(atomic) = item.atomic {
-                    let node = item.node.expect("an atomic inline has a node");
-                    ctx.layout_element(
-                        node,
-                        at[position] + atomic.margin_left,
-                        cursor_y + atomic.margin_top,
-                        atomic.available,
-                        None,
-                    );
-                    if let Some(index) = ctx.tree_index(node) {
+                // The item's box top: its reach above the baseline.
+                let top = cursor_y + drop(reach_up[position]);
+                if item.atomic.is_some() {
+                    if let Some(index) = atomics[position] {
+                        ctx.shift_subtree(index, 0.0, drop(reach_up[position]));
                         indices.push(index);
                     }
                     open_run = None;
@@ -1030,7 +1075,7 @@ pub(crate) fn layout_inline_run(
                     node: item.node,
                     style_node: item.style_node,
                     kind: item.kind,
-                    rect: Rect::new(at[position], cursor_y, item.width, item.height),
+                    rect: Rect::new(at[position], top, item.width, item.height),
                     text: Some(item.text.clone()),
                     margin: no_edges(),
                     padding: no_edges(),
