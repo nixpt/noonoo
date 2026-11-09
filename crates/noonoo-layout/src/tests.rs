@@ -3208,3 +3208,89 @@ fn a_percentage_column_grows_before_auto_columns() {
     let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
     assert_eq!((rect("a").width, rect("b").width), (100.0, 100.0));
 }
+
+/// A row item's main-axis margins take space in the line: the next item
+/// starts after the margin.
+#[test]
+fn row_item_margins_push_the_next_item() {
+    let (doc, tree) = page(
+        r#"<div id="row"><div id="a">abc</div><div id="b">de</div></div>"#,
+        "#row { display: flex } #a { margin-left: 10px; margin-right: 24px }",
+        1000.0,
+    );
+    let a = tree.get(id(&doc, "a")).unwrap().rect;
+    let b = tree.get(id(&doc, "b")).unwrap().rect;
+    assert_eq!((a.x, a.width), (10.0, 24.0));
+    assert_eq!(b.x, 10.0 + 24.0 + 24.0);
+}
+
+/// Margins count against the free space a growing item fills.
+#[test]
+fn row_item_margins_come_out_of_the_free_space() {
+    let (doc, tree) = page(
+        r#"<div id="row"><div id="a"></div><div id="b"></div></div>"#,
+        "#row { display: flex; width: 400px } \
+         #a { flex-grow: 1; margin-right: 20px } #b { width: 100px; margin-left: 30px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.width, 250.0);
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.x, 300.0);
+}
+
+/// Margins count as overflow a shrinking line has to give up.
+#[test]
+fn row_item_margins_count_as_overflow() {
+    let (doc, tree) = page(
+        r#"<div id="row"><div id="a"></div><div id="b"></div></div>"#,
+        "#row { display: flex; width: 300px } \
+         #a { width: 200px; margin-right: 100px; min-width: 0 } #b { width: 200px; min-width: 0 }",
+        400.0,
+    );
+    // 400px of items + 100px of margin in 300: each gives up 100.
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.width, 100.0);
+    assert_eq!(tree.get(id(&doc, "b")).unwrap().rect.x, 200.0);
+}
+
+/// rust-lang.org's two-column rows: a `max-width` item freezes at its
+/// maximum (CSS Flexbox 9.7) and the other shrinks into the rest.
+#[test]
+fn a_max_width_row_item_freezes_and_the_other_takes_the_rest() {
+    let long = "word ".repeat(200);
+    for max in ["500px", "50%"] {
+        let (doc, tree) = page(
+            &format!(r#"<div id="row"><div id="a">{long}</div><div id="b">{long}</div></div>"#),
+            &format!("#row {{ display: flex }} #a {{ max-width: {max} }}"),
+            1000.0,
+        );
+        assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.width, 500.0, "{max}");
+        let b = tree.get(id(&doc, "b")).unwrap().rect;
+        assert_eq!((b.x, b.width), (500.0, 500.0), "{max}");
+    }
+}
+
+/// A grow factor sum under 1 takes only that share of the free space.
+#[test]
+fn fractional_grow_factors_take_a_share_of_the_free_space() {
+    let (doc, tree) = page(
+        r#"<div id="row"><div id="a"></div></div>"#,
+        "#row { display: flex; width: 400px } #a { width: 100px; flex-grow: 0.5 }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "a")).unwrap().rect.width, 250.0);
+}
+
+/// `margin-left: auto` takes the free space, pushing the item to the end.
+#[test]
+fn an_auto_margin_row_item_takes_the_free_space() {
+    let (doc, tree) = page(
+        r#"<div id="row"><div id="a"></div><div id="b"></div><div id="c"></div></div>"#,
+        "#row { display: flex; width: 400px; justify-content: center } \
+         #a, #b, #c { width: 50px } #b { margin-left: auto } #c { margin: 0 auto }",
+        400.0,
+    );
+    // 250px free over three auto margins: b's left, c's left and right.
+    let x = |name| tree.get(id(&doc, name)).unwrap().rect.x;
+    assert_eq!(x("a"), 0.0);
+    assert!((x("b") - (50.0 + 250.0 / 3.0)).abs() < 0.01);
+    assert!((x("c") - (100.0 + 500.0 / 3.0)).abs() < 0.01);
+}

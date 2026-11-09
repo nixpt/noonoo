@@ -219,6 +219,16 @@ pub(crate) fn preferred_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
     width
 }
 
+/// The max-content border box before `min-width`/`max-width` clamp it: a
+/// flex item's base size (CSS Flexbox 9.2, step 3E).
+pub(crate) fn unclamped_preferred_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
+    let style = ctx.style(node);
+    let padding = resolve::paddings(&style.padding, 0.0);
+    let border = resolve::borders(style);
+    let edges = padding.left + padding.right + border.left + border.right;
+    preferred_content(ctx, node) + edges
+}
+
 fn compute_preferred_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
     let style = ctx.style(node);
     // Percentages are unmeasurable without a reference; they count as zero.

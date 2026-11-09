@@ -306,6 +306,129 @@ fn layout_column(
     (indices, (y - content_y - gap - extra).max(0.0))
 }
 
+/// One row item's main-axis inputs to CSS Flexbox 9.7.
+struct RowItem {
+    /// The flex base size, border box.
+    base: f32,
+    /// The base clamped by `min-width`/`max-width`.
+    hypothetical: f32,
+    minimum: f32,
+    maximum: Option<f32>,
+    grow: f32,
+    shrink: f32,
+    /// Left and right margins, `auto` as 0.
+    margins: (f32, f32),
+    /// Which of those margins are `auto`.
+    auto: (bool, bool),
+}
+
+impl RowItem {
+    fn clamp(&self, size: f32) -> f32 {
+        let size = match self.maximum {
+            Some(maximum) => size.min(maximum),
+            None => size,
+        };
+        size.max(self.minimum).max(0.0)
+    }
+
+    fn outer_margins(&self) -> f32 {
+        self.margins.0 + self.margins.1
+    }
+}
+
+/// CSS Flexbox 9.7, "resolve the flexible lengths" of one line: grow or
+/// shrink the items toward the available space, freezing each that a
+/// minimum or maximum clamps and handing what it can't take to the rest.
+fn resolve_flexible_lengths(items: &[&RowItem], available: f32) -> Vec<f32> {
+    let n = items.len();
+    let hypothetical: f32 = items
+        .iter()
+        .map(|item| item.hypothetical + item.outer_margins())
+        .sum();
+    let growing = hypothetical < available;
+    let mut sizes: Vec<f32> = items.iter().map(|item| item.hypothetical).collect();
+    // Inflexible items freeze at their hypothetical size: no factor, or a
+    // base the clamp already moved the wrong way.
+    let mut frozen: Vec<bool> = items
+        .iter()
+        .map(|item| {
+            if growing {
+                item.grow <= 0.0 || item.base > item.hypothetical
+            } else {
+                item.shrink <= 0.0 || item.base < item.hypothetical
+            }
+        })
+        .collect();
+    let free_with = |sizes: &[f32], frozen: &[bool]| {
+        available
+            - (0..n)
+                .map(|k| {
+                    let size = if frozen[k] { sizes[k] } else { items[k].base };
+                    size + items[k].outer_margins()
+                })
+                .sum::<f32>()
+    };
+    let initial = free_with(&sizes, &frozen);
+    // Each pass freezes at least one item, so this terminates.
+    while frozen.iter().any(|&f| !f) {
+        let mut free = free_with(&sizes, &frozen);
+        let unfrozen: Vec<usize> = (0..n).filter(|&k| !frozen[k]).collect();
+        let factors: f32 = unfrozen
+            .iter()
+            .map(|&k| {
+                if growing {
+                    items[k].grow
+                } else {
+                    items[k].shrink
+                }
+            })
+            .sum();
+        // Factors summing under 1 take only that share of the space.
+        if factors < 1.0 {
+            let share = initial * factors;
+            if share.abs() < free.abs() {
+                free = share;
+            }
+        }
+        let mut targets = vec![0.0; n];
+        if growing {
+            for &k in &unfrozen {
+                targets[k] = items[k].base + free * items[k].grow / factors;
+            }
+        } else {
+            let scaled: f32 = unfrozen
+                .iter()
+                .map(|&k| items[k].shrink * items[k].base)
+                .sum();
+            for &k in &unfrozen {
+                let weight = items[k].shrink * items[k].base;
+                targets[k] = if scaled > 0.0 {
+                    items[k].base + free * weight / scaled
+                } else {
+                    items[k].base
+                };
+            }
+        }
+        let mut violation = 0.0;
+        for &k in &unfrozen {
+            let clamped = items[k].clamp(targets[k]);
+            violation += clamped - targets[k];
+            sizes[k] = clamped;
+        }
+        for &k in &unfrozen {
+            let clamped = sizes[k];
+            frozen[k] = if violation.abs() <= f32::EPSILON {
+                true
+            } else if violation > 0.0 {
+                clamped > targets[k]
+            } else {
+                clamped < targets[k]
+            };
+        }
+    }
+    sizes
+}
+
 fn layout_row(
     ctx: &mut Ctx<'_>,
     parent: NodeId,
@@ -315,29 +438,24 @@ fn layout_row(
     content_y: f32,
     content_width: f32,
 ) -> (Vec<usize>, f32) {
-    let count = items.len();
     let gap = style.column_gap;
 
     // Base main sizes and flex factors. An anonymous text item has no margins
     // and no flex factors: its base is its shrink-to-fit width.
-    let mut bases = Vec::with_capacity(count);
-    let mut grows = Vec::with_capacity(count);
-    let mut shrinks = Vec::with_capacity(count);
-    let mut minimums = Vec::with_capacity(count);
-    let mut maximums = Vec::with_capacity(count);
+    let mut rows = Vec::with_capacity(items.len());
     for item in items {
-        let text = item.text();
-        let base;
-        let minimum;
-        let maximum;
-        let grow;
-        let shrink;
-        if let Some(text) = text {
-            base = runs::width(ctx, text, style, content_width);
-            minimum = None;
-            maximum = None;
-            grow = 0.0;
-            shrink = 0.0;
+        let row = if let Some(text) = item.text() {
+            let base = runs::width(ctx, text, style, content_width).max(0.0);
+            RowItem {
+                base,
+                hypothetical: base,
+                minimum: 0.0,
+                maximum: None,
+                grow: 0.0,
+                shrink: 0.0,
+                margins: (0.0, 0.0),
+                auto: (false, false),
+            }
         } else {
             let node = item.node();
             let item_style = ctx.style(node);
@@ -345,10 +463,12 @@ fn layout_row(
                 Dimension::Auto => None,
                 dimension => resolve::dimension(dimension.clone(), content_width),
             };
-            base = basis
+            let base = basis
                 .or_else(|| resolve::dimension(item_style.width.clone(), content_width))
-                // Auto: the item's max-content border box.
-                .unwrap_or_else(|| crate::float::preferred_width(ctx, node));
+                // Auto: the item's max-content border box, unclamped: the
+                // clamp comes after, in the hypothetical size.
+                .unwrap_or_else(|| crate::float::unclamped_preferred_width(ctx, node))
+                .max(0.0);
             // `min-width`/`max-width` clamp the flex base before grow/shrink, and
             // share `width`'s box (per `box-sizing`).
             let horizontal = {
@@ -363,43 +483,58 @@ fn layout_row(
             // `min-width: auto` on a flex item that doesn't clip is its
             // automatic minimum: no narrower than its content can wrap to
             // (nor than a specified width).
-            minimum = match resolve::dimension(item_style.min_width.clone(), content_width) {
-                Some(minimum) => Some(to_border_box(minimum)),
+            let minimum = match resolve::dimension(item_style.min_width.clone(), content_width) {
+                Some(minimum) => to_border_box(minimum),
                 None if !resolve::clips(item_style) => {
                     let content = crate::float::min_content_of_contents(ctx, node);
-                    Some(
-                        match resolve::dimension(item_style.width.clone(), content_width) {
-                            Some(width) => content.min(to_border_box(width)),
-                            None => content,
-                        },
-                    )
+                    match resolve::dimension(item_style.width.clone(), content_width) {
+                        Some(width) => content.min(to_border_box(width)),
+                        None => content,
+                    }
                 }
-                None => None,
+                None => 0.0,
             };
-            maximum =
+            let maximum =
                 resolve::dimension(item_style.max_width.clone(), content_width).map(to_border_box);
-            grow = item_style.flex_grow;
-            shrink = item_style.flex_shrink;
-        }
-        bases.push(base.max(0.0));
-        minimums.push(minimum);
-        maximums.push(maximum);
-        grows.push(grow);
-        shrinks.push(shrink);
+            let margin = resolve::margins(&item_style.margin, content_width);
+            let auto = (
+                matches!(item_style.margin.left, Dimension::Auto),
+                matches!(item_style.margin.right, Dimension::Auto),
+            );
+            let mut row = RowItem {
+                base,
+                hypothetical: base,
+                minimum,
+                maximum,
+                grow: item_style.flex_grow,
+                shrink: item_style.flex_shrink,
+                margins: (margin.left, margin.right),
+                auto,
+            };
+            row.hypothetical = row.clamp(base);
+            row
+        };
+        rows.push(row);
     }
 
-    // Partition into lines when wrapping is on.
+    // Partition into lines when wrapping is on, by outer hypothetical size.
+    let count = items.len();
     let mut lines: Vec<Vec<usize>> = Vec::new();
     if style.flex_wrap == FlexWrap::NoWrap {
         lines.push((0..count).collect());
     } else {
         let mut current: Vec<usize> = Vec::new();
         let mut used = 0.0;
-        for (i, &base) in bases.iter().enumerate() {
-            let addition = if current.is_empty() { base } else { gap + base };
+        for (i, row) in rows.iter().enumerate() {
+            let outer = row.hypothetical + row.outer_margins();
+            let addition = if current.is_empty() {
+                outer
+            } else {
+                gap + outer
+            };
             if !current.is_empty() && used + addition > content_width {
                 lines.push(std::mem::take(&mut current));
-                used = base;
+                used = outer;
             } else {
                 used += addition;
             }
@@ -416,108 +551,34 @@ fn layout_row(
     for line in &lines {
         let n = line.len();
         let line_gaps = gap * n.saturating_sub(1) as f32;
-        let mut line_bases: Vec<f32> = line.iter().map(|&i| bases[i]).collect();
-        let free = content_width - line_bases.iter().sum::<f32>() - line_gaps;
+        let line_rows: Vec<&RowItem> = line.iter().map(|&i| &rows[i]).collect();
+        let line_bases = resolve_flexible_lengths(&line_rows, content_width - line_gaps);
 
-        if free > 0.0 {
-            let total_grow: f32 = line.iter().map(|&i| grows[i]).sum();
-            if total_grow > 0.0 {
-                // CSS 9.7's freeze: grow, then any item clamped by its
-                // min/max freezes at the bound and its share re-distributes
-                // among the growers that are still free. Each pass freezes at
-                // least one item, so this terminates.
-                let mut sizes: Vec<f32> = line.iter().map(|&i| bases[i]).collect();
-                let mut frozen = vec![false; n];
-                loop {
-                    let remaining =
-                        (content_width - line_gaps - sizes.iter().sum::<f32>()).max(0.0);
-                    if remaining <= f32::EPSILON {
-                        break;
-                    }
-                    let growers: Vec<usize> = line
-                        .iter()
-                        .enumerate()
-                        .filter(|&(k, &i)| !frozen[k] && grows[i] > 0.0)
-                        .map(|(k, _)| k)
-                        .collect();
-                    if growers.is_empty() {
-                        break;
-                    }
-                    let total: f32 = growers.iter().map(|&k| grows[line[k]]).sum();
-                    if total <= 0.0 {
-                        break;
-                    }
-                    for &k in &growers {
-                        sizes[k] += remaining * grows[line[k]] / total;
-                    }
-                    let mut froze_any = false;
-                    for &k in &growers {
-                        let i = line[k];
-                        if let Some(maximum) = maximums[i]
-                            && sizes[k] > maximum
-                        {
-                            sizes[k] = maximum;
-                            frozen[k] = true;
-                            froze_any = true;
-                        }
-                        if let Some(minimum) = minimums[i]
-                            && sizes[k] < minimum
-                        {
-                            sizes[k] = minimum;
-                            frozen[k] = true;
-                            froze_any = true;
-                        }
-                    }
-                    if !froze_any {
-                        break;
-                    }
-                }
-                line_bases = sizes;
-            }
-        } else if free < 0.0 {
-            // CSS 9.7's freeze, shrinking: each item gives up overflow in
-            // proportion to `flex-shrink` × base, and one that reaches its
-            // minimum freezes there while the others give up the rest.
-            let mut sizes: Vec<f32> = line.iter().map(|&i| bases[i]).collect();
-            let mut frozen = vec![false; n];
-            loop {
-                let overflow = sizes.iter().sum::<f32>() + line_gaps - content_width;
-                if overflow <= f32::EPSILON {
-                    break;
-                }
-                let shrinkers: Vec<usize> = (0..n)
-                    .filter(|&k| !frozen[k] && shrinks[line[k]] * bases[line[k]] > 0.0)
-                    .collect();
-                let total: f32 = shrinkers
-                    .iter()
-                    .map(|&k| shrinks[line[k]] * bases[line[k]])
-                    .sum();
-                if shrinkers.is_empty() || total <= 0.0 {
-                    break;
-                }
-                for &k in &shrinkers {
-                    let weight = shrinks[line[k]] * bases[line[k]];
-                    sizes[k] = (sizes[k] - overflow * weight / total).max(0.0);
-                }
-                let mut froze_any = false;
-                for &k in &shrinkers {
-                    let floor = minimums[line[k]].unwrap_or(0.0);
-                    if sizes[k] <= floor {
-                        sizes[k] = floor;
-                        frozen[k] = true;
-                        froze_any = true;
-                    }
-                }
-                if !froze_any {
-                    break;
-                }
-            }
-            line_bases = sizes;
-        }
-
-        let used: f32 = line_bases.iter().sum::<f32>() + line_gaps;
+        // Free space left over goes to `auto` margins first (CSS Flexbox
+        // 9.5 step 12), then to `justify-content`.
+        let used: f32 = line_bases.iter().sum::<f32>()
+            + line_rows.iter().map(|row| row.outer_margins()).sum::<f32>()
+            + line_gaps;
         let remaining = (content_width - used).max(0.0);
-        let (start, extra) = justify_offset(style.justify_content, remaining, n);
+        let autos = line_rows
+            .iter()
+            .map(|row| row.auto.0 as usize + row.auto.1 as usize)
+            .sum::<usize>();
+        let mut margins: Vec<(f32, f32)> = line_rows.iter().map(|row| row.margins).collect();
+        let (start, extra) = if autos > 0 && remaining > 0.0 {
+            let each = remaining / autos as f32;
+            for (k, row) in line_rows.iter().enumerate() {
+                if row.auto.0 {
+                    margins[k].0 += each;
+                }
+                if row.auto.1 {
+                    margins[k].1 += each;
+                }
+            }
+            (0.0, 0.0)
+        } else {
+            justify_offset(style.justify_content, remaining, n)
+        };
 
         // Cross sizes first: an item is positioned (and stretched) within the
         // line, so its height must be known before it is placed. The
@@ -525,24 +586,19 @@ fn layout_row(
         let mut cross = Vec::with_capacity(n);
         let mut measure_x = content_x + start;
         for (k, &i) in line.iter().enumerate() {
+            measure_x += margins[k].0;
             let height = match &items[i] {
                 Item::Text { text, .. } => runs::height(ctx, text, style, line_bases[k]),
                 Item::Element(node) => {
-                    let margin = resolve::margins(&ctx.style(*node).margin, content_width);
                     ctx.flexed_width = Some((*node, line_bases[k]));
-                    let height = ctx.measure_height(
-                        *node,
-                        measure_x + margin.left,
-                        cursor_y,
-                        line_bases[k],
-                        None,
-                    );
+                    let height =
+                        ctx.measure_height(*node, measure_x, cursor_y, line_bases[k], None);
                     ctx.flexed_width = None;
                     height
                 }
             };
             cross.push(height);
-            measure_x += line_bases[k] + gap + extra;
+            measure_x += line_bases[k] + margins[k].1 + gap + extra;
         }
         ctx.prune_pending();
         let mut line_height = cross.iter().copied().fold(0.0_f32, f32::max);
@@ -556,6 +612,7 @@ fn layout_row(
 
         let mut x = content_x + start;
         for (k, &i) in line.iter().enumerate() {
+            x += margins[k].0;
             let item_align = if items[i].is_text() {
                 style.align_items
             } else {
@@ -585,20 +642,14 @@ fn layout_row(
                 Item::Element(node) => {
                     let margin = resolve::margins(&ctx.style(*node).margin, content_width);
                     ctx.flexed_width = Some((*node, line_bases[k]));
-                    ctx.layout_element(
-                        *node,
-                        x + margin.left,
-                        y + margin.top,
-                        line_bases[k],
-                        definite,
-                    );
+                    ctx.layout_element(*node, x, y + margin.top, line_bases[k], definite);
                     ctx.flexed_width = None;
                     if let Some(index) = ctx.tree_index(*node) {
                         indices.push(index);
                     }
                 }
             }
-            x += line_bases[k] + gap + extra;
+            x += line_bases[k] + margins[k].1 + gap + extra;
         }
         cursor_y += line_height + style.row_gap;
     }
