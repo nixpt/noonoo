@@ -707,6 +707,7 @@ pub fn layout_with_images(
         margins: Default::default(),
         measured: HashMap::new(),
         baselines: HashMap::new(),
+        cell_contents: HashMap::new(),
         measuring: 0,
         preferred: Default::default(),
         min_content: Default::default(),
@@ -825,6 +826,9 @@ pub(crate) struct Ctx<'a> {
     /// Measured baselines of atomic inlines (from the border-box top), by
     /// the same inputs: a cached height lays nothing out to read one from.
     pub baselines: HashMap<MeasureKey, Option<f32>>,
+    /// Each table cell's last laid-out content height: what its contents
+    /// take, contained margins included, before the row stretches it.
+    pub(crate) cell_contents: HashMap<NodeId, f32>,
     /// How many [`Ctx::measure_height`] calls are under way: their boxes
     /// are thrown away.
     pub measuring: usize,
@@ -1604,6 +1608,9 @@ impl Ctx<'_> {
 
         let border_box_height =
             definite_border_height.unwrap_or_else(|| clamp_height(content_height + vertical));
+        if style.display == Display::TableCell {
+            self.cell_contents.insert(node, content_height);
+        }
 
         let padding_box = Rect::new(
             border_x + border.left,

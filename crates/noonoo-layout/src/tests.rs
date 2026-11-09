@@ -1390,7 +1390,9 @@ fn a_float_in_a_flex_item_stays_inside_it() {
 #[test]
 fn an_inline_block_contains_its_floats() {
     let (doc, tree) = page(
-        r#"<div><span id="ib"><div id="f"></div></span></div><p id="p">after</p>"#,
+        // Standards mode: quirks mode drops the strut from a line with no
+        // text.
+        r#"<!doctype html><div><span id="ib"><div id="f"></div></span></div><p id="p">after</p>"#,
         "body { margin: 0 } p { margin: 0 } div { line-height: 10px }
          #ib { display: inline-block; width: 100px; height: 10px }
          #f { float: left; width: 50px; height: 60px }",
@@ -4105,4 +4107,44 @@ fn a_space_takes_the_width_of_its_own_font() {
     assert_eq!((rect("s").x, rect("s").width), (8.0, 8.0));
     // The space after the span is the paragraph's: 8px.
     assert_eq!(rect("w").x, 24.0);
+}
+
+/// Quirks mode's line height quirk: a line with no text has no strut, so a
+/// lone image's line is the image (HN's `<img height=10>` spacer before its
+/// footer). In standards mode the strut holds the line open as before.
+#[test]
+fn in_quirks_mode_a_line_without_text_has_no_strut() {
+    let html =
+        r#"<div id=d><img width=10 height=10></div><div id=e><img width=10 height=10> x</div>"#;
+    let (doc, tree) = page(html, "", 400.0);
+    let height = |tree: &LayoutTree, doc: &Document, name: &str| {
+        tree.get(id(doc, name)).unwrap().rect.height
+    };
+    assert_eq!(height(&tree, &doc, "d"), 10.0);
+    // Text on the line brings the strut back.
+    assert!(
+        near(height(&tree, &doc, "e"), 19.2),
+        "{}",
+        height(&tree, &doc, "e")
+    );
+    let (doc, tree) = page(&format!("<!doctype html>{html}"), "", 400.0);
+    assert!(
+        near(height(&tree, &doc, "d"), 19.2),
+        "{}",
+        height(&tree, &doc, "d")
+    );
+}
+
+/// A cell centres its content by the height its layout gave it, margins it
+/// contains included: HN's footer cell ends in a form whose quirks-mode
+/// bottom margin stays in the cell, leaving no room to centre in.
+#[test]
+fn a_cell_centres_its_content_margins_included() {
+    let (_, tree) = page(
+        r#"<table style="border-spacing: 0"><tr><td style="height: 60px; padding: 0">a</td><td style="padding: 0"><div><p style="margin: 0 0 20px">x</p></div></td></tr></table>"#,
+        "",
+        400.0,
+    );
+    // 19.2px of line and 20px of margin in a 60px row: 20.8px to share.
+    assert!(near(text_y(&tree, "x"), 10.4), "{}", text_y(&tree, "x"));
 }

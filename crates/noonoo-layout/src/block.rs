@@ -997,7 +997,19 @@ pub(crate) fn layout_inline_run(
             // up plus the tallest down. Atomic boxes are laid out first, at
             // the line's top, to find their baselines (their last line's,
             // or their bottom margin edge), then moved onto it.
-            let (mut up, mut down) = ctx.inline_box(parent_style, line_height);
+            //
+            // Quirks mode's line height quirk: a line with no text has
+            // neither the strut nor its inline elements' boxes, so a lone
+            // image's line is just the image.
+            let struts = !ctx.is_quirks()
+                || line
+                    .iter()
+                    .any(|item| item.atomic.is_none() && !item.text.is_empty());
+            let (mut up, mut down) = if struts {
+                ctx.inline_box(parent_style, line_height)
+            } else {
+                (0.0, 0.0)
+            };
             // `vertical-align` raises each inline element from its parent's
             // baseline; what it holds rides along. Outer fragments come
             // first, so a parent's rise is known before its children's.
@@ -1019,8 +1031,10 @@ pub(crate) fn layout_inline_run(
                     };
                 rises.insert(fragment.element, rise);
                 fragment_rises.push(rise);
-                up = up.max(above + rise);
-                down = down.max(below - rise);
+                if struts {
+                    up = up.max(above + rise);
+                    down = down.max(below - rise);
+                }
             }
             let mut atomics: Vec<Option<usize>> = vec![None; line.len()];
             // Each item's reach above its own baseline, and where it sits.
