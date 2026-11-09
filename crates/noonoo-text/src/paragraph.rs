@@ -89,6 +89,19 @@ pub fn is_collapsible_space(c: char) -> bool {
     matches!(c, ' ' | '\t' | '\n' | '\r' | '\u{c}')
 }
 
+/// A space that doesn't collapse but allows a line break after it: UAX #14
+/// class BA's spaces (the en, em and thin spaces, ideographic space, ...).
+/// U+2007 FIGURE SPACE is GL, no break.
+pub fn is_breaking_space(c: char) -> bool {
+    matches!(c, '\u{1680}' | '\u{2000}'..='\u{2006}' | '\u{2008}'..='\u{200a}' | '\u{205f}' | '\u{3000}')
+}
+
+/// `word` split after each breaking space, the space kept at the end of its
+/// piece: the pieces are break opportunities with no space between them.
+pub fn break_pieces(word: &str) -> impl Iterator<Item = &str> {
+    word.split_inclusive(is_breaking_space)
+}
+
 /// The words of `text` between runs of collapsible white space.
 pub fn collapsible_words(text: &str) -> impl Iterator<Item = &str> {
     text.split(is_collapsible_space)

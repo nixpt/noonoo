@@ -3294,3 +3294,49 @@ fn an_auto_margin_row_item_takes_the_free_space() {
     assert!((x("b") - (50.0 + 250.0 / 3.0)).abs() < 0.01);
     assert!((x("c") - (100.0 + 500.0 / 3.0)).abs() < 0.01);
 }
+
+/// An em space doesn't collapse, but a line may still break after it
+/// (UAX #14 class BA), with no space added at the break.
+#[test]
+fn a_line_breaks_after_a_wide_space() {
+    // MetricShaper: 8px per character. "aaa\u{2003}" is 32, "bbb" 24.
+    let (_doc, tree) = page(
+        "<div>aaa\u{2003}bbb ccc</div>",
+        "div { width: 50px }",
+        400.0,
+    );
+    let ys: Vec<f32> = text_lines(&tree).iter().map(|(_, y)| *y).collect();
+    assert_eq!(
+        ys.last().copied(),
+        Some(2.0 * 19.2),
+        "{:?}",
+        text_lines(&tree)
+    );
+    // On one line the pieces touch: the em space is the only space.
+    let (_doc, tree) = page("<div>aaa\u{2003}bbb</div>", "", 400.0);
+    let drawn = drawn_x(&tree);
+    assert_eq!(drawn.last().unwrap().1, 32.0, "{drawn:?}");
+    // A figure space (U+2007) is no break.
+    let (_doc, tree) = page("<div>aaa\u{2007}bbb</div>", "div { width: 50px }", 400.0);
+    assert!(text_lines(&tree).iter().all(|(_, y)| *y == 0.0));
+}
+
+/// The break after an em space narrows the min-content width too.
+#[test]
+fn min_content_breaks_after_a_wide_space() {
+    let (doc, tree) = page(
+        "<table><tr><td id=c>aaaa\u{3000}bb</table>",
+        "td { padding: 0 }",
+        10.0,
+    );
+    assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.width, 40.0);
+}
+
+/// `break_pieces` splits a word after each breaking space.
+#[test]
+fn breaking_spaces_split_words() {
+    assert_eq!(
+        noonoo_text::break_pieces("a\u{2003}b\u{3000}c\u{2007}d").collect::<Vec<_>>(),
+        ["a\u{2003}", "b\u{3000}", "c\u{2007}d"]
+    );
+}

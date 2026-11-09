@@ -489,6 +489,7 @@ fn text_min_width(ctx: &Ctx<'_>, text: &str, style: &ComputedStyle) -> f32 {
         return text_width(ctx, text, style);
     }
     noonoo_text::collapsible_words(text)
+        .flat_map(noonoo_text::break_pieces)
         .map(|word| ctx.advance(word, style))
         .fold(0.0, f32::max)
 }

@@ -658,31 +658,39 @@ pub(crate) fn layout_inline_run(
                         }
                         let Some(word) = word else { continue };
                         walk.column += word.chars().count();
-                        let first = index == 0;
-                        let spaced = !first || walk.spaced;
-                        let glued = if first {
-                            !walk.spaced && !walk.after_atomic
-                        } else {
-                            unbreakable
-                        };
-                        let item = Item {
-                            node: Some(node),
-                            style_node,
-                            kind: BoxKind::Text,
-                            text: word.to_owned(),
-                            width: ctx.advance(word, style),
-                            height,
-                            atomic: None,
-                            spaced,
-                            glued,
-                            preserved: None,
-                            chain: Vec::new(),
-                            opens: 0,
-                            closes: 0,
-                            lead: 0.0,
-                            trail: 0.0,
-                        };
-                        walk.push(ctx, width, &mut groups, item, false);
+                        // A breaking space (an em space, ...) ends a piece:
+                        // the next may start a line, with no space between.
+                        for (part, piece) in noonoo_text::break_pieces(word).enumerate() {
+                            let first = index == 0 && part == 0;
+                            let spaced = if part == 0 {
+                                !first || walk.spaced
+                            } else {
+                                false
+                            };
+                            let glued = if first {
+                                !walk.spaced && !walk.after_atomic
+                            } else {
+                                unbreakable
+                            };
+                            let item = Item {
+                                node: Some(node),
+                                style_node,
+                                kind: BoxKind::Text,
+                                text: piece.to_owned(),
+                                width: ctx.advance(piece, style),
+                                height,
+                                atomic: None,
+                                spaced,
+                                glued,
+                                preserved: None,
+                                chain: Vec::new(),
+                                opens: 0,
+                                closes: 0,
+                                lead: 0.0,
+                                trail: 0.0,
+                            };
+                            walk.push(ctx, width, &mut groups, item, false);
+                        }
                     }
                 }
             }
