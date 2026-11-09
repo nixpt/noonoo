@@ -238,3 +238,14 @@ fn buttons_checkboxes_and_radios_have_browser_boxes() {
         assert_eq!(margins(style), expected, "{id}");
     }
 }
+
+#[test]
+fn hidden_inputs_are_not_displayed() {
+    let doc = noonoo_html::parse(r#"<!doctype html><input id=h type=HIDDEN>"#);
+    // As in browsers, `!important`: a page's `input { display: block }`
+    // doesn't show it.
+    let sheet = Stylesheet::parse("input { display: block }").unwrap();
+    let styles = compute(&doc, &[sheet]);
+    let style = styles.get(doc.get_element_by_id("h").unwrap()).unwrap();
+    assert_eq!(style.display, Display::None);
+}
