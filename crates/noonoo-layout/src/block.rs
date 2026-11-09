@@ -177,15 +177,18 @@ pub(crate) fn layout_block_children(
         }
 
         let margin = margin::effective_margins(ctx, child, content_width);
-        // `clear` sits below the floats it names before anything else happens.
-        cursor = cursor.max(ctx.floats().clearance(ctx.style(child).clear, cursor));
+        // `clear` (CSS 2 §9.5.2): where the box's border edge would go with
+        // its margins collapsed as usual; if that's above the floats it
+        // names, clearance puts the edge at their bottom instead, the
+        // margins above spent in it.
+        let collapses_out = !has_content && collapse_top;
 
         if margin.through {
             // A collapsed-through box adds its margin to the chain and occupies
             // no space; it still gets a (zero-height) box for the tree. Unless
             // the margin leaves through the container's top, the box goes
             // below the margin so far, as if it had a bottom border.
-            let at = if !has_content && collapse_top {
+            let at = if collapses_out {
                 cursor
             } else {
                 cursor
@@ -194,10 +197,21 @@ pub(crate) fn layout_block_children(
                         None => margin.leading,
                     }
             };
-            pending = Some(match pending {
-                Some(previous) => margin::collapse(previous, margin.top),
-                None => margin.top,
-            });
+            let at = match cleared(ctx, child, at) {
+                Some(below) => {
+                    cursor = below;
+                    pending = Some(margin.bottom);
+                    has_content = true;
+                    below
+                }
+                None => {
+                    pending = Some(match pending {
+                        Some(previous) => margin::collapse(previous, margin.top),
+                        None => margin.top,
+                    });
+                    at
+                }
+            };
             let available = flow_width(ctx, child, content_width);
             ctx.layout_element(child, content_x + margin.left, at, available, None);
             if let Some(index) = ctx.tree_index(child) {
@@ -212,12 +226,14 @@ pub(crate) fn layout_block_children(
             Some(previous) => margin::collapse(previous, margin.top),
             None => margin.top,
         };
-        if !has_content && collapse_top {
+        let at = if collapses_out {
             // The leading margin collapses out of the container entirely, so the
             // first content sits at the container's content top.
+            cursor
         } else {
-            cursor += gap;
-        }
+            cursor + gap
+        };
+        cursor = cleared(ctx, child, at).unwrap_or(at);
 
         let available = flow_width(ctx, child, content_width);
         let height = ctx.layout_element(child, content_x + margin.left, cursor, available, None);
@@ -294,6 +310,15 @@ struct Item {
     /// zero-width box where it sits, but no line height and no line of
     /// its own.
     phantom: bool,
+}
+
+/// Where clearance puts `child`'s border edge, if it moves it: below the
+/// floats its `clear` names when its edge would sit at `at`, above them.
+/// Out of line, to keep the frame block layout recurses through small.
+#[inline(never)]
+fn cleared(ctx: &Ctx<'_>, child: NodeId, at: f32) -> Option<f32> {
+    let below = ctx.floats().clearance(ctx.style(child).clear, at);
+    (below > at).then_some(below)
 }
 
 /// Which inline elements a collapsed space between two items falls in, as

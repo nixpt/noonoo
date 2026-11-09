@@ -4379,3 +4379,31 @@ fn an_empty_inline_element_has_a_box_but_no_line() {
         rect("s")
     );
 }
+
+/// Clearance puts a box's border edge at the float's bottom when the
+/// margins before it wouldn't get it there, and those margins are spent in
+/// it (CSS 2 §9.5.2): gnu.org's `<div style="clear: both">` after its
+/// floated button sat a paragraph margin too low.
+#[test]
+fn clearance_absorbs_the_margins_above_it() {
+    let float =
+        r#"<div style="float: left; width: 10px; height: 50px; margin-bottom: 32px"></div>"#;
+    let (doc, tree) = page(
+        &format!(
+            r#"<!doctype html><div><p style="margin: 0 0 16px">a</p>{float}<div id=c style="clear: both"></div><div id=n>b</div></div><div><p style="margin: 0 0 16px">a</p>{float}<div id=t style="clear: both; margin-top: 10px">c</div></div>"#
+        ),
+        "div, p { font-size: 16px }",
+        400.0,
+    );
+    let y = |name: &str| tree.get(id(&doc, name)).unwrap().rect.y;
+    // The float sits at 19.2 + 16; its margin box ends 82px lower.
+    assert!(near(y("c"), 117.2), "{}", y("c"));
+    assert!(near(y("n"), 117.2), "{}", y("n"));
+    let second = 117.2 + 19.2;
+    assert!(
+        near(y("t"), second + 117.2),
+        "{} vs {}",
+        y("t"),
+        second + 117.2
+    );
+}
