@@ -4032,3 +4032,17 @@ fn a_leading_space_inside_an_inline_is_part_of_it() {
     assert_eq!((rect("u").x, rect("u").width), (16.0, 8.0));
     assert_eq!((rect("v").x, rect("v").width), (24.0, 34.0));
 }
+
+/// A table's `width` is its border box, as Chromium's UA sheet sets
+/// `box-sizing: border-box` on tables (HN's `<table width=100%
+/// style="padding:2px">` fills its cell, no wider).
+#[test]
+fn a_tables_width_includes_its_padding_and_border() {
+    let (doc, tree) = page(
+        r#"<div style="width: 200px"><table id=t width="100%" style="padding: 2px; border: 3px solid"><tr><td>x</td></tr></table><table id=u style="width: 100px; padding: 5px"><tr><td>x</td></tr></table></div>"#,
+        "",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "t")).unwrap().rect.width, 200.0);
+    assert_eq!(tree.get(id(&doc, "u")).unwrap().rect.width, 100.0);
+}
