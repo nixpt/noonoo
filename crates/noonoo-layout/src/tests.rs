@@ -4423,3 +4423,29 @@ fn a_text_controls_average_character_is_whole_pixels() {
     assert!(near(width("a"), 140.0), "{}", width("a"));
     assert!(near(width("t"), 85.0), "{}", width("t"));
 }
+
+/// `justify-content` keeps aligning when the items overflow (its default
+/// alignment is unsafe): `flex-end` pushes the overflow out the start,
+/// `center` out both sides, and the `space-*` values fall back to `start`
+/// or `center`, as in Chromium (rust-lang.org's nav list).
+#[test]
+fn justify_content_aligns_overflowing_items() {
+    let row = |justify: &str| {
+        format!(
+            r#"<div style="display: flex; width: 100px; justify-content: {justify}"><div id="{justify}" style="flex: none; width: 150px; height: 10px"></div></div>"#
+        )
+    };
+    let html: String = ["flex-end", "center", "space-between", "space-around"]
+        .iter()
+        .map(|j| row(j))
+        .collect::<String>()
+        + r#"<div style="display: flex; flex-direction: column; height: 100px; justify-content: flex-end"><div id="col" style="flex: none; height: 150px"></div></div>"#;
+    let (doc, tree) = page(&format!("<!doctype html>{html}"), "", 400.0);
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert_eq!(rect("flex-end").x, -50.0);
+    assert_eq!(rect("center").x, -25.0);
+    assert_eq!(rect("space-between").x, 0.0);
+    assert_eq!(rect("space-around").x, -25.0);
+    let column_top = rect("col").y - (40.0);
+    assert_eq!(column_top, -50.0, "{:?}", rect("col"));
+}

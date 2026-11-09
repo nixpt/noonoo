@@ -252,10 +252,18 @@ fn layout_column(
                     *size = (*size + free * weight / total).max(column.floor);
                 }
             }
-            free = 0.0;
+            // What shrinking couldn't absorb (inflexible items, floors)
+            // still overflows, for `justify-content` to place.
+            free = height
+                - sizes
+                    .iter()
+                    .zip(&columns)
+                    .map(|(size, column)| size + column.margin_main)
+                    .sum::<f32>()
+                - gaps;
         }
     }
-    let (start, extra) = justify_offset(style.justify_content, free.max(0.0), items.len());
+    let (start, extra) = justify_offset(style.justify_content, free, items.len());
 
     let mut indices = Vec::new();
     let mut y = content_y + start;
@@ -559,7 +567,7 @@ fn layout_row(
         let used: f32 = line_bases.iter().sum::<f32>()
             + line_rows.iter().map(|row| row.outer_margins()).sum::<f32>()
             + line_gaps;
-        let remaining = (content_width - used).max(0.0);
+        let remaining = content_width - used;
         let autos = line_rows
             .iter()
             .map(|row| row.auto.0 as usize + row.auto.1 as usize)
@@ -657,8 +665,22 @@ fn layout_row(
     (indices, (cursor_y - content_y - style.row_gap).max(0.0))
 }
 
+/// Where `justify-content` starts the items and the extra space between
+/// them. `free` may be negative, the items overflowing: alignment stays
+/// unsafe, as browsers default it, so `end` and `center` push the overflow
+/// out the start (and the end); the `space-*` values fall back to `start`
+/// (`space-between`) or `center` (CSS Box Alignment §5.3).
 fn justify_offset(justify: JustifyContent, free: f32, count: usize) -> (f32, f32) {
     let n = count as f32;
+    if free < 0.0 {
+        return match justify {
+            JustifyContent::Start | JustifyContent::SpaceBetween => (0.0, 0.0),
+            JustifyContent::End => (free, 0.0),
+            JustifyContent::Center | JustifyContent::SpaceAround | JustifyContent::SpaceEvenly => {
+                (free / 2.0, 0.0)
+            }
+        };
+    }
     match justify {
         JustifyContent::Start => (0.0, 0.0),
         JustifyContent::End => (free, 0.0),
