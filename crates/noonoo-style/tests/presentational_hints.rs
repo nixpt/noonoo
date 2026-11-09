@@ -157,3 +157,13 @@ fn align_attributes_align_text_and_tables() {
     // ... and does not align its cells' text.
     assert_eq!(of("tl").text_align, TextAlign::Start);
 }
+
+#[test]
+fn embedded_content_keeps_a_zero_size() {
+    // A tracking pixel's `width=0 height=0` is a size, where a table's
+    // zero width is no hint.
+    let html =
+        r#"<img id="i" width="0" height="0"><table id="t" width="0"><tr><td>a</td></tr></table>"#;
+    assert_eq!(width_of(html, "", "i"), Dimension::Px(0.0));
+    assert_eq!(width_of(html, "", "t"), Dimension::Auto);
+}

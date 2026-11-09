@@ -367,6 +367,18 @@ fn presentational_hints(
     {
         hints.push(("width", width));
     }
+    // Embedded content's `width` and `height` map to its size, zero
+    // included, so it holds its place before (or without) its pixels.
+    if matches!(
+        element.name.as_str(),
+        "img" | "video" | "iframe" | "embed" | "object"
+    ) {
+        for name in ["width", "height"] {
+            if let Some(value) = element.attr(name).and_then(dimension_value) {
+                hints.push((name, value));
+            }
+        }
+    }
     if element.name == "table"
         && let Some(spacing) = element.attr("cellspacing").and_then(non_negative_integer)
     {
@@ -456,12 +468,18 @@ fn non_negative_integer(value: &str) -> Option<u32> {
 /// HTML's "rules for parsing dimension values", nonzero: a number, read
 /// as pixels, or a percentage.
 fn dimension_attribute(value: &str) -> Option<String> {
+    dimension_value(value).filter(|value| !matches!(value.as_str(), "0px" | "0%"))
+}
+
+/// HTML's "rules for parsing dimension values": a non-negative number,
+/// read as pixels, or a percentage; trailing junk is ignored.
+fn dimension_value(value: &str) -> Option<String> {
     let value = value.trim_start();
     let end = value
         .find(|c: char| !(c.is_ascii_digit() || c == '.'))
         .unwrap_or(value.len());
     let number: f32 = value[..end].parse().ok()?;
-    if !number.is_finite() || number <= 0.0 {
+    if !number.is_finite() {
         return None;
     }
     Some(if value[end..].starts_with('%') {

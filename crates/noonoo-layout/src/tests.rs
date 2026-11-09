@@ -3986,3 +3986,22 @@ fn a_textarea_is_sized_by_cols_and_rows() {
     assert!(near(height, 38.4), "{height}");
     assert_eq!(size("c"), (50.0, 20.0));
 }
+
+/// An image's `width` and `height` attributes size it before (or without)
+/// its pixels, as presentational hints: the page doesn't jump when the
+/// image arrives. Author CSS still wins.
+#[test]
+fn img_width_and_height_attributes_size_it_before_it_loads() {
+    let (doc, tree) = page(
+        r#"<img id="a" src="x.png" width="50" height="40"><img id="b" src="x.png" width="60" alt="pic"><img id="c" src="x.png" width="50" height="40" style="width: 20px">"#,
+        "",
+        400.0,
+    );
+    let size = |name: &str| {
+        let rect = tree.get(id(&doc, name)).unwrap().content_box();
+        (rect.width, rect.height)
+    };
+    assert_eq!(size("a"), (50.0, 40.0));
+    assert_eq!(size("b").0, 60.0);
+    assert_eq!(size("c"), (20.0, 40.0));
+}

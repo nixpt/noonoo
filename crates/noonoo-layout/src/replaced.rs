@@ -2,8 +2,8 @@
 //! layout's [`Images`](crate::Images) is sized from the image, not its
 //! content (CSS 2 §10.3.2 and §10.6.2, simplified).
 //!
-//! Each axis takes its CSS size, else its HTML attribute (a presentational
-//! hint), else follows the other axis through the natural ratio, else the
+//! Each axis takes its CSS size (HTML's `width`/`height` attributes arrive
+//! as presentational hints), else follows the other axis through the natural ratio, else the
 //! natural size. `min-`/`max-` sizes then clamp it, carrying the ratio to
 //! an axis that wasn't given.
 
@@ -35,7 +35,6 @@ impl Ctx<'_> {
         height_basis: Option<f32>,
     ) -> Option<(f32, f32)> {
         let image = self.image(node)?;
-        let element = self.document.element(node)?;
         let padding_basis = if width_basis.is_finite() {
             width_basis
         } else {
@@ -61,11 +60,8 @@ impl Ctx<'_> {
             }
             .map(|height| content(height, vertical))
         };
-        let attribute = |name: &str| element.attr(name).and_then(parse_dimension);
-        let width =
-            width_of(&style.width).or_else(|| attribute("width").and_then(|w| width_of(&w)));
-        let height =
-            height_of(&style.height).or_else(|| attribute("height").and_then(|h| height_of(&h)));
+        let width = width_of(&style.width);
+        let height = height_of(&style.height);
 
         let ratio = image.width as f32 / image.height as f32;
         let (mut w, mut h) = match (width, height) {
@@ -107,38 +103,5 @@ impl Ctx<'_> {
             self.tree.images.insert(node, encoded);
         }
         (Vec::new(), 0.0)
-    }
-}
-
-/// An HTML dimension attribute (`width="40"`, `width="50%"`): a
-/// non-negative number, optionally a percentage; trailing junk is ignored.
-fn parse_dimension(value: &str) -> Option<Dimension> {
-    let value = value.trim_start();
-    let digits = value
-        .find(|c: char| !(c.is_ascii_digit() || c == '.'))
-        .unwrap_or(value.len());
-    let number: f32 = value[..digits].parse().ok()?;
-    if !number.is_finite() {
-        return None;
-    }
-    Some(if value[digits..].starts_with('%') {
-        Dimension::Percent(number)
-    } else {
-        Dimension::Px(number)
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn dimension_attributes_parse_like_html() {
-        assert_eq!(parse_dimension("40"), Some(Dimension::Px(40.0)));
-        assert_eq!(parse_dimension(" 12.5px"), Some(Dimension::Px(12.5)));
-        assert_eq!(parse_dimension("50%"), Some(Dimension::Percent(50.0)));
-        assert_eq!(parse_dimension("-4"), None);
-        assert_eq!(parse_dimension("auto"), None);
-        assert_eq!(parse_dimension(""), None);
     }
 }
