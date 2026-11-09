@@ -310,6 +310,49 @@ fn winners_for(
     winners
 }
 
+/// HTML's rendering section, quirks mode: a child of `body`, `td` or `th`
+/// with no substantial sibling before it loses its default (UA) top
+/// margin; a child of `td` or `th` with none after it loses its default
+/// bottom margin. Author margins stay.
+fn drop_edge_margins(doc: &Document, id: NodeId, winners: &mut HashMap<Property, Candidate>) {
+    let Some(parent) = doc.tree().parent(id) else {
+        return;
+    };
+    let Some(container) = doc.element(parent).map(|e| e.name.as_str()) else {
+        return;
+    };
+    let cell = matches!(container, "td" | "th");
+    if !cell && container != "body" {
+        return;
+    }
+    // An element, or text that isn't inter-element white space.
+    let substantial = |node: NodeId| match doc.node(node) {
+        Some(noonoo_dom::NodeData::Element(_)) => true,
+        Some(noonoo_dom::NodeData::Text(text)) => !text
+            .trim_matches(|c: char| c.is_ascii_whitespace())
+            .is_empty(),
+        _ => false,
+    };
+    let siblings = doc.tree().children(parent);
+    let Some(at) = siblings.iter().position(|&node| node == id) else {
+        return;
+    };
+    let mut drop_default = |property: Property| {
+        if winners
+            .get(&property)
+            .is_some_and(|winner| winner.key.rank == rank(Origin::Ua, false))
+        {
+            winners.remove(&property);
+        }
+    };
+    if !siblings[..at].iter().any(|&node| substantial(node)) {
+        drop_default(Property::MarginTop);
+    }
+    if cell && !siblings[at + 1..].iter().any(|&node| substantial(node)) {
+        drop_default(Property::MarginBottom);
+    }
+}
+
 /// The CSS an element's presentational attributes ask for, as
 /// `(property, value)` declarations.
 fn presentational_hints(
@@ -634,7 +677,7 @@ impl Cascade {
             .map(|p| inherited.line_heights[p.index()])
             .unwrap_or(InheritedLineHeight::Normal);
 
-        let winners = winners_for(
+        let mut winners = winners_for(
             doc,
             id,
             &self.rules,
@@ -642,7 +685,10 @@ impl Cascade {
             &mut pass.candidates,
             pass.interaction,
         );
-        let resolved = resolve(
+        if doc.quirks_mode() == noonoo_dom::QuirksMode::Quirks {
+            drop_edge_margins(doc, id, &mut winners);
+        }
+        let mut resolved = resolve(
             &winners,
             parent,
             parent_custom,
@@ -680,6 +726,14 @@ impl Cascade {
                     style,
                 });
             }
+        }
+
+        // Blink: a table never takes the `-webkit-` alignments; it resets
+        // them to `start`, so `<center>` centres the table, not its text.
+        if doc.element(id).is_some_and(|e| e.name == "table")
+            && resolved.style.text_align == crate::TextAlign::WebkitCenter
+        {
+            resolved.style.text_align = crate::TextAlign::Start;
         }
 
         inherited.custom[id.index()] = resolved.custom;

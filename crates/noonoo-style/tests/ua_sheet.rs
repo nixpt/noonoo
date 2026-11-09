@@ -8,8 +8,9 @@ use noonoo_style::{
     ComputedStyle, Dimension, Display, FontStyle, Styles, TextAlign, WhiteSpace, compute,
 };
 
+/// A standards-mode page: quirks mode drops some default margins.
 fn styled(html: &str) -> (Document, Styles) {
-    let doc = noonoo_html::parse(html);
+    let doc = noonoo_html::parse(&format!("<!doctype html>{html}"));
     let styles = compute(&doc, &[]);
     (doc, styles)
 }

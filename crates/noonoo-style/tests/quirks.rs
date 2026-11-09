@@ -42,6 +42,68 @@ fn in_no_quirks_mode_tables_and_forms_inherit_as_usual() {
     let (doc, styles) = styled(&format!("<!DOCTYPE html>{PAGE}"));
     let table = of(&doc, &styles, "t");
     assert_eq!(table.font_size, 20.0);
-    assert_eq!(table.text_align, TextAlign::WebkitCenter);
+    // ...but never `-webkit-center` (see a_table_does_not_inherit_webkit_centre).
+    assert_eq!(table.text_align, TextAlign::Start);
     assert_eq!(of(&doc, &styles, "f").margin.bottom, Dimension::Px(0.0));
+}
+
+fn margins(style: &ComputedStyle) -> (Dimension, Dimension) {
+    (style.margin.top.clone(), style.margin.bottom.clone())
+}
+
+/// HTML's rendering section: in quirks mode a body, td or th child with no
+/// substantial sibling before it loses its default top margin; a td or th
+/// child with none after it loses its default bottom margin.
+#[test]
+fn in_quirks_mode_default_margins_drop_at_body_and_cell_edges() {
+    let (doc, styles) = styled(
+        "<body>\n<h1 id=h>t</h1><p id=after>x</p>\
+         <table><tr><td>\n <p id=a>first</p> <p id=b>last</p>\n</td>\
+         <td>x<p id=c>after text</p>y</td></tr></table>",
+    );
+    let h1 = 0.67 * 32.0;
+    assert_eq!(
+        margins(of(&doc, &styles, "h")),
+        (Dimension::Px(0.0), Dimension::Px(h1))
+    );
+    // A body child doesn't lose its bottom margin, nor a later one its top.
+    assert_eq!(
+        margins(of(&doc, &styles, "after")),
+        (Dimension::Px(16.0), Dimension::Px(16.0))
+    );
+    assert_eq!(
+        margins(of(&doc, &styles, "a")),
+        (Dimension::Px(0.0), Dimension::Px(16.0))
+    );
+    assert_eq!(
+        margins(of(&doc, &styles, "b")),
+        (Dimension::Px(16.0), Dimension::Px(0.0))
+    );
+    // Text is substantial: it keeps both.
+    assert_eq!(
+        margins(of(&doc, &styles, "c")),
+        (Dimension::Px(16.0), Dimension::Px(16.0))
+    );
+}
+
+#[test]
+fn author_margins_and_standards_mode_keep_their_margins() {
+    let doc = noonoo_html::parse("<body><h1 id=h>t</h1><p id=p>x</p>");
+    let sheet = noonoo_css::Stylesheet::parse("h1 { margin-top: 5px }").unwrap();
+    let styles = compute(&doc, &[sheet]);
+    assert_eq!(of(&doc, &styles, "h").margin.top, Dimension::Px(5.0));
+    let (doc, styles) = styled("<!doctype html><body><h1 id=h>t</h1>");
+    assert_eq!(
+        of(&doc, &styles, "h").margin.top,
+        Dimension::Px(0.67 * 32.0)
+    );
+}
+
+/// Blink resets the `-webkit-` alignments to `start` on a table, in every
+/// mode: `<center>` centres the table, not the text in its cells.
+#[test]
+fn a_table_does_not_inherit_webkit_centre() {
+    let (doc, styles) = styled("<!doctype html><center><table id=t><tr><td id=d>a</table>");
+    assert_eq!(of(&doc, &styles, "t").text_align, TextAlign::Start);
+    assert_eq!(of(&doc, &styles, "d").text_align, TextAlign::Start);
 }
