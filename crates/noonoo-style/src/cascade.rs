@@ -372,6 +372,9 @@ fn presentational_hints(
     {
         hints.push(("border-spacing", format!("{spacing}px")));
     }
+    if let Some(align) = element.attr("align") {
+        hints.extend(align_hints(&element.name, &align.to_ascii_lowercase()));
+    }
     if element.name == "table"
         && let Some(border) = element.attr("border").map(table_border)
     {
@@ -403,6 +406,34 @@ fn owning_table(doc: &Document, cell: NodeId) -> Option<NodeId> {
             "tr" | "tbody" | "thead" | "tfoot" => node = doc.tree().parent(node)?,
             _ => return None,
         }
+    }
+}
+
+/// What an `align` attribute (lowercased) asks of an element. Block
+/// containers and table parts align their text, and centre their blocks
+/// as `-webkit-center` does; paragraphs and headings align only text; a
+/// table floats left or right, or centres with auto margins.
+fn align_hints(element: &str, align: &str) -> Vec<(&'static str, String)> {
+    let hint = |property: &'static str, value: &str| vec![(property, value.to_owned())];
+    match element {
+        "div" | "caption" | "thead" | "tbody" | "tfoot" | "tr" | "td" | "th" => match align {
+            "left" | "right" | "justify" => hint("text-align", align),
+            "center" | "middle" => hint("text-align", "-webkit-center"),
+            _ => Vec::new(),
+        },
+        "p" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => match align {
+            "left" | "right" | "center" | "justify" => hint("text-align", align),
+            _ => Vec::new(),
+        },
+        "table" => match align {
+            "left" | "right" => hint("float", align),
+            "center" => vec![
+                ("margin-left", "auto".to_owned()),
+                ("margin-right", "auto".to_owned()),
+            ],
+            _ => Vec::new(),
+        },
+        _ => Vec::new(),
     }
 }
 

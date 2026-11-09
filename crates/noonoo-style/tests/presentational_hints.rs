@@ -121,3 +121,39 @@ fn a_border_attribute_frames_the_table_and_its_cells() {
     // Author CSS beats the hint.
     assert_eq!(of("dd").border_style.top, BorderStyle::None);
 }
+
+#[test]
+fn align_attributes_align_text_and_tables() {
+    use noonoo_style::{Float, TextAlign};
+    let doc = noonoo_html::parse(
+        "<div id=d align=center>a</div><div id=m align=MIDDLE>a</div>\
+         <p id=p align=center>a</p><h2 id=h align=right>a</h2><div id=j align=justify>a</div>\
+         <div id=x align=bogus>a</div><span id=s align=center>a</span>\
+         <table id=tc align=center><tr id=r align=right><td id=c align=center>a<th id=th align=left>b</table>\
+         <table id=tl align=left><tr><td>a</table><table id=tr align=right><tr><td>a</table>",
+    );
+    let sheet = Stylesheet::parse("#m { text-align: left }").unwrap();
+    let styles = compute(&doc, &[sheet]);
+    let of = |id: &str| styles.get(doc.get_element_by_id(id).unwrap()).unwrap();
+    // Block containers and table parts centre their blocks too.
+    assert_eq!(of("d").text_align, TextAlign::WebkitCenter);
+    assert_eq!(of("c").text_align, TextAlign::WebkitCenter);
+    assert_eq!(of("r").text_align, TextAlign::Right);
+    assert_eq!(of("th").text_align, TextAlign::Left);
+    // Paragraphs and headings centre only their text.
+    assert_eq!(of("p").text_align, TextAlign::Center);
+    assert_eq!(of("h").text_align, TextAlign::Right);
+    assert_eq!(of("j").text_align, TextAlign::Justify);
+    // Author CSS wins; unknown values and other elements are no hint.
+    assert_eq!(of("m").text_align, TextAlign::Left);
+    assert_eq!(of("x").text_align, TextAlign::Start);
+    assert_eq!(of("s").text_align, TextAlign::Start);
+    // A table floats left or right, or centres with auto margins.
+    assert_eq!(of("tl").float, Float::Left);
+    assert_eq!(of("tr").float, Float::Right);
+    assert_eq!(of("tc").float, Float::None);
+    assert_eq!(of("tc").margin.left, Dimension::Auto);
+    assert_eq!(of("tc").margin.right, Dimension::Auto);
+    // ... and does not align its cells' text.
+    assert_eq!(of("tl").text_align, TextAlign::Start);
+}
