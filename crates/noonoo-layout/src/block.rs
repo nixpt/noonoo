@@ -998,13 +998,19 @@ pub(crate) fn layout_inline_run(
             // the line's top, to find their baselines (their last line's,
             // or their bottom margin edge), then moved onto it.
             //
-            // Quirks mode's line height quirk: a line with no text has
-            // neither the strut nor its inline elements' boxes, so a lone
-            // image's line is just the image.
-            let struts = !ctx.is_quirks()
-                || line
-                    .iter()
-                    .any(|item| item.atomic.is_none() && !item.text.is_empty());
+            // Quirks mode's line height quirk: an inline box counts only
+            // when it holds text itself (or has padding or a border), so a
+            // lone image's line is just the image, and small text in a
+            // span doesn't bring back its block's larger strut.
+            let quirks = ctx.is_quirks();
+            let holds_text = |owner: Option<NodeId>| {
+                line.iter().any(|item| {
+                    item.atomic.is_none()
+                        && !item.text.is_empty()
+                        && item.chain.last().copied() == owner
+                })
+            };
+            let struts = !quirks || holds_text(None);
             let (mut up, mut down) = if struts {
                 ctx.inline_box(parent_style, line_height)
             } else {
@@ -1031,7 +1037,13 @@ pub(crate) fn layout_inline_run(
                     };
                 rises.insert(fragment.element, rise);
                 fragment_rises.push(rise);
-                if struts {
+                let counts = !quirks || holds_text(Some(fragment.element)) || {
+                    let edges = InlineEdges::of(ctx, fragment.element, width);
+                    edges.start() + edges.end() > 0.0
+                        || edges.padding.top + edges.padding.bottom > 0.0
+                        || edges.border.top + edges.border.bottom > 0.0
+                };
+                if counts {
                     up = up.max(above + rise);
                     down = down.max(below - rise);
                 }

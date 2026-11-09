@@ -4148,3 +4148,17 @@ fn a_cell_centres_its_content_margins_included() {
     // 19.2px of line and 20px of margin in a 60px row: 20.8px to share.
     assert!(near(text_y(&tree, "x"), 10.4), "{}", text_y(&tree, "x"));
 }
+
+/// The quirk counts only text an inline box holds itself: small text in a
+/// span doesn't bring back its block's larger strut (HN's footer links).
+#[test]
+fn in_quirks_mode_only_direct_text_brings_back_a_strut() {
+    let html = r#"<div id=a style="font-size: 20px"><span style="font-size: 10px">x</span></div><div id=b style="font-size: 20px">y<span style="font-size: 10px">x</span></div><div id=c style="font-size: 20px"><span style="font-size: 10px"><b style="font-size: 5px">z</b></span></div>"#;
+    let (doc, tree) = page(html, "b { font-weight: normal }", 400.0);
+    let height = |name: &str| tree.get(id(&doc, name)).unwrap().rect.height;
+    // MetricShaper: a line is 1.2em.
+    assert!(near(height("a"), 12.0), "{}", height("a"));
+    assert!(near(height("b"), 24.0), "{}", height("b"));
+    // The span holds no text itself: only the 5px text's box counts.
+    assert!(near(height("c"), 6.0), "{}", height("c"));
+}
