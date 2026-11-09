@@ -293,6 +293,8 @@ struct Straddle {
     /// How many of the elements the item before closes, outermost first,
     /// hold the space.
     closes: usize,
+    /// The space's width in the font of the text it sits in.
+    width: Option<f32>,
 }
 
 impl Item {
@@ -305,7 +307,7 @@ impl Item {
     fn gap(&self, space: f32) -> f32 {
         match &self.preserved {
             Some((_, width)) => *width,
-            None if self.spaced => space,
+            None if self.spaced => self.straddle.width.unwrap_or(space),
             None => 0.0,
         }
     }
@@ -453,6 +455,8 @@ struct InlineWalk {
     /// came, and how many elements closed since.
     space_opening: usize,
     closed_since_space: usize,
+    /// ... and its width, in the font of the text it came in.
+    space_width: f32,
     /// CSS Text: a line may break on either side of an atomic inline,
     /// white space or not. Set after one, for the item that follows.
     after_atomic: bool,
@@ -481,12 +485,14 @@ impl InlineWalk {
         self.column = 0;
     }
 
-    /// White space in the source: the next item gets a space before it.
-    fn space(&mut self) {
+    /// White space in the source, a space `width` wide in its text's font:
+    /// the next item gets a space before it.
+    fn space(&mut self, width: f32) {
         if !self.spaced {
             self.spaced = true;
             self.space_opening = self.opening;
             self.closed_since_space = 0;
+            self.space_width = width;
         }
     }
 
@@ -566,6 +572,7 @@ impl InlineWalk {
             item.straddle = Straddle {
                 opens: self.space_opening.min(self.opening),
                 closes: self.closed_since_space,
+                width: Some(self.space_width),
             };
         }
         self.opening = 0;
@@ -736,7 +743,7 @@ pub(crate) fn layout_inline_run(
                     let preserve = crate::preserves_spaces(style.white_space);
                     for (index, (white, word)) in words_of(line).into_iter().enumerate() {
                         if !white.is_empty() {
-                            walk.space();
+                            walk.space(ctx.advance(" ", style));
                             if preserve {
                                 let kept = crate::expand_tabs(white, walk.column);
                                 walk.column += kept.chars().count();

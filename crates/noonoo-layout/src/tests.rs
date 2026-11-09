@@ -4089,3 +4089,20 @@ fn a_rows_height_holds_even_when_empty() {
     assert_eq!((rect("c").y, rect("c").height), (10.0, 30.0));
     assert_eq!(rect("d").y, 40.0);
 }
+
+/// A collapsed space is as wide as a space in the font of the text it sits
+/// in, not the paragraph's (HN's small `(site)` after a title wrapped a
+/// line Chromium kept whole).
+#[test]
+fn a_space_takes_the_width_of_its_own_font() {
+    let (doc, tree) = page(
+        r#"<p>a<span id=s style="font-size: 8px"> b</span> <b id=w>c</b></p>"#,
+        "p { margin: 0; font-size: 16px } b { font-weight: normal }",
+        400.0,
+    );
+    // MetricShaper: half the font size a character.
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert_eq!((rect("s").x, rect("s").width), (8.0, 8.0));
+    // The space after the span is the paragraph's: 8px.
+    assert_eq!(rect("w").x, 24.0);
+}
