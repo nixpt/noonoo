@@ -49,6 +49,8 @@ struct Cell {
 #[derive(Default)]
 struct Row {
     cells: Vec<Cell>,
+    /// The row's own `height` in pixels: the least it is, cells or not.
+    height: f32,
 }
 
 /// How many columns one `colspan` may claim, so a corrupt or insane
@@ -103,7 +105,7 @@ pub(crate) fn layout_table_children(
             measured.push(height + margin.top + margin.bottom);
         }
         ctx.prune_pending();
-        let row_height = measured.iter().copied().fold(0.0_f32, f32::max);
+        let row_height = measured.iter().copied().fold(row.height, f32::max);
 
         for (cell, height) in row.cells.iter().zip(&measured) {
             let cell_width = span_width(cell.column, cell.span);
@@ -544,7 +546,8 @@ fn row_of(ctx: &Ctx<'_>, node: NodeId) -> Row {
         column += cell.span;
         cells.push(cell);
     }
-    Row { cells }
+    let height = resolve::definite(&ctx.style(node).height).unwrap_or(0.0);
+    Row { cells, height }
 }
 
 fn cell_of(ctx: &Ctx<'_>, node: NodeId, column: usize) -> Cell {

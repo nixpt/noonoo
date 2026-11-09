@@ -4075,3 +4075,17 @@ fn cell_content_aligns_vertically_in_its_row() {
     assert!(near(text_y(&tree, "bot"), 20.8), "{}", text_y(&tree, "bot"));
     assert_eq!(tree.get(id(&doc, "m")).unwrap().rect.height, 40.0);
 }
+
+/// A row is at least its own `height`, cells or not (HN's
+/// `<tr style='height:10px'/>` spacers).
+#[test]
+fn a_rows_height_holds_even_when_empty() {
+    let (doc, tree) = page(
+        r#"<table style="border-spacing: 0"><tr style="height: 10px"></tr><tr style="height: 30px"><td id=c style="padding: 0">x</td></tr><tr><td id=d>y</td></tr></table>"#,
+        "",
+        400.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert_eq!((rect("c").y, rect("c").height), (10.0, 30.0));
+    assert_eq!(rect("d").y, 40.0);
+}

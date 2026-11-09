@@ -184,3 +184,23 @@ fn cells_centre_vertically_and_valign_moves_them() {
     assert_eq!(of("b").vertical_align, VerticalAlign::Bottom);
     assert_eq!(of("h").vertical_align, VerticalAlign::Baseline);
 }
+
+#[test]
+fn height_attributes_size_tables_rows_and_cells() {
+    let doc = noonoo_html::parse(
+        r#"<table id=t height=50><tr id=r height="12"><td id=c height="30%">a</td><td id=z height=0>b</td></tr></table><div id=d height=9></div>"#,
+    );
+    let styles = compute(&doc, &[]);
+    let of = |id: &str| {
+        styles
+            .get(doc.get_element_by_id(id).unwrap())
+            .unwrap()
+            .height
+            .clone()
+    };
+    assert_eq!(of("t"), Dimension::Px(50.0));
+    assert_eq!(of("r"), Dimension::Px(12.0));
+    assert_eq!(of("c"), Dimension::Percent(30.0));
+    assert_eq!(of("z"), Dimension::Auto);
+    assert_eq!(of("d"), Dimension::Auto);
+}

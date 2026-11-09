@@ -451,6 +451,11 @@ fn presentational_hints(
             }
         }
     }
+    if matches!(element.name.as_str(), "table" | "tr" | "td" | "th")
+        && let Some(height) = element.attr("height").and_then(dimension_attribute)
+    {
+        hints.push(("height", height));
+    }
     if element.name == "table"
         && let Some(spacing) = element.attr("cellspacing").and_then(non_negative_integer)
     {
