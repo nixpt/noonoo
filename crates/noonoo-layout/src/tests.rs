@@ -3962,3 +3962,27 @@ fn a_text_field_makes_room_for_its_widest_character() {
     assert_eq!(width("a"), 64.0);
     assert_eq!(width("b"), 184.0);
 }
+
+/// A textarea is `cols` average characters wide plus the scrollbar
+/// browsers keep room for, and `rows` lines tall (20 × 2 by default),
+/// whatever text it holds; CSS sizes still win.
+#[test]
+fn a_textarea_is_sized_by_cols_and_rows() {
+    let (doc, tree) = page(
+        r#"<textarea id="a" cols="10" rows="3">a very long value that would wrap onto many lines in ten columns</textarea><br><textarea id="b"></textarea><br><textarea id="c" cols="10" style="width: 50px; height: 20px"></textarea>"#,
+        "textarea { padding: 0; border: 0; font-size: 16px }",
+        400.0,
+    );
+    let size = |name: &str| {
+        let rect = tree.get(id(&doc, name)).unwrap().content_box();
+        (rect.width, rect.height)
+    };
+    // MetricShaper: an average character is 8px, a line 19.2px.
+    let (width, height) = size("a");
+    assert_eq!(width, 95.0);
+    assert!(near(height, 57.6), "{height}");
+    let (width, height) = size("b");
+    assert_eq!(width, 175.0);
+    assert!(near(height, 38.4), "{height}");
+    assert_eq!(size("c"), (50.0, 20.0));
+}

@@ -203,6 +203,17 @@ pub(crate) fn expand_tabs(text: &str, column: usize) -> String {
     out
 }
 
+/// The room browsers keep beside a textarea's text for its scrollbar.
+const SCROLLBAR_WIDTH: f32 = 15.0;
+
+/// An attribute read as a positive integer (`size`, `cols`, `rows`).
+fn positive_attribute(element: &noonoo_dom::ElementData, name: &str) -> Option<u32> {
+    element
+        .attr(name)
+        .and_then(|value| value.trim().parse::<u32>().ok())
+        .filter(|&value| value > 0)
+}
+
 /// Whether `element` is a single-line text field: an `<input>` whose type
 /// takes typed text (the default type is `text`).
 fn is_text_field(element: &noonoo_dom::ElementData) -> bool {
@@ -1017,20 +1028,37 @@ impl Ctx<'_> {
     /// average characters (20 unless the attribute is a positive integer),
     /// plus what the font's widest character needs beyond an average one,
     /// as Chromium sizes them.
+    ///
+    /// A textarea is `cols` average characters (20 unless a positive
+    /// integer) plus the room browsers keep for its scrollbar.
     pub(crate) fn text_field_width(&self, node: NodeId, style: &ComputedStyle) -> Option<f32> {
         let element = self.document.element(node)?;
+        if element.name == "textarea" {
+            let (average, _) = self
+                .shaper
+                .char_widths(style.font_request(), style.font_size);
+            let cols = positive_attribute(element, "cols").unwrap_or(20);
+            return Some(cols as f32 * average + SCROLLBAR_WIDTH);
+        }
         if !is_text_field(element) {
             return None;
         }
-        let size = element
-            .attr("size")
-            .and_then(|size| size.trim().parse::<u32>().ok())
-            .filter(|&size| size > 0)
-            .unwrap_or(20);
+        let size = positive_attribute(element, "size").unwrap_or(20);
         let (average, widest) = self
             .shaper
             .char_widths(style.font_request(), style.font_size);
         Some(size as f32 * average + (widest - average).max(0.0))
+    }
+
+    /// A textarea's content height: `rows` lines (2 unless a positive
+    /// integer), whatever text it holds.
+    fn textarea_height(&self, node: NodeId, style: &ComputedStyle) -> Option<f32> {
+        let element = self.document.element(node)?;
+        if element.name != "textarea" {
+            return None;
+        }
+        let rows = positive_attribute(element, "rows").unwrap_or(2);
+        Some(rows as f32 * self.line_height_of(style))
     }
 
     /// Lay out a replaced element's placeholder as its content: one line of
@@ -1301,7 +1329,9 @@ impl Ctx<'_> {
     /// first line of text would sit, as browsers align one.
     fn text_field_baseline(&self, node: NodeId) -> Option<f32> {
         let style = self.style(node);
-        self.text_field_width(node, style)?;
+        if !is_text_field(self.document.element(node)?) {
+            return None;
+        }
         let padding = resolve::paddings(&style.padding, 0.0);
         let border = resolve::borders(style);
         let (above, _) = self.inline_box(style, self.line_height_of(style));
@@ -1484,6 +1514,10 @@ impl Ctx<'_> {
             .or(replaced.map(|(_, height)| height + vertical))
             .or(specified_height)
             .or(definite_height)
+            .or_else(|| {
+                self.textarea_height(node, &style)
+                    .map(|height| height + vertical)
+            })
             .map(clamp_height);
         // CSS Quirks §3.5: in quirks mode an auto-height block hands its
         // children the percentage basis it was given, so a percentage looks

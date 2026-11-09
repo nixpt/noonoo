@@ -166,7 +166,16 @@ fn text_fields_have_an_inset_border_and_padding() {
         r#"<input id="a"><input id="b" type="search"><textarea id="t"></textarea><input id="c" type="checkbox">"#,
     );
     let by_id = |id: &str| styles.get(doc.get_element_by_id(id).unwrap()).unwrap();
-    for id in ["a", "b", "t"] {
+    // A textarea's box is Chromium's: 2px of padding in a 1px border.
+    let textarea = by_id("t");
+    assert_eq!(textarea.padding.top, noonoo_style::Length::Px(2.0));
+    assert_eq!(textarea.padding.left, noonoo_style::Length::Px(2.0));
+    assert_eq!(textarea.border_width.top, 1.0);
+    assert_eq!(textarea.border_style.top, noonoo_style::BorderStyle::Solid);
+    assert_eq!(textarea.font_family, ["monospace"]);
+    // ... and it scrolls its text rather than spilling it.
+    assert_eq!(textarea.overflow_y, noonoo_style::Overflow::Auto);
+    for id in ["a", "b"] {
         let style = by_id(id);
         assert_eq!(style.padding.top, noonoo_style::Length::Px(1.0), "{id}");
         assert_eq!(style.padding.left, noonoo_style::Length::Px(2.0), "{id}");

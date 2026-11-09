@@ -59,8 +59,11 @@ pre, code, kbd, samp, listing, plaintext, xmp { font-family: monospace }
 a { color: #0000ee; text-decoration: underline }
 [hidden] { display: none }
 input:not([type]), input[type="text"], input[type="search"], input[type="email"],
-input[type="url"], input[type="tel"], input[type="password"], input[type="number"],
-textarea { padding: 1px 2px; border: 2px inset #767676 }
+input[type="url"], input[type="tel"], input[type="password"], input[type="number"]
+{ padding: 1px 2px; border: 2px inset #767676 }
+textarea {
+    padding: 2px; border: 1px solid #767676; font-family: monospace; overflow: auto
+}
 "#;
 
 /// The user-agent rules for quirks-mode documents only, after HTML's
