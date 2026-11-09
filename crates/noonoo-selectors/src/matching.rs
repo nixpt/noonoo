@@ -198,6 +198,15 @@ impl AttrSelector {
             return false;
         };
         let some_value = self.value.as_deref().unwrap_or("");
+        if is_case_insensitive_attribute(&self.name) {
+            let (actual, some_value) =
+                (actual.to_ascii_lowercase(), some_value.to_ascii_lowercase());
+            return self.op_matches(&actual, &some_value);
+        }
+        self.op_matches(&actual, some_value)
+    }
+
+    fn op_matches(&self, actual: &str, some_value: &str) -> bool {
         match self.op {
             AttrOp::Exists => true,
             AttrOp::Equals => actual == some_value,
@@ -212,6 +221,60 @@ impl AttrSelector {
             AttrOp::Substring => actual.contains(some_value),
         }
     }
+}
+
+/// The attributes whose values HTML's selectors compare without ASCII case
+/// (HTML, "case-sensitivity of selectors").
+fn is_case_insensitive_attribute(name: &str) -> bool {
+    matches!(
+        name,
+        "accept"
+            | "accept-charset"
+            | "align"
+            | "alink"
+            | "axis"
+            | "bgcolor"
+            | "charset"
+            | "checked"
+            | "clear"
+            | "codetype"
+            | "color"
+            | "compact"
+            | "declare"
+            | "defer"
+            | "dir"
+            | "direction"
+            | "disabled"
+            | "enctype"
+            | "face"
+            | "frame"
+            | "hreflang"
+            | "http-equiv"
+            | "lang"
+            | "language"
+            | "link"
+            | "media"
+            | "method"
+            | "multiple"
+            | "nohref"
+            | "noresize"
+            | "noshade"
+            | "nowrap"
+            | "readonly"
+            | "rel"
+            | "rev"
+            | "rules"
+            | "scope"
+            | "scrolling"
+            | "selected"
+            | "shape"
+            | "target"
+            | "text"
+            | "type"
+            | "valign"
+            | "valuetype"
+            | "vlink"
+    )
 }
 
 impl PseudoClass {
