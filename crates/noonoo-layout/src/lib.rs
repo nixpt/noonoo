@@ -1054,12 +1054,21 @@ impl Ctx<'_> {
         Some(size as f32 * average + (widest - average).max(0.0))
     }
 
-    /// A textarea's content height: `rows` lines (2 unless a positive
-    /// integer), whatever text it holds.
-    fn textarea_height(&self, node: NodeId, style: &ComputedStyle) -> Option<f32> {
+    /// The content height of a control or of media that hasn't loaded,
+    /// when its own height is auto: a textarea's `rows` lines (2 unless a
+    /// positive integer), whatever text it holds, or the content width over
+    /// the [`attribute_ratio`](Self::attribute_ratio).
+    fn intrinsic_height(
+        &self,
+        node: NodeId,
+        style: &ComputedStyle,
+        content_width: f32,
+    ) -> Option<f32> {
         let element = self.document.element(node)?;
         if element.name != "textarea" {
-            return None;
+            return self
+                .attribute_ratio(node)
+                .map(|ratio| content_width / ratio);
         }
         let rows = positive_attribute(element, "rows").unwrap_or(2);
         Some(rows as f32 * self.line_height_of(style))
@@ -1548,7 +1557,7 @@ impl Ctx<'_> {
             .or(first)
             .or(second)
             .or_else(|| {
-                self.textarea_height(node, &style)
+                self.intrinsic_height(node, &style, content_width)
                     .map(|height| height + vertical)
             })
             .map(clamp_height);

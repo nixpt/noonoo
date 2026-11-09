@@ -301,6 +301,7 @@ fn compute_is_collapse_through(ctx: &Ctx<'_>, node: NodeId, width: f32) -> bool 
         || !matches!(style.height, Dimension::Auto)
         || resolve::clips(style)
         || ctx.establishes_bfc(node, style)
+        || is_replaced(ctx, node)
     {
         return false;
     }

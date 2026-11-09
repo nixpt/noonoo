@@ -4231,3 +4231,32 @@ fn a_collapsed_through_box_sits_below_its_top_margin() {
     assert!(near(y("u"), 35.2), "{}", y("u"));
     assert!(near(y("n"), 35.2), "{}", y("n"));
 }
+
+/// Embedded content that hasn't loaded keeps the ratio of its `width` and
+/// `height` attributes on an auto axis (HTML maps them to `aspect-ratio:
+/// auto w / h`), as gnu.org's video does with `height: auto`.
+#[test]
+fn unloaded_media_keeps_its_attribute_ratio() {
+    let (doc, tree) = page(
+        r#"<!doctype html><video id=v width=512 height=288></video><img id=i width=40 height=30 alt="x">"#,
+        "body { margin: 0 } video, img { display: block; width: 256px; height: auto; padding: 2px }",
+        400.0,
+    );
+    let content = |name| tree.get(id(&doc, name)).unwrap().content_box().height;
+    assert!(near(content("v"), 144.0), "{}", content("v"));
+    assert!(near(content("i"), 192.0), "{}", content("i"));
+}
+
+/// A block-level replaced element is never collapsed through, even when
+/// its children (a video's `source`s and `track`s) show nothing: the
+/// content after it starts below it, as on gnu.org.
+#[test]
+fn a_block_video_holds_its_place() {
+    let (doc, tree) = page(
+        r#"<!doctype html><video id=v width=512 height=288><source src=a.webm><track src=a.vtt></video><p id=p>x</p>"#,
+        "body { margin: 0 } video { display: block; width: 256px; height: auto } source, track { display: none } p { margin: 0 }",
+        400.0,
+    );
+    let y = tree.get(id(&doc, "p")).unwrap().rect.y;
+    assert!(near(y, 144.0), "{y}");
+}

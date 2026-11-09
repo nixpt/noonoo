@@ -96,6 +96,29 @@ impl Ctx<'_> {
         Some((w, h))
     }
 
+    /// The width-to-height ratio of embedded content that hasn't loaded,
+    /// from its `width` and `height` attributes: HTML maps them to
+    /// `aspect-ratio: auto w / h`, so an auto height follows the content
+    /// width before (or without) the media's own size.
+    pub(crate) fn attribute_ratio(&self, node: NodeId) -> Option<f32> {
+        let element = self.document.element(node)?;
+        if !matches!(
+            element.name.as_str(),
+            "img" | "video" | "canvas" | "iframe" | "embed" | "object"
+        ) || self.image(node).is_some()
+        {
+            return None;
+        }
+        let number = |name: &str| {
+            let value = element.attr(name)?.trim();
+            let end = value
+                .find(|c: char| !(c.is_ascii_digit() || c == '.'))
+                .unwrap_or(value.len());
+            value[..end].parse::<f32>().ok().filter(|n| *n > 0.0)
+        };
+        Some(number("width")? / number("height")?)
+    }
+
     /// Note the image `node` draws; its box has no content to lay out.
     pub(crate) fn record_image(&mut self, node: NodeId) -> (Vec<usize>, f32) {
         if let Some(image) = self.image(node) {
