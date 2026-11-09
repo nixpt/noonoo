@@ -3169,3 +3169,42 @@ fn a_fixed_width_column_keeps_its_width_in_a_wider_table() {
         rect("c").width
     );
 }
+
+/// A percentage cell width makes its column that share of the table, before
+/// the auto columns get the rest. MetricShaper: 8px a character.
+#[test]
+fn a_percentage_column_takes_its_share_of_the_table() {
+    let (doc, tree) = page(
+        r#"<table style="width: 400px" cellpadding="0"><tr><td id="a" style="width: 25%">a</td><td id="b">b</td></tr></table>"#,
+        "",
+        400.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert_eq!((rect("a").width, rect("b").width), (100.0, 300.0));
+}
+
+/// A `width: 100%` column (Wikipedia's navbox lists) takes all the room the
+/// other columns' minimums leave it.
+#[test]
+fn a_full_width_column_leaves_the_others_their_minimums() {
+    let (doc, tree) = page(
+        r#"<table style="width: 400px" cellpadding="0"><tr><td id="g" style="white-space: nowrap">Group</td><td id="l" style="width: 100%">x</td></tr></table>"#,
+        "",
+        400.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert_eq!((rect("g").width, rect("l").width), (40.0, 360.0));
+}
+
+/// Short of room, a percentage column reaches its share first; the auto
+/// columns grow above their minimums with what's left.
+#[test]
+fn a_percentage_column_grows_before_auto_columns() {
+    let (doc, tree) = page(
+        r#"<table style="width: 200px" cellpadding="0"><tr><td id="a" style="width: 50%">aaaa aaaa</td><td id="b">bbbbb bbbbb bbbbb bbbbb bbbbb bbbbb bbbbb bbbbb</td></tr></table>"#,
+        "",
+        400.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert_eq!((rect("a").width, rect("b").width), (100.0, 100.0));
+}

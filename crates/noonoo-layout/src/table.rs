@@ -144,6 +144,9 @@ struct Demands {
     /// Whether a cell of the column (spanning it alone) has a pixel width:
     /// such a column keeps its width when the table has room to spare.
     fixed: Vec<bool>,
+    /// The widest percentage width of a cell spanning the column alone, as
+    /// a fraction of the table's content width.
+    percents: Vec<Option<f32>>,
 }
 
 /// Each column's width demands: a cell demands its min-content and
@@ -159,6 +162,7 @@ fn column_demands(ctx: &Ctx<'_>, rows: &[Row], content_width: f32) -> Demands {
     let mut minimums = vec![0.0_f32; column_count];
     let mut maximums = vec![0.0_f32; column_count];
     let mut fixed = vec![false; column_count];
+    let mut percents: Vec<Option<f32>> = vec![None; column_count];
     for row in rows {
         for cell in &row.cells {
             let cell_style = ctx.style(cell.node);
@@ -167,11 +171,16 @@ fn column_demands(ctx: &Ctx<'_>, rows: &[Row], content_width: f32) -> Demands {
             let span = cell.span as f32;
             let minimum = (float::min_content_of_contents(ctx, cell.node) + outer) / span;
             let maximum = (float::preferred_width(ctx, cell.node) + outer) / span;
-            if cell.span == 1
-                && matches!(cell_style.width, noonoo_style::Dimension::Px(_))
-                && let Some(column) = fixed.get_mut(cell.column)
-            {
-                *column = true;
+            if cell.span == 1 && cell.column < column_count {
+                match cell_style.width {
+                    noonoo_style::Dimension::Px(_) => fixed[cell.column] = true,
+                    noonoo_style::Dimension::Percent(percent) if percent > 0.0 => {
+                        let share = percent / 100.0;
+                        let column = &mut percents[cell.column];
+                        *column = Some(column.map_or(share, |known| known.max(share)));
+                    }
+                    _ => {}
+                }
             }
             let end = (cell.column + cell.span).min(column_count);
             for column in cell.column..end.max(cell.column) {
@@ -185,63 +194,107 @@ fn column_demands(ctx: &Ctx<'_>, rows: &[Row], content_width: f32) -> Demands {
     for (maximum, &minimum) in maximums.iter_mut().zip(&minimums) {
         *maximum = maximum.max(minimum);
     }
+    // Percentages past 100% in total don't count: the columns after the
+    // budget runs out lose theirs.
+    let mut budget = 1.0_f32;
+    for percent in percents.iter_mut().flatten() {
+        *percent = percent.min(budget);
+        budget -= *percent;
+    }
     Demands {
         minimums,
         maximums,
         fixed,
+        percents,
     }
 }
 
-/// The columns' widths in a content box `target` wide (CSS 2 §17.5.2.2):
-/// - wider than their maximums, a table that `fill`s shares the extra
-///   among the columns without a pixel width (all of them, if every one
-///   has one) in proportion to their maximums; otherwise they stay at
-///   their maximums;
-/// - between minimums and maximums, each gets its minimum plus a share of
-///   what's left in proportion to how much wider it would like to be;
-/// - narrower than the minimums, they keep their minimums and overflow.
+/// The columns' widths in a content box `target` wide, after CSS 2
+/// §17.5.2.2 as browsers implement it. Every column starts at its minimum;
+/// then, while there is room:
+/// 1. percentage columns grow toward their share of `target` (a table that
+///    doesn't `fill` has no share to give);
+/// 2. the other columns grow toward their maximums, in proportion to how
+///    much more each wants;
+/// 3. a table that `fill`s shares what is left among the auto columns (by
+///    their widths), or failing those the fixed ones, then the percentage
+///    ones, then all of them evenly.
+///
+/// Narrower than the minimums, the columns keep them and overflow.
 fn fit_columns(demands: &Demands, target: f32, fill: bool) -> Vec<f32> {
-    let (minimums, maximums) = (&demands.minimums, &demands.maximums);
-    let (least, most): (f32, f32) = (minimums.iter().sum(), maximums.iter().sum());
-    if target >= most {
-        let mut columns = maximums.to_vec();
-        if fill {
-            let growing: Vec<bool> = if demands.fixed.iter().all(|&fixed| fixed) {
-                vec![true; columns.len()]
-            } else {
-                demands.fixed.iter().map(|&fixed| !fixed).collect()
-            };
-            let wanted: f32 = columns
-                .iter()
-                .zip(&growing)
-                .filter(|(_, grows)| **grows)
-                .map(|(width, _)| width)
-                .sum();
-            let extra = target - most;
-            let count = growing.iter().filter(|&&grows| grows).count().max(1) as f32;
-            for (column, grows) in columns.iter_mut().zip(&growing) {
-                if *grows {
-                    // In proportion to what each wants; evenly if none
-                    // wants anything.
-                    *column += if wanted > f32::EPSILON {
-                        extra * *column / wanted
-                    } else {
-                        extra / count
-                    };
-                }
+    let count = demands.minimums.len();
+    let mut columns = demands.minimums.clone();
+    let mut room = target - columns.iter().sum::<f32>();
+    let percent = |column: usize| if fill { demands.percents[column] } else { None };
+
+    // 1. Percentage columns toward their share.
+    let goals: Vec<f32> = (0..count)
+        .map(|column| match percent(column) {
+            Some(share) => (share * target).max(columns[column]),
+            None => columns[column],
+        })
+        .collect();
+    grow_toward(&mut columns, &goals, &mut room);
+
+    // 2. The rest toward their maximums.
+    let goals: Vec<f32> = (0..count)
+        .map(|column| match percent(column) {
+            Some(_) => columns[column],
+            None => demands.maximums[column].max(columns[column]),
+        })
+        .collect();
+    grow_toward(&mut columns, &goals, &mut room);
+
+    // 3. What is left.
+    if fill && room > f32::EPSILON && count > 0 {
+        let auto: Vec<bool> = (0..count)
+            .map(|column| !demands.fixed[column] && percent(column).is_none())
+            .collect();
+        let fixed: Vec<bool> = (0..count)
+            .map(|column| demands.fixed[column] && percent(column).is_none())
+            .collect();
+        let percentage: Vec<bool> = (0..count).map(|column| percent(column).is_some()).collect();
+        let group = [auto, fixed, percentage]
+            .into_iter()
+            .find(|group| group.iter().any(|&member| member))
+            .unwrap_or_else(|| vec![true; count]);
+        let wanted: f32 = (0..count)
+            .filter(|&column| group[column])
+            .map(|column| columns[column])
+            .sum();
+        let members = group.iter().filter(|&&member| member).count() as f32;
+        for column in 0..count {
+            if group[column] {
+                columns[column] += if wanted > f32::EPSILON {
+                    room * columns[column] / wanted
+                } else {
+                    room / members
+                };
             }
         }
-        return columns;
     }
-    if target <= least || most - least <= f32::EPSILON {
-        return minimums.to_vec();
+    columns
+}
+
+/// Grow `columns` toward `goals` with up to `room`, each by its share of
+/// the total wanted when there isn't enough for all.
+fn grow_toward(columns: &mut [f32], goals: &[f32], room: &mut f32) {
+    if *room <= 0.0 {
+        return;
     }
-    let share = (target - least) / (most - least);
-    minimums
+    let wanted: f32 = columns
         .iter()
-        .zip(maximums)
-        .map(|(&minimum, &maximum)| minimum + (maximum - minimum) * share)
-        .collect()
+        .zip(goals)
+        .map(|(width, goal)| (goal - width).max(0.0))
+        .sum();
+    if wanted <= f32::EPSILON {
+        return;
+    }
+    let share = (*room / wanted).min(1.0);
+    for (width, goal) in columns.iter_mut().zip(goals) {
+        *width += (goal - *width).max(0.0) * share;
+    }
+    *room -= wanted * share;
 }
 
 /// The x of `column`'s left edge inside the table's content box (there is no
