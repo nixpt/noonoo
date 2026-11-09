@@ -3517,9 +3517,11 @@ fn in_quirks_mode_html_and_body_fill_the_viewport() {
     let (body, html) = body_and_root(&doc, &tree);
     assert_eq!(html.height, 600.0);
     assert_eq!((body.y, body.height), (8.0, 584.0));
-    // Content taller than the viewport still wins.
+    // Content taller than the viewport still wins. A filling body keeps its
+    // last child's bottom margin inside (not checked against a browser when
+    // the content outgrows the fill).
     let (doc, tree) = page("<p>x</p>", "p { height: 900px }", 400.0);
-    assert_eq!(body_and_root(&doc, &tree).0.height, 900.0);
+    assert_eq!(body_and_root(&doc, &tree).0.height, 916.0);
     // A set height, or standards mode, doesn't fill.
     let (doc, tree) = page("<p>x</p>", "body { height: 50px }", 400.0);
     assert_eq!(body_and_root(&doc, &tree).0.height, 50.0);
@@ -3545,4 +3547,15 @@ fn in_quirks_mode_percentage_heights_skip_auto_height_blocks() {
         400.0,
     );
     assert_eq!(tree.get(id(&doc, "d")).unwrap().rect.height, 0.0);
+}
+
+/// The root element is a formatting context root (CSS 2 §9.4.1): body's
+/// margin collapses with its first child's but never out of `<html>`, so
+/// the root's box starts at the top of the canvas.
+#[test]
+fn margins_do_not_collapse_out_of_the_root() {
+    let (doc, tree) = page_with_ua_body("<!doctype html><p>x</p>", 400.0);
+    let (body, html) = body_and_root(&doc, &tree);
+    assert_eq!((html.y, html.height), (0.0, 16.0 + 19.2 + 16.0));
+    assert_eq!(body.y, 16.0);
 }

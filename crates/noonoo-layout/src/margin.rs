@@ -81,7 +81,8 @@ fn compute_effective_margins(ctx: &Ctx<'_>, node: NodeId, width: f32) -> Vertica
     let bottom_open = border.bottom == 0.0
         && padding.bottom == 0.0
         && matches!(style.height, Dimension::Auto)
-        && !clipping;
+        && !clipping
+        && !ctx.quirks_fills(node, style);
 
     let horizontal =
         margin.left + margin.right + padding.left + padding.right + border.left + border.right;

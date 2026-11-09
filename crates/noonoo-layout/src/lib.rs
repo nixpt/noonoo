@@ -832,6 +832,17 @@ pub(crate) struct Ctx<'a> {
 impl Ctx<'_> {
     /// The definite content height a percentage height resolves against, if
     /// the containing block has one.
+    fn is_quirks(&self) -> bool {
+        self.document.quirks_mode() == noonoo_dom::QuirksMode::Quirks
+    }
+
+    /// Whether `node` is stretched by [`Self::quirks_fill_height`]: its
+    /// bottom then sits below its content, and its last child's bottom
+    /// margin stays inside it.
+    pub(crate) fn quirks_fills(&self, node: NodeId, style: &ComputedStyle) -> bool {
+        self.is_quirks() && self.quirks_fill_height(node, style, 0.0).is_some()
+    }
+
     /// CSS Quirks §3.6–3.7: in quirks mode an in-flow, auto-height root
     /// element's border box is at least the viewport less its margins, and
     /// an auto-height body's at least the root's content box less its own.
@@ -1331,7 +1342,8 @@ impl Ctx<'_> {
         let collapse_bottom = border.bottom == 0.0
             && padding.bottom == 0.0
             && matches!(style.height, Dimension::Auto)
-            && !contains_margins;
+            && !contains_margins
+            && !self.quirks_fills(node, &style);
 
         // `height`, `min-height`, and `max-height` share a box (per
         // `box-sizing`), like the widths above. A percentage resolves against
@@ -1346,7 +1358,7 @@ impl Ctx<'_> {
             Some(basis) => resolve::dimension(value.clone(), basis),
             None => resolve::definite(value),
         };
-        let quirks = self.document.quirks_mode() == noonoo_dom::QuirksMode::Quirks;
+        let quirks = self.is_quirks();
         let fill = if quirks {
             self.quirks_fill_height(node, &style, margin.top + margin.bottom)
         } else {
@@ -1543,7 +1555,10 @@ impl Ctx<'_> {
                     Display::Flex | Display::InlineFlex | Display::Grid | Display::InlineGrid
                 )
             });
-        resolve::clips(style)
+        // The root element is the initial formatting context's root.
+        let is_root = self.document.tree().parent(node) == Some(self.document.root());
+        is_root
+            || resolve::clips(style)
             || in_flex_or_grid
             || style.float != noonoo_style::Float::None
             || matches!(style.position, Position::Absolute | Position::Fixed)
