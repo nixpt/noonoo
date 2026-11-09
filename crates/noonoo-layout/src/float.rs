@@ -319,6 +319,9 @@ fn preferred_content(ctx: &Ctx<'_>, node: NodeId) -> f32 {
     if let Some(width) = ctx.text_field_width(node, style) {
         return width;
     }
+    if ctx.is_unsized_fallback(node, style) {
+        return 0.0;
+    }
     if let Some(text) = ctx.placeholder(node) {
         return text_width(ctx, &text, style);
     }
@@ -599,6 +602,9 @@ fn min_content(ctx: &Ctx<'_>, node: NodeId, style: &ComputedStyle) -> f32 {
     }
     if let Some(width) = ctx.text_field_width(node, style) {
         return width;
+    }
+    if ctx.is_unsized_fallback(node, style) {
+        return 0.0;
     }
     if let Some(text) = ctx.placeholder(node) {
         return text_min_width(ctx, &text, style);

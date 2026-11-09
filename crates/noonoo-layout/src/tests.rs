@@ -4260,3 +4260,18 @@ fn a_block_video_holds_its_place() {
     let y = tree.get(id(&doc, "p")).unwrap().rect.y;
     assert!(near(y, 144.0), "{y}");
 }
+
+/// An image that hasn't loaded and has a percentage width has no natural
+/// size, so its alt text adds nothing to a shrink-to-fit width: the box
+/// shrinks to its other content and the image takes its share of that, as
+/// in Chromium (gnu.org's distro thumbnails).
+#[test]
+fn a_percentage_width_unloaded_image_adds_no_intrinsic_width() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div id=d><img alt="a long description of the screenshot"><br>xx</div>"#,
+        "body { margin: 0 } div { display: inline-block; font-size: 16px } img { width: 50% }",
+        800.0,
+    );
+    let width = tree.get(id(&doc, "d")).unwrap().rect.width;
+    assert!(near(width, 16.0), "{width}");
+}

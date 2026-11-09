@@ -119,6 +119,15 @@ impl Ctx<'_> {
         Some(number("width")? / number("height")?)
     }
 
+    /// Whether `node` is an `<img>` without its image whose width is a
+    /// percentage: with no natural size, its alt text adds nothing to the
+    /// intrinsic widths around it, as in Chromium.
+    pub(crate) fn is_unsized_fallback(&self, node: NodeId, style: &ComputedStyle) -> bool {
+        matches!(style.width, Dimension::Percent(_) | Dimension::Calc { .. })
+            && self.document.element(node).is_some_and(|e| e.name == "img")
+            && self.image(node).is_none()
+    }
+
     /// Note the image `node` draws; its box has no content to lay out.
     pub(crate) fn record_image(&mut self, node: NodeId) -> (Vec<usize>, f32) {
         if let Some(image) = self.image(node) {
