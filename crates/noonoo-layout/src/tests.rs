@@ -4192,3 +4192,25 @@ fn a_checkboxs_baseline_is_its_border_box_bottom() {
     assert!(near(text_y(&tree, "x"), 3.2), "{}", text_y(&tree, "x"));
     assert!(near(tree.get(id(&doc, "d")).unwrap().rect.height, 22.4));
 }
+
+/// An image that hasn't loaded but has a size shows its alt text clipped
+/// in that size, as Chromium does, so its baseline is its bottom edge, not
+/// the alt text's (Wikipedia's wordmark and tagline sat top-aligned).
+#[test]
+fn a_sized_unloaded_image_sits_on_its_bottom_edge() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div><img id=a alt="Wikipedia" style="width: 140px; height: 22px"><img id=b alt="The Free Encyclopedia" width=140 height=11></div>"#,
+        "body { margin: 0 }",
+        400.0,
+    );
+    let bottom = |name| {
+        let rect = tree.get(id(&doc, name)).unwrap().rect;
+        rect.y + rect.height
+    };
+    assert!(
+        near(bottom("a"), bottom("b")),
+        "{} vs {}",
+        bottom("a"),
+        bottom("b")
+    );
+}

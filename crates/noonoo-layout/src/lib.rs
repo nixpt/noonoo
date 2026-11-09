@@ -1315,8 +1315,9 @@ impl Ctx<'_> {
             return (height, baseline);
         }
         let height = self.layout_element_uncached(node, border_x, border_y, available_width, None);
-        let baseline = self
-            .tree_index(node)
+        let baseline = (!self.is_sized_fallback(node))
+            .then(|| self.tree_index(node))
+            .flatten()
             .and_then(|index| self.box_baseline(index))
             .map(|baseline| baseline - border_y)
             .or_else(|| self.text_field_baseline(node))
@@ -1328,6 +1329,16 @@ impl Ctx<'_> {
             self.baselines.insert(key, baseline);
         }
         (height, baseline)
+    }
+
+    /// Whether `node` is an `<img>` without its image but with a width or
+    /// height: Chromium clips its alt text to that size, so like any
+    /// clipping inline-block it sits on its bottom margin edge.
+    fn is_sized_fallback(&self, node: NodeId) -> bool {
+        let style = self.style(node);
+        self.document.element(node).is_some_and(|e| e.name == "img")
+            && self.image(node).is_none()
+            && (style.width != Dimension::Auto || style.height != Dimension::Auto)
     }
 
     /// A checkbox or radio's baseline, from its border-box top: its border
