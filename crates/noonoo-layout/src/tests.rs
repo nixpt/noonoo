@@ -4046,3 +4046,15 @@ fn a_tables_width_includes_its_padding_and_border() {
     assert_eq!(tree.get(id(&doc, "t")).unwrap().rect.width, 200.0);
     assert_eq!(tree.get(id(&doc, "u")).unwrap().rect.width, 100.0);
 }
+
+/// A cell is as tall as its row, whatever its own `height` (HN's header
+/// cell asks for 10px beside a 20px logo cell).
+#[test]
+fn a_cell_stretches_to_its_row_past_its_own_height() {
+    let (doc, tree) = page(
+        r#"<table style="border-spacing: 0"><tr><td style="height: 20px; padding: 0">a</td><td id=c style="height: 10px; padding: 0">b</td></tr></table>"#,
+        "",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.height, 20.0);
+}

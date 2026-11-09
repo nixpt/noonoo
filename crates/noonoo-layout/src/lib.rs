@@ -1510,10 +1510,17 @@ impl Ctx<'_> {
             .flexed
             .take_if(|(flexed, _)| *flexed == node)
             .map(|(_, height)| height);
+        // A cell's row decides its height (never below what the cell asked
+        // for), so the row's height wins over the cell's own.
+        let (first, second) = if style.display == Display::TableCell {
+            (definite_height, specified_height)
+        } else {
+            (specified_height, definite_height)
+        };
         let definite_border_height = flexed
             .or(replaced.map(|(_, height)| height + vertical))
-            .or(specified_height)
-            .or(definite_height)
+            .or(first)
+            .or(second)
             .or_else(|| {
                 self.textarea_height(node, &style)
                     .map(|height| height + vertical)
