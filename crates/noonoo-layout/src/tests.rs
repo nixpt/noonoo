@@ -3340,3 +3340,71 @@ fn breaking_spaces_split_words() {
         ["a\u{2003}", "b\u{3000}", "c\u{2007}d"]
     );
 }
+
+/// HN's "(example.com)" wrapped: a shrink-to-fit box's max-content width
+/// dropped the space between text and an inline element.
+#[test]
+fn max_content_keeps_the_space_beside_an_inline_element() {
+    // MetricShaper: 8px per character, spaces included.
+    for html in [
+        "xx <span>yy</span>",
+        "xx<span> yy</span>",
+        "<span>xx </span>yy",
+        "xx <span> </span> yy",
+        "xx <span><a>yy</a></span> ",
+        " <span>xx</span> yy ",
+    ] {
+        let (doc, tree) = page(
+            &format!(r#"<div id="f">{html}</div>"#),
+            "#f { float: left }",
+            400.0,
+        );
+        let f = tree.get(id(&doc, "f")).unwrap().rect;
+        assert_eq!((f.width, f.height), (40.0, 19.2), "{html}");
+    }
+}
+
+/// An inline element's edges count in max-content; its `width` doesn't.
+#[test]
+fn max_content_counts_inline_edges_not_inline_width() {
+    let (doc, tree) = page(
+        r#"<div id="f">xx <span>yy</span></div>"#,
+        "#f { float: left } span { padding: 0 3px; border-left: 2px solid; width: 300px }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 48.0);
+}
+
+/// A `<br>` ends the run: the widest line is the max-content width.
+#[test]
+fn max_content_breaks_at_br() {
+    let (doc, tree) = page(
+        r#"<div id="f">aa <span>b</span><br>cccc</div>"#,
+        "#f { float: left }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 32.0);
+}
+
+/// Text that touches an inline element is one word: no break between.
+#[test]
+fn min_content_joins_words_across_inline_elements() {
+    let (doc, tree) = page(
+        "<table><tr><td id=c>xx<span>yy</span>z a</table>",
+        "td { padding: 0 }",
+        10.0,
+    );
+    assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.width, 40.0);
+}
+
+/// A flex row's min-content sums its items with gaps between them; no
+/// empty entries for white space between items add phantom gaps.
+#[test]
+fn a_flex_rows_min_content_has_no_phantom_gaps() {
+    let (doc, tree) = page(
+        "<table><tr><td id=c><div id=r> <div id=a></div> <div id=b></div> </div></table>",
+        "td { padding: 0 } #r { display: flex; column-gap: 4px } #a, #b { width: 30px }",
+        10.0,
+    );
+    assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.width, 64.0);
+}

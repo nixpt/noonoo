@@ -329,7 +329,7 @@ fn preferred_content(ctx: &Ctx<'_>, node: NodeId) -> f32 {
         return crate::table::max_content_width(ctx, node);
     }
     let mut widest = 0.0f32;
-    let mut run = 0.0f32;
+    let mut run = InlineRun::default();
     // A row's cells, or a run of cells outside a table, sit side by side.
     let mut cells = 0.0f32;
     for child in child_nodes(ctx.document, node) {
@@ -356,18 +356,178 @@ fn preferred_content(ctx: &Ctx<'_>, node: NodeId) -> f32 {
         if ctx.is_text(child) {
             // Text has no style of its own; it inherits the container's.
             let text = ctx.document.text_content(child);
-            run += text_width(ctx, &text, style);
+            run.text(ctx, &text, style);
         } else if ctx.is_inline_level(child) {
-            let margins = resolve::margins(&ctx.style(child).margin, 0.0);
-            run += preferred_width(ctx, child) + margins.left + margins.right;
+            run.inline(ctx, child);
         } else {
-            widest = widest.max(run);
-            run = 0.0;
+            widest = widest.max(run.finish().0);
             let margins = resolve::margins(&ctx.style(child).margin, 0.0);
             widest = widest.max(preferred_width(ctx, child) + margins.left + margins.right);
         }
     }
-    widest.max(run).max(cells)
+    widest.max(run.finish().0).max(cells)
+}
+
+/// A run of inline content measured the way line breaking sees it, across
+/// inline element boundaries: words and atomic boxes, one collapsed space
+/// wherever white space falls between content, and a `<br>` ending a line.
+/// It gives the run's max-content width (its widest line) and min-content
+/// width (its widest unbreakable piece).
+#[derive(Default)]
+struct InlineRun {
+    /// The widest line ended by a `<br>`.
+    widest: f32,
+    /// The current line's width.
+    width: f32,
+    /// A space waiting for content after it, and whether it breaks.
+    pending: Option<(f32, bool)>,
+    /// Whether the line has content yet: leading white space collapses.
+    started: bool,
+    /// The unbreakable piece being built, and the longest so far.
+    word: f32,
+    longest: f32,
+}
+
+impl InlineRun {
+    fn end_word(&mut self) {
+        self.longest = self.longest.max(self.word);
+        self.word = 0.0;
+    }
+
+    fn space(&mut self, width: f32, breaks: bool) {
+        if self.started && self.pending.is_none() {
+            self.pending = Some((width, breaks));
+        }
+        if breaks {
+            self.end_word();
+        }
+    }
+
+    /// Content glued to the piece being built.
+    fn content(&mut self, width: f32) {
+        if let Some((space, breaks)) = self.pending.take() {
+            self.width += space;
+            if !breaks {
+                self.word += space;
+            }
+        }
+        self.width += width;
+        self.word += width;
+        self.started = true;
+    }
+
+    /// An atomic box: a break opportunity on each side.
+    fn atomic(&mut self, max: f32, min: f32) {
+        self.content(0.0);
+        self.end_word();
+        self.width += max;
+        self.longest = self.longest.max(min);
+    }
+
+    fn line_break(&mut self) {
+        self.end_word();
+        self.widest = self.widest.max(self.width);
+        self.width = 0.0;
+        self.pending = None;
+        self.started = false;
+    }
+
+    /// `(max-content, min-content)`, and a fresh run.
+    fn finish(&mut self) -> (f32, f32) {
+        self.line_break();
+        let result = (self.widest, self.longest);
+        *self = Self::default();
+        result
+    }
+
+    /// The min-content width of a run that had any content, and a fresh run.
+    fn finish_started(&mut self) -> Option<f32> {
+        let started = self.started || self.widest > 0.0 || self.longest > 0.0;
+        let (_, min) = self.finish();
+        started.then_some(min)
+    }
+
+    fn text(&mut self, ctx: &Ctx<'_>, text: &str, style: &ComputedStyle) {
+        let breaks = !matches!(style.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre);
+        if crate::preserves_spaces(style.white_space)
+            || crate::forced_lines(text, style.white_space).len() > 1
+        {
+            // Preserved spaces and newlines: measured as they stand.
+            if !text.is_empty() {
+                let min = text_min_width(ctx, text, style);
+                self.content(0.0);
+                self.width += text_width(ctx, text, style);
+                self.word += min;
+                if breaks {
+                    self.end_word();
+                }
+            }
+            return;
+        }
+        let space = ctx.advance(" ", style);
+        if text.starts_with(noonoo_text::is_collapsible_space) {
+            self.space(space, breaks);
+        }
+        for (index, word) in noonoo_text::collapsible_words(text).enumerate() {
+            if index > 0 {
+                self.space(space, breaks);
+            }
+            for (part, piece) in noonoo_text::break_pieces(word).enumerate() {
+                if part > 0 && breaks {
+                    self.end_word();
+                }
+                self.content(ctx.advance(piece, style));
+            }
+        }
+        if !text.is_empty() && text.ends_with(noonoo_text::is_collapsible_space) {
+            self.space(space, breaks);
+        }
+    }
+
+    /// An inline-level element: a plain inline's content joins the run
+    /// between its edges; anything else is an atomic box.
+    fn inline(&mut self, ctx: &Ctx<'_>, node: NodeId) {
+        if ctx.document.element(node).is_some_and(|e| e.name == "br") {
+            self.line_break();
+            return;
+        }
+        let style = ctx.style(node);
+        let margin = resolve::margins(&style.margin, 0.0);
+        let plain = style.display == Display::Inline
+            && ctx.image_size(node, style, f32::INFINITY, None).is_none()
+            && ctx.text_field_width(node, style).is_none()
+            && ctx.placeholder(node).is_none();
+        if !plain {
+            let edges = margin.left + margin.right;
+            self.atomic(
+                preferred_width(ctx, node) + edges,
+                min_content_width(ctx, node) + edges,
+            );
+            return;
+        }
+        let padding = resolve::paddings(&style.padding, 0.0);
+        let border = resolve::borders(style);
+        let start = margin.left + padding.left + border.left;
+        if start > 0.0 {
+            self.content(start);
+        }
+        for child in child_nodes(ctx.document, node) {
+            if ctx.is_hidden(child) || ctx.is_out_of_flow(child) {
+                continue;
+            }
+            if ctx.is_text(child) {
+                self.text(ctx, &ctx.document.text_content(child), style);
+            } else {
+                self.inline(ctx, child);
+            }
+        }
+        let end = margin.right + padding.right + border.right;
+        if end > 0.0 {
+            self.width += end;
+            self.word += end;
+            self.started = true;
+        }
+    }
 }
 
 /// The border-box width a box takes when it wraps wherever it can
@@ -452,22 +612,36 @@ fn min_content(ctx: &Ctx<'_>, node: NodeId, style: &ComputedStyle) -> f32 {
             FlexDirection::Row | FlexDirection::RowReverse
         )
         && style.flex_wrap == FlexWrap::NoWrap;
+    // Outside flex and grid containers, inline content measures as runs.
+    let inline_runs = !matches!(
+        style.display,
+        Display::Flex | Display::InlineFlex | Display::Grid | Display::InlineGrid
+    );
     let mut widths = Vec::new();
+    let mut run = InlineRun::default();
     for child in child_nodes(ctx.document, node) {
         if ctx.is_hidden(child) || ctx.is_out_of_flow(child) {
             continue;
         }
-        if ctx.is_text(child) {
-            // Text has no style of its own; it inherits the container's.
+        if inline_runs && ctx.is_inline_level(child) {
+            if ctx.is_text(child) {
+                // Text has no style of its own; it inherits the container's.
+                run.text(ctx, &ctx.document.text_content(child), style);
+            } else {
+                run.inline(ctx, child);
+            }
+        } else if ctx.is_text(child) {
             let text = ctx.document.text_content(child);
             if !noonoo_text::trim_collapsible(&text).is_empty() {
                 widths.push(text_min_width(ctx, &text, style));
             }
         } else {
+            widths.extend(run.finish_started());
             let margins = resolve::margins(&ctx.style(child).margin, 0.0);
             widths.push(min_content_width(ctx, child) + margins.left + margins.right);
         }
     }
+    widths.extend(run.finish_started());
     if side_by_side {
         widths.iter().sum::<f32>() + style.column_gap * widths.len().saturating_sub(1) as f32
     } else {
