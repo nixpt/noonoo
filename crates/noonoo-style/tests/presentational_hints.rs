@@ -92,3 +92,32 @@ fn tables_space_their_cells_and_cellspacing_sets_it() {
     assert_eq!(of("a").border_spacing, (2.0, 2.0));
     assert_eq!(of("b").border_spacing, (5.0, 5.0));
 }
+
+#[test]
+fn a_border_attribute_frames_the_table_and_its_cells() {
+    use noonoo_style::BorderStyle;
+    let doc = noonoo_html::parse(
+        "<table id=a border=2><tr><td id=ad>x</table>\
+         <table id=b border><tr><th id=bd>x</table>\
+         <table id=c border=0><tr><td id=cd>x</table>\
+         <table id=d border=3><tr><td id=dd>x</table>",
+    );
+    let sheet = Stylesheet::parse("#dd { border: none }").unwrap();
+    let styles = compute(&doc, &[sheet]);
+    let of = |id: &str| styles.get(doc.get_element_by_id(id).unwrap()).unwrap();
+    for (table, width) in [("a", 2.0), ("b", 1.0)] {
+        let style = of(table);
+        assert_eq!(style.border_width.left, width, "{table}");
+        assert_eq!(style.border_width.bottom, width, "{table}");
+        assert_eq!(style.border_style.top, BorderStyle::Outset, "{table}");
+    }
+    for cell in ["ad", "bd"] {
+        assert_eq!(of(cell).border_width.top, 1.0, "{cell}");
+        assert_eq!(of(cell).border_style.right, BorderStyle::Inset, "{cell}");
+    }
+    // `border=0` is no frame, and no cell borders either.
+    assert_eq!(of("c").border_width.top, 0.0);
+    assert_eq!(of("cd").border_width.top, 0.0);
+    // Author CSS beats the hint.
+    assert_eq!(of("dd").border_style.top, BorderStyle::None);
+}

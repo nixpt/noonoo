@@ -372,6 +372,18 @@ fn presentational_hints(
     {
         hints.push(("border-spacing", format!("{spacing}px")));
     }
+    if element.name == "table"
+        && let Some(border) = element.attr("border").map(table_border)
+    {
+        hints.push(("border", format!("{border}px outset gray")));
+    }
+    if cell
+        && owning_table(doc, id)
+            .and_then(|table| doc.element(table)?.attr("border"))
+            .is_some_and(|border| table_border(border) > 0)
+    {
+        hints.push(("border", "1px inset gray".to_owned()));
+    }
     if cell
         && let Some(padding) = owning_table(doc, id)
             .and_then(|table| doc.element(table)?.attr("cellpadding"))
@@ -392,6 +404,12 @@ fn owning_table(doc: &Document, cell: NodeId) -> Option<NodeId> {
             _ => return None,
         }
     }
+}
+
+/// A table's `border` attribute in pixels: a bare or unparsable one is a
+/// pixel, as HTML's rendering section has it.
+fn table_border(value: &str) -> u32 {
+    non_negative_integer(value).unwrap_or(1)
 }
 
 /// HTML's "rules for parsing non-negative integers": leading digits after
