@@ -145,14 +145,52 @@ fn spacing(style: &ComputedStyle) -> (f32, f32) {
     }
 }
 
-/// A table's max-content content width: its columns' widest demands.
+/// A table's max-content content width: its columns' widest demands, or
+/// wider when its percentage columns need room for their share.
 pub(crate) fn max_content_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
     let children = crate::child_nodes(ctx.document, node);
     let rows = collect_rows(ctx, &children);
     let declared = declared_columns(ctx, &children);
     let (spacing_x, _) = spacing(ctx.style(node));
-    let maximums = column_demands(ctx, &rows, &declared, 0.0, spacing_x).maximums;
-    with_spacing(maximums.iter().sum(), maximums.len(), spacing_x)
+    let demands = column_demands(ctx, &rows, &declared, 0.0, spacing_x);
+    let columns = demands.maximums.iter().sum::<f32>();
+    with_spacing(
+        columns.max(widened_by_percents(&demands)),
+        demands.maximums.len(),
+        spacing_x,
+    )
+}
+
+/// How wide a table's columns must be for each percentage column to hold
+/// its maximum as its share, and the other columns theirs in what the
+/// percentages leave, as browsers' auto layout widens a table. When the
+/// percentages leave nothing for columns that want room, the table asks
+/// for as much as it can get, as browsers do with their maximum width.
+fn widened_by_percents(demands: &Demands) -> f32 {
+    /// Browsers' cap on a table's width.
+    const TABLE_MAX_WIDTH: f32 = 1_000_000.0;
+    let (mut widest, mut total, mut others) = (0.0_f32, 0.0_f32, 0.0_f32);
+    for (maximum, percent) in demands.maximums.iter().zip(&demands.percents) {
+        match *percent {
+            Some(percent) if percent > 0.0 => {
+                widest = widest.max(maximum / percent);
+                total += percent;
+            }
+            _ => others += maximum,
+        }
+    }
+    if total == 0.0 {
+        return 0.0;
+    }
+    let remaining = 1.0 - total;
+    if remaining <= f32::EPSILON {
+        return if others > 0.0 {
+            TABLE_MAX_WIDTH
+        } else {
+            widest
+        };
+    }
+    widest.max(others / remaining)
 }
 
 /// `columns` wide plus the spacing around `count` columns (none without any).

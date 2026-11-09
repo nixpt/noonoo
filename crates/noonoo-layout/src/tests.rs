@@ -3884,3 +3884,40 @@ fn col_and_colgroup_widths_size_their_columns() {
         [40.0, 40.0]
     );
 }
+
+/// A table with no width of its own widens until its percentage columns
+/// get their share, as browsers' auto layout does: a 25% column holding
+/// 8px needs a 32px table. Percentages that leave nothing for the other
+/// columns widen it to its containing block.
+#[test]
+fn percentage_columns_widen_a_shrink_to_fit_table() {
+    let css = "table { border-spacing: 0 } td { padding: 0 }";
+    let rects = |html: &str, names: &[&str]| {
+        let (doc, tree) = page(html, css, 400.0);
+        names
+            .iter()
+            .map(|name| rect_of(&doc, &tree, name).width)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        rects(
+            r#"<table id=t><tr><td id=a width="25%">x<td id=b>y</table>"#,
+            &["t", "a", "b"]
+        ),
+        [32.0, 8.0, 24.0]
+    );
+    assert_eq!(
+        rects(
+            r#"<table id=t><tr><td id=a width="50%">x<td id=b width="50%">yyyy</table>"#,
+            &["t", "a", "b"]
+        ),
+        [64.0, 32.0, 32.0]
+    );
+    assert_eq!(
+        rects(
+            r#"<table id=t><tr><td id=a>x<td id=b width="100%">y</table>"#,
+            &["t", "a", "b"]
+        ),
+        [400.0, 8.0, 392.0]
+    );
+}
