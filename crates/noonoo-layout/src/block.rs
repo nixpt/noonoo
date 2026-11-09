@@ -8,7 +8,7 @@ use noonoo_style::{ComputedStyle, Display, Edges, TextAlign, VerticalAlign, Whit
 
 use crate::float;
 use crate::margin;
-use crate::{BoxKind, Ctx, LayoutBox};
+use crate::{BoxKind, Ctx, LayoutBox, child_nodes};
 
 pub(crate) fn no_edges() -> Edges<f32> {
     Edges::all(0.0)
@@ -290,6 +290,10 @@ struct Item {
     /// Where the white space before it falls among the inline edges around
     /// it, as the source has it.
     straddle: Straddle,
+    /// An empty, edgeless inline element's marker: it gives the element a
+    /// zero-width box where it sits, but no line height and no line of
+    /// its own.
+    phantom: bool,
 }
 
 /// Which inline elements a collapsed space between two items falls in, as
@@ -462,6 +466,10 @@ struct InlineWalk {
     /// Whether white space came since the last item: a space goes before
     /// the next one, and the line may break there.
     spaced: bool,
+    /// Whether the last item is a phantom that took a space: white space
+    /// right after it collapses into that one, as across any inline
+    /// element's edges.
+    phantom_spaced: bool,
     /// For that white space: how many open elements had no item yet when it
     /// came, and how many elements closed since.
     space_opening: usize,
@@ -491,6 +499,7 @@ impl InlineWalk {
     /// A forced break: the next line starts fresh.
     fn new_line(&mut self) {
         self.spaced = false;
+        self.phantom_spaced = false;
         self.kept.clear();
         self.kept_width = 0.0;
         self.column = 0;
@@ -499,7 +508,7 @@ impl InlineWalk {
     /// White space in the source, a space `width` wide in its text's font:
     /// the next item gets a space before it.
     fn space(&mut self, width: f32) {
-        if !self.spaced {
+        if !self.spaced && !self.phantom_spaced {
             self.spaced = true;
             self.space_opening = self.opening;
             self.closed_since_space = 0;
@@ -514,13 +523,21 @@ impl InlineWalk {
     }
 
     /// Close `element`: the last item inside it ends it, taking its end
-    /// edges. An empty element with edges still makes a box, held open by
-    /// an empty item; one without edges never opens.
+    /// edges. An empty element still makes a box, held open by an empty
+    /// item: one without edges is a phantom, taking no line height.
     fn exit(&mut self, ctx: &Ctx<'_>, element: NodeId, width: f32, groups: &mut [Vec<Item>]) {
         let entered = self.entered_at.last().copied().unwrap_or(0);
         if self.count == entered {
+            // An empty element still marks its place: with edges they take
+            // room on the line; without, it's a phantom (CSS 2 §9.4.2).
             let edges = InlineEdges::of(ctx, element, width);
-            if edges.start() + edges.end() > 0.0 {
+            let phantom = edges.start() + edges.end() == 0.0;
+            // An element split around a block isn't empty, only this run
+            // of it: it marks nothing here.
+            let empty = child_nodes(ctx.document, element)
+                .into_iter()
+                .all(|child| ctx.is_hidden(child) || margin::is_phantom(ctx, child));
+            if !phantom || empty {
                 let item = Item {
                     node: None,
                     style_node: element,
@@ -538,6 +555,7 @@ impl InlineWalk {
                     lead: 0.0,
                     trail: 0.0,
                     straddle: Straddle::default(),
+                    phantom,
                 };
                 self.push(ctx, width, groups, item, false);
             }
@@ -587,6 +605,7 @@ impl InlineWalk {
             };
         }
         self.opening = 0;
+        self.phantom_spaced = item.phantom && (self.spaced || self.phantom_spaced);
         self.spaced = false;
         self.after_atomic = atomic;
         let group = groups.len() - 1;
@@ -795,6 +814,7 @@ pub(crate) fn layout_inline_run(
                                 lead: 0.0,
                                 trail: 0.0,
                                 straddle: Straddle::default(),
+                                phantom: false,
                             };
                             walk.push(ctx, width, &mut groups, item, false);
                         }
@@ -838,6 +858,7 @@ pub(crate) fn layout_inline_run(
                         lead: 0.0,
                         trail: 0.0,
                         straddle: Straddle::default(),
+                        phantom: false,
                     };
                     walk.push(ctx, width, &mut groups, item, true);
                     continue;
@@ -878,6 +899,7 @@ pub(crate) fn layout_inline_run(
                             lead: 0.0,
                             trail: 0.0,
                             straddle: Straddle::default(),
+                            phantom: false,
                         };
                         walk.push(ctx, width, &mut groups, item, false);
                     }
@@ -1021,7 +1043,10 @@ pub(crate) fn layout_inline_run(
                         && item.chain.last().copied() == owner
                 })
             };
-            let struts = !quirks || holds_text(None);
+            // A line of phantoms alone (an empty span after a `<br>`) takes
+            // no height at all.
+            let phantoms_only = line.iter().all(|item| item.phantom);
+            let struts = !phantoms_only && (!quirks || holds_text(None));
             let (mut up, mut down) = if struts {
                 ctx.inline_box(parent_style, line_height)
             } else {
@@ -1048,7 +1073,10 @@ pub(crate) fn layout_inline_run(
                     };
                 rises.insert(fragment.element, rise);
                 fragment_rises.push(rise);
-                let counts = !quirks || holds_text(Some(fragment.element)) || {
+                let substantial = line[fragment.first..=fragment.last]
+                    .iter()
+                    .any(|item| !item.phantom);
+                let counts = substantial && !quirks || holds_text(Some(fragment.element)) || {
                     let edges = InlineEdges::of(ctx, fragment.element, width);
                     edges.start() + edges.end() > 0.0
                         || edges.padding.top + edges.padding.bottom > 0.0
@@ -1107,7 +1135,9 @@ pub(crate) fn layout_inline_run(
                     }
                     (above, below, Align::Rise(owner_rise))
                 };
-                if let Align::Rise(rise) = align {
+                if let Align::Rise(rise) = align
+                    && !item.phantom
+                {
                     let (above, below) = reach.unwrap_or((above, below));
                     up = up.max(above + rise);
                     down = down.max(below - rise);
