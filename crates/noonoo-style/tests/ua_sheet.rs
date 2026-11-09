@@ -249,3 +249,17 @@ fn hidden_inputs_are_not_displayed() {
     let style = styles.get(doc.get_element_by_id("h").unwrap()).unwrap();
     assert_eq!(style.display, Display::None);
 }
+
+#[test]
+fn a_rule_is_a_grey_inset_line() {
+    let (doc, styles) = styled("<p>a</p><hr><p>b</p>");
+    let hr = first(&doc, &styles, "hr");
+    // Chromium's: a 1px inset border all round, half a line of margin.
+    assert_eq!(hr.border_width.top, 1.0);
+    assert_eq!(hr.border_width.bottom, 1.0);
+    assert_eq!(hr.border_style.top, noonoo_style::BorderStyle::Inset);
+    let (top, _, bottom, _) = margins(hr);
+    assert_eq!((top, bottom), (8.0, 8.0));
+    assert!(hr.margin.left == Dimension::Auto && hr.margin.right == Dimension::Auto);
+    assert_eq!(hr.overflow_y, noonoo_style::Overflow::Hidden);
+}
