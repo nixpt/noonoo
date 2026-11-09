@@ -4214,3 +4214,20 @@ fn a_sized_unloaded_image_sits_on_its_bottom_edge() {
         bottom("b")
     );
 }
+
+/// A box the margins collapse through sits where it would with a bottom
+/// border (CSS 2 §8.3.1): after the margin before it and its own leading
+/// margins, as Chromium places Wikipedia's empty menus. Content after it
+/// doesn't move.
+#[test]
+fn a_collapsed_through_box_sits_below_its_top_margin() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div>a</div><div id=e><ul id=u></ul></div><div id=n>b</div>"#,
+        "body { margin: 0 } div { font-size: 16px }",
+        400.0,
+    );
+    let y = |name| tree.get(id(&doc, name)).unwrap().rect.y;
+    assert!(near(y("e"), 35.2), "{}", y("e"));
+    assert!(near(y("u"), 35.2), "{}", y("u"));
+    assert!(near(y("n"), 35.2), "{}", y("n"));
+}

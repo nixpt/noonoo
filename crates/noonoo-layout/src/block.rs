@@ -182,13 +182,24 @@ pub(crate) fn layout_block_children(
 
         if margin.through {
             // A collapsed-through box adds its margin to the chain and occupies
-            // no space; it still gets a (zero-height) box for the tree.
+            // no space; it still gets a (zero-height) box for the tree. Unless
+            // the margin leaves through the container's top, the box goes
+            // below the margin so far, as if it had a bottom border.
+            let at = if !has_content && collapse_top {
+                cursor
+            } else {
+                cursor
+                    + match pending {
+                        Some(previous) => margin::collapse(previous, margin.leading),
+                        None => margin.leading,
+                    }
+            };
             pending = Some(match pending {
                 Some(previous) => margin::collapse(previous, margin.top),
                 None => margin.top,
             });
             let available = flow_width(ctx, child, content_width);
-            ctx.layout_element(child, content_x + margin.left, cursor, available, None);
+            ctx.layout_element(child, content_x + margin.left, at, available, None);
             if let Some(index) = ctx.tree_index(child) {
                 apply_auto_margins(ctx, child, index, content_width, parent_style.text_align);
                 indices.push(index);

@@ -53,6 +53,10 @@ pub(crate) struct VerticalMargins {
     pub bottom: f32,
     /// The resolved left margin (horizontal margins never collapse).
     pub left: f32,
+    /// A collapsed-through box's own top margin with its children's leading
+    /// ones, the bottom margins left out: where its top border edge goes
+    /// (CSS 2 §8.3.1). The same as `top` for any other box.
+    pub leading: f32,
     /// Whether the box is *collapsed through*: an empty box whose top and bottom
     /// margins are actually one margin passing through it.
     pub through: bool,
@@ -104,6 +108,7 @@ fn compute_effective_margins(ctx: &Ctx<'_>, node: NodeId, width: f32) -> Vertica
             top: through,
             bottom: through,
             left: margin.left,
+            leading: leading_margin(ctx, node, margin.top, content_width),
             through: true,
         };
     }
@@ -123,6 +128,7 @@ fn compute_effective_margins(ctx: &Ctx<'_>, node: NodeId, width: f32) -> Vertica
         top,
         bottom,
         left: margin.left,
+        leading: top,
         through: false,
     }
 }
