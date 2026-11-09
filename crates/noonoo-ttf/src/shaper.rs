@@ -51,6 +51,29 @@ pub(crate) fn fallback_advance(set: &FontSet, selected: &Font, text: &str, font_
     pixels
 }
 
+/// The ascent and descent of the faces `text` is drawn with — `selected`
+/// and each fallback [`FontSet::face_presented`] picks for a character —
+/// the tallest of each, whole pixels as [`ascent_descent_px`] gives them.
+pub(crate) fn fallback_metrics(
+    set: &FontSet,
+    selected: &Font,
+    text: &str,
+    font_size: f32,
+) -> (f32, f32) {
+    let mut reach = ascent_descent_px(selected, font_size);
+    let mut previous: *const Font = selected;
+    for (character, emoji) in crate::emoji::presented(text) {
+        let font = set.face_presented(selected, character, emoji);
+        if std::ptr::eq(font, previous) {
+            continue;
+        }
+        previous = font;
+        let (ascent, descent) = ascent_descent_px(font, font_size);
+        reach = (reach.0.max(ascent), reach.1.max(descent));
+    }
+    reach
+}
+
 /// The `normal` line height of `font` at `font_size`, in pixels: ascent,
 /// descent and line gap each rounded to whole pixels and then added, as
 /// browsers do, so lines (and the boxes they stack in) stay pixel-aligned.
@@ -167,6 +190,16 @@ impl Shaper for FontSetShaper<'_> {
             .select_best(request.families, request.weight, request.italic)
         {
             Some(font) => ascent_descent_px(font, font_size),
+            None => (font_size * 0.8, font_size * 0.4),
+        }
+    }
+
+    fn text_metrics(&self, text: &str, request: FontRequest, font_size: f32) -> (f32, f32) {
+        match self
+            .set
+            .select_best(request.families, request.weight, request.italic)
+        {
+            Some(font) => fallback_metrics(self.set, font, text, font_size),
             None => (font_size * 0.8, font_size * 0.4),
         }
     }
