@@ -264,6 +264,8 @@ pub(crate) fn apply(
                     "table-row-group" | "thead-body-group" => Display::TableRowGroup,
                     "table-row" => Display::TableRow,
                     "table-cell" => Display::TableCell,
+                    "table-column-group" => Display::TableColumnGroup,
+                    "table-column" => Display::TableColumn,
                     _ => style.display,
                 };
             }

@@ -17,6 +17,8 @@ table { display: table; border-spacing: 2px }
 thead, tbody, tfoot { display: table-row-group }
 tr { display: table-row }
 td, th { display: table-cell }
+colgroup { display: table-column-group }
+col { display: table-column }
 li { display: list-item }
 head, title, meta, link, style, script, base, template, dialog { display: none }
 dialog[open] { display: block }

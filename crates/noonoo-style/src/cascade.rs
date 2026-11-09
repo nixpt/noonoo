@@ -362,7 +362,7 @@ fn presentational_hints(
 ) -> Vec<(&'static str, String)> {
     let mut hints = Vec::new();
     let cell = matches!(element.name.as_str(), "td" | "th");
-    if (cell || element.name == "table")
+    if (cell || matches!(element.name.as_str(), "table" | "col" | "colgroup"))
         && let Some(width) = element.attr("width").and_then(dimension_attribute)
     {
         hints.push(("width", width));

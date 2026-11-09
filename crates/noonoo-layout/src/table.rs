@@ -12,6 +12,9 @@
 //!   a column's width is the widest demand placed on it, and a `colspan`
 //!   cell spreads its demand evenly across the columns it covers (an
 //!   accepted approximation of the spec's distribution);
+//! - `col`/`colgroup` widths (across their `span`) count as a cell's; a
+//!   column with a pixel width wants that width, or its minimum if wider,
+//!   whatever its cells' max-content;
 //! - column widths shrink proportionally when their sum exceeds the table's
 //!   content box, or stretch proportionally when the table's width leaves
 //!   leftover space — the §17.5.2 distribution;
@@ -29,7 +32,7 @@
 //!   modelled; stray content contributes nothing.
 
 use noonoo_dom::NodeId;
-use noonoo_style::{BorderCollapse, ComputedStyle, Display};
+use noonoo_style::{BorderCollapse, ComputedStyle, Dimension, Display};
 
 use crate::{Ctx, float, resolve};
 
@@ -69,7 +72,8 @@ pub(crate) fn layout_table_children(
         return (Vec::new(), 0.0);
     }
     let (spacing_x, spacing_y) = spacing(style);
-    let demands = column_demands(ctx, &rows, content_width, spacing_x);
+    let declared = declared_columns(ctx, children);
+    let demands = column_demands(ctx, &rows, &declared, content_width, spacing_x);
     let gaps = spacing_x * (demands.minimums.len() + 1) as f32;
     let columns = fit_columns(&demands, (content_width - gaps).max(0.0), fill);
     let column_start = |column: usize| column_start(&columns, column, spacing_x);
@@ -143,9 +147,11 @@ fn spacing(style: &ComputedStyle) -> (f32, f32) {
 
 /// A table's max-content content width: its columns' widest demands.
 pub(crate) fn max_content_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
-    let rows = collect_rows(ctx, &crate::child_nodes(ctx.document, node));
+    let children = crate::child_nodes(ctx.document, node);
+    let rows = collect_rows(ctx, &children);
+    let declared = declared_columns(ctx, &children);
     let (spacing_x, _) = spacing(ctx.style(node));
-    let maximums = column_demands(ctx, &rows, 0.0, spacing_x).maximums;
+    let maximums = column_demands(ctx, &rows, &declared, 0.0, spacing_x).maximums;
     with_spacing(maximums.iter().sum(), maximums.len(), spacing_x)
 }
 
@@ -160,9 +166,11 @@ fn with_spacing(columns: f32, count: usize, spacing_x: f32) -> f32 {
 
 /// A table's min-content content width: its columns' minimums side by side.
 pub(crate) fn min_content_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
-    let rows = collect_rows(ctx, &crate::child_nodes(ctx.document, node));
+    let children = crate::child_nodes(ctx.document, node);
+    let rows = collect_rows(ctx, &children);
+    let declared = declared_columns(ctx, &children);
     let (spacing_x, _) = spacing(ctx.style(node));
-    let minimums = column_demands(ctx, &rows, 0.0, spacing_x).minimums;
+    let minimums = column_demands(ctx, &rows, &declared, 0.0, spacing_x).minimums;
     with_spacing(minimums.iter().sum(), minimums.len(), spacing_x)
 }
 
@@ -181,18 +189,36 @@ struct Demands {
 /// Each column's width demands: a cell demands its min-content and
 /// max-content border-box widths (plus its margins, as track sizing counts
 /// outer boxes); a spanning cell spreads its demands evenly across the
-/// columns it covers, less the `spacing_x` between them. A column's
-/// maximum is never below its minimum.
-fn column_demands(ctx: &Ctx<'_>, rows: &[Row], content_width: f32, spacing_x: f32) -> Demands {
+/// columns it covers, less the `spacing_x` between them. A `declared`
+/// column width (from `col`/`colgroup`) counts as a cell's. A column with
+/// a pixel width wants that width, or its minimum if wider; otherwise a
+/// column's maximum is never below its minimum.
+fn column_demands(
+    ctx: &Ctx<'_>,
+    rows: &[Row],
+    declared: &[Dimension],
+    content_width: f32,
+    spacing_x: f32,
+) -> Demands {
     let column_count = rows
         .iter()
         .map(|row| row.cells.iter().map(|cell| cell.span).sum::<usize>())
         .max()
-        .unwrap_or(0);
+        .unwrap_or(0)
+        .max(declared.len());
     let mut minimums = vec![0.0_f32; column_count];
     let mut maximums = vec![0.0_f32; column_count];
-    let mut fixed = vec![false; column_count];
+    let mut fixed_widths: Vec<Option<f32>> = vec![None; column_count];
     let mut percents: Vec<Option<f32>> = vec![None; column_count];
+    for (column, width) in declared.iter().enumerate() {
+        match *width {
+            Dimension::Px(width) => raise(&mut fixed_widths[column], width),
+            Dimension::Percent(percent) if percent > 0.0 => {
+                raise(&mut percents[column], percent / 100.0);
+            }
+            _ => {}
+        }
+    }
     for row in rows {
         for cell in &row.cells {
             let cell_style = ctx.style(cell.node);
@@ -207,11 +233,9 @@ fn column_demands(ctx: &Ctx<'_>, rows: &[Row], content_width: f32, spacing_x: f3
                 ((float::preferred_width(ctx, cell.node) + outer - inner_gaps) / span).max(0.0);
             if cell.span == 1 && cell.column < column_count {
                 match cell_style.width {
-                    noonoo_style::Dimension::Px(_) => fixed[cell.column] = true,
-                    noonoo_style::Dimension::Percent(percent) if percent > 0.0 => {
-                        let share = percent / 100.0;
-                        let column = &mut percents[cell.column];
-                        *column = Some(column.map_or(share, |known| known.max(share)));
+                    Dimension::Px(_) => raise(&mut fixed_widths[cell.column], maximum),
+                    Dimension::Percent(percent) if percent > 0.0 => {
+                        raise(&mut percents[cell.column], percent / 100.0);
                     }
                     _ => {}
                 }
@@ -225,8 +249,9 @@ fn column_demands(ctx: &Ctx<'_>, rows: &[Row], content_width: f32, spacing_x: f3
             }
         }
     }
-    for (maximum, &minimum) in maximums.iter_mut().zip(&minimums) {
-        *maximum = maximum.max(minimum);
+    for ((maximum, &minimum), fixed_width) in maximums.iter_mut().zip(&minimums).zip(&fixed_widths)
+    {
+        *maximum = fixed_width.unwrap_or(*maximum).max(minimum);
     }
     // Percentages past 100% in total don't count: the columns after the
     // budget runs out lose theirs.
@@ -238,9 +263,14 @@ fn column_demands(ctx: &Ctx<'_>, rows: &[Row], content_width: f32, spacing_x: f3
     Demands {
         minimums,
         maximums,
-        fixed,
+        fixed: fixed_widths.iter().map(Option::is_some).collect(),
         percents,
     }
+}
+
+/// Raise `slot` to at least `value`, setting it if unset.
+fn raise(slot: &mut Option<f32>, value: f32) {
+    *slot = Some(slot.map_or(value, |known| known.max(value)));
 }
 
 /// The columns' widths in a content box `target` wide, after CSS 2
@@ -388,6 +418,45 @@ fn collect_rows(ctx: &Ctx<'_>, children: &[NodeId]) -> Vec<Row> {
     rows
 }
 
+/// The widths `col` and `colgroup` children declare, one per column they
+/// span, in column order. A `col` without a width takes its group's; a
+/// group without `col`s spans its own `span` columns.
+fn declared_columns(ctx: &Ctx<'_>, children: &[NodeId]) -> Vec<Dimension> {
+    let mut widths = Vec::new();
+    let mut declare = |node: NodeId, width: &Dimension| {
+        let span = span_of(ctx, node, "span");
+        widths.extend(std::iter::repeat_n(width.clone(), span));
+    };
+    for &child in children {
+        match display_of(ctx, child) {
+            Some(Display::TableColumn) => declare(child, &ctx.style(child).width),
+            Some(Display::TableColumnGroup) => {
+                let group = &ctx.style(child).width;
+                let columns: Vec<NodeId> = crate::child_nodes(ctx.document, child)
+                    .into_iter()
+                    .filter(|&col| display_of(ctx, col) == Some(Display::TableColumn))
+                    .collect();
+                if columns.is_empty() {
+                    declare(child, group);
+                }
+                for col in columns {
+                    let width = &ctx.style(col).width;
+                    declare(
+                        col,
+                        if *width == Dimension::Auto {
+                            group
+                        } else {
+                            width
+                        },
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+    widths
+}
+
 /// A node's `display`, or `None` for text, which has no computed style:
 /// whitespace between table parts is text and takes no part in the table.
 fn display_of(ctx: &Ctx<'_>, node: NodeId) -> Option<Display> {
@@ -409,14 +478,18 @@ fn row_of(ctx: &Ctx<'_>, node: NodeId) -> Row {
 }
 
 fn cell_of(ctx: &Ctx<'_>, node: NodeId, column: usize) -> Cell {
-    let span = ctx
-        .document
+    let span = span_of(ctx, node, "colspan");
+    Cell { node, column, span }
+}
+
+/// A `colspan` or `span` attribute: 1 when absent, invalid or zero.
+fn span_of(ctx: &Ctx<'_>, node: NodeId, attribute: &str) -> usize {
+    ctx.document
         .element(node)
-        .and_then(|element| element.attr("colspan"))
+        .and_then(|element| element.attr(attribute))
         .and_then(|value| value.parse::<usize>().ok())
         .unwrap_or(1)
-        .clamp(1, MAX_SPAN);
-    Cell { node, column, span }
+        .clamp(1, MAX_SPAN)
 }
 
 /// In `collapse` mode the cell to the left of (or above) a shared edge drops

@@ -522,6 +522,8 @@ fn is_display(values: &[Value]) -> bool {
             | "table-row-group"
             | "table-row"
             | "table-cell"
+            | "table-column-group"
+            | "table-column"
             | "inherit"
             | "initial"
             | "unset"

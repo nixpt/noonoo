@@ -1070,10 +1070,15 @@ impl Ctx<'_> {
     }
 
     /// Whether `node` is `display: none`.
+    /// Columns (`col`, `colgroup`) count too: they make no box, and their
+    /// widths reach the table through its column walk.
     pub fn is_hidden(&self, node: NodeId) -> bool {
-        self.styles
-            .get(node)
-            .is_some_and(|style| style.display == Display::None)
+        self.styles.get(node).is_some_and(|style| {
+            matches!(
+                style.display,
+                Display::None | Display::TableColumn | Display::TableColumnGroup
+            )
+        })
     }
 
     /// Whether `node` is text of collapsible white space only (spaces, tabs,

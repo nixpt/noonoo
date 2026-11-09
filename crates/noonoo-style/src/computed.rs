@@ -45,6 +45,10 @@ pub enum Display {
     TableRow,
     /// `table-cell`.
     TableCell,
+    /// `table-column-group` (`colgroup`): no box, only column widths.
+    TableColumnGroup,
+    /// `table-column` (`col`): no box, only a column's width.
+    TableColumn,
 }
 
 /// `border-collapse`: whether adjacent cells' borders merge into one.

@@ -3827,3 +3827,60 @@ fn spacing_comes_out_of_the_columns_and_into_spanning_cells() {
     assert!(near(w.width, 80.0), "{w:?}");
     assert!(near(w.width, a.width + 2.0 + b.width));
 }
+
+/// `<col>` and `<colgroup>` widths size their columns, from attributes or
+/// CSS, across their `span`; a fixed column wraps its content to its width.
+#[test]
+fn col_and_colgroup_widths_size_their_columns() {
+    let css = "table { border-spacing: 0 } td { padding: 0 }";
+    let widths = |html: &str, names: &[&str]| {
+        let (doc, tree) = page(html, css, 400.0);
+        names
+            .iter()
+            .map(|name| rect_of(&doc, &tree, name).width)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        widths(
+            r#"<table><col width=50><col style="width: 30px"><tr><td id=a>x<td id=b>y</table>"#,
+            &["a", "b"]
+        ),
+        [50.0, 30.0]
+    );
+    assert_eq!(
+        widths(
+            "<table><colgroup width=40 span=2></colgroup><col><tr><td id=a>x<td id=b>y<td id=c>z</table>",
+            &["a", "b", "c"]
+        ),
+        [40.0, 40.0, 8.0]
+    );
+    assert_eq!(
+        widths(
+            "<table><colgroup width=90><col span=2 width=20></colgroup><tr><td id=a>x<td id=b>y</table>",
+            &["a", "b"]
+        ),
+        [20.0, 20.0]
+    );
+    assert_eq!(
+        widths(
+            r#"<table width=200><col width="25%"><tr><td id=a>x<td id=b>y</table>"#,
+            &["a", "b"]
+        ),
+        [50.0, 150.0]
+    );
+    assert_eq!(
+        widths(
+            "<table><col width=40><tr><td id=a>aaaa bbbb cccc</table>",
+            &["a"]
+        ),
+        [40.0]
+    ); // A cell's pixel width holds its column the same way against a wider
+    // neighbour in another row.
+    assert_eq!(
+        widths(
+            "<table><tr><td id=a width=40>x<tr><td id=b>aaaa bbbb cccc</table>",
+            &["a", "b"]
+        ),
+        [40.0, 40.0]
+    );
+}
