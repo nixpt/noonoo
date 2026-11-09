@@ -2314,7 +2314,8 @@ fn a_text_field_is_as_wide_as_its_size() {
     assert_eq!(width("a"), 160.0);
     assert_eq!(width("b"), 40.0);
     assert_eq!(width("c"), 50.0);
-    assert_eq!(width("d"), 0.0, "only text fields take a size");
+    // A checkbox takes no `size`: it is its own 13px.
+    assert_eq!(width("d"), 13.0, "only text fields take a size");
 }
 
 /// The text boxes' (text, y) in reading order.
@@ -4161,4 +4162,33 @@ fn in_quirks_mode_only_direct_text_brings_back_a_strut() {
     assert!(near(height("b"), 24.0), "{}", height("b"));
     // The span holds no text itself: only the 5px text's box counts.
     assert!(near(height("c"), 6.0), "{}", height("c"));
+}
+
+/// A `border-box` size never squeezes the padding and border: the content
+/// box is at least empty, so the box is at least its edges.
+#[test]
+fn a_border_box_size_is_at_least_its_padding_and_border() {
+    let (doc, tree) = page(
+        r#"<div id=d style="box-sizing: border-box; width: 10px; height: 10px; padding: 8px; border: 1px solid"></div>"#,
+        "",
+        400.0,
+    );
+    let rect = tree.get(id(&doc, "d")).unwrap().rect;
+    assert_eq!((rect.width, rect.height), (18.0, 18.0));
+}
+
+/// A checkbox or radio's baseline is the bottom of its border box, as in
+/// Chromium: its bottom margin hangs below the line's baseline instead of
+/// lifting it (Wikipedia's menu label sat 3px low).
+#[test]
+fn a_checkboxs_baseline_is_its_border_box_bottom() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div id=d><input type=checkbox>x</div>"#,
+        "body { margin: 0 } div { font-size: 16px }",
+        400.0,
+    );
+    // MetricShaper strut: 12.8 above, 6.4 below; the checkbox 3 + 13 above
+    // and its 3px margin below.
+    assert!(near(text_y(&tree, "x"), 3.2), "{}", text_y(&tree, "x"));
+    assert!(near(tree.get(id(&doc, "d")).unwrap().rect.height, 22.4));
 }

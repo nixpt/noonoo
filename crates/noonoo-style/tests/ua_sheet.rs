@@ -209,3 +209,32 @@ fn form_controls_use_the_small_control_font() {
         assert_eq!(style.line_height, None, "{id}");
     }
 }
+
+#[test]
+fn buttons_checkboxes_and_radios_have_browser_boxes() {
+    let (doc, styles) = styled(
+        r#"<button id=b>x</button><input id=s type=submit><input id=c type=checkbox><input id=r type=RADIO>"#,
+    );
+    let by_id = |id: &str| styles.get(doc.get_element_by_id(id).unwrap()).unwrap();
+    for id in ["b", "s"] {
+        let style = by_id(id);
+        assert_eq!(style.padding.top, noonoo_style::Length::Px(1.0), "{id}");
+        assert_eq!(style.padding.left, noonoo_style::Length::Px(6.0), "{id}");
+        assert_eq!(style.border_width.left, 2.0, "{id}");
+        assert_eq!(
+            style.border_style.left,
+            noonoo_style::BorderStyle::Outset,
+            "{id}"
+        );
+    }
+    let px = noonoo_style::Dimension::Px;
+    for (id, expected) in [("c", (3.0, 3.0, 3.0, 4.0)), ("r", (3.0, 3.0, 0.0, 5.0))] {
+        let style = by_id(id);
+        assert_eq!(
+            (style.width.clone(), style.height.clone()),
+            (px(13.0), px(13.0)),
+            "{id}"
+        );
+        assert_eq!(margins(style), expected, "{id}");
+    }
+}

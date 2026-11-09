@@ -1319,7 +1319,8 @@ impl Ctx<'_> {
             .tree_index(node)
             .and_then(|index| self.box_baseline(index))
             .map(|baseline| baseline - border_y)
-            .or_else(|| self.text_field_baseline(node));
+            .or_else(|| self.text_field_baseline(node))
+            .or_else(|| self.toggle_baseline(node, height));
         if let Some(key) = key
             && self.establishes_bfc(node, self.style(node))
         {
@@ -1327,6 +1328,15 @@ impl Ctx<'_> {
             self.baselines.insert(key, baseline);
         }
         (height, baseline)
+    }
+
+    /// A checkbox or radio's baseline, from its border-box top: its border
+    /// box's bottom, as Chromium aligns one (not its margin box's).
+    fn toggle_baseline(&self, node: NodeId, border_box_height: f32) -> Option<f32> {
+        let element = self.document.element(node)?;
+        let kind = element.attr("type")?.to_ascii_lowercase();
+        (element.name == "input" && matches!(kind.as_str(), "checkbox" | "radio"))
+            .then_some(border_box_height)
     }
 
     /// An empty text field's baseline, from its border-box top: where its
@@ -1389,8 +1399,9 @@ impl Ctx<'_> {
         // normalise them all to border boxes, clamp — `min` wins over `max` —
         // and derive the content width. An auto width fills the available
         // width (its border box is the whole reference).
+        // A border box is never narrower than its padding and border.
         let to_border_box = |width: f32| match style.box_sizing {
-            BoxSizing::BorderBox => width,
+            BoxSizing::BorderBox => width.max(horizontal),
             BoxSizing::ContentBox => (width + horizontal).max(0.0),
         };
         let specified = resolve::dimension(style.width.clone(), available_width).map(to_border_box);
@@ -1479,7 +1490,7 @@ impl Ctx<'_> {
         // In quirks mode a cell's `height` is its border box (padding inside).
         let border_box_cell = style.display == Display::TableCell && self.is_quirks();
         let to_border_box_height = |height: f32| match style.box_sizing {
-            BoxSizing::BorderBox => height,
+            BoxSizing::BorderBox => height.max(vertical),
             BoxSizing::ContentBox if border_box_cell => height.max(vertical),
             BoxSizing::ContentBox => height + vertical,
         };

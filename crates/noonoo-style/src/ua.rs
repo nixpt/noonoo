@@ -65,6 +65,12 @@ input[type="url"], input[type="tel"], input[type="password"], input[type="number
 textarea {
     padding: 2px; border: 1px solid #767676; font-family: monospace; overflow: auto
 }
+button, input[type="button"], input[type="submit"], input[type="reset"] {
+    padding: 1px 6px; border: 2px outset #767676
+}
+input[type="checkbox"], input[type="radio"] { width: 13px; height: 13px; box-sizing: border-box }
+input[type="checkbox"] { margin: 3px 3px 3px 4px }
+input[type="radio"] { margin: 3px 3px 0 5px }
 "#;
 
 /// The user-agent rules for quirks-mode documents only, after HTML's
