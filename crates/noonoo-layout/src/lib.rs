@@ -832,6 +832,45 @@ pub(crate) struct Ctx<'a> {
 impl Ctx<'_> {
     /// The definite content height a percentage height resolves against, if
     /// the containing block has one.
+    /// CSS Quirks §3.6–3.7: in quirks mode an in-flow, auto-height root
+    /// element's border box is at least the viewport less its margins, and
+    /// an auto-height body's at least the root's content box less its own.
+    fn quirks_fill_height(
+        &self,
+        node: NodeId,
+        style: &ComputedStyle,
+        own_margins: f32,
+    ) -> Option<f32> {
+        if !matches!(style.height, Dimension::Auto)
+            || style.float != noonoo_style::Float::None
+            || matches!(style.position, Position::Absolute | Position::Fixed)
+        {
+            return None;
+        }
+        let tree = self.document.tree();
+        let root = self.document.root();
+        let parent = tree.parent(node)?;
+        let name = self.document.element(node)?.name.as_str();
+        let width = self.viewport.width;
+        if name == "html" && parent == root {
+            return Some((self.viewport.height - own_margins).max(0.0));
+        }
+        if name == "body" && tree.parent(parent) == Some(root) {
+            let html = self.style(parent);
+            let margin = resolve::margins(&html.margin, width);
+            let padding = resolve::paddings(&html.padding, width);
+            let border = resolve::borders(html);
+            let edges = margin.top
+                + margin.bottom
+                + padding.top
+                + padding.bottom
+                + border.top
+                + border.bottom;
+            return Some((self.viewport.height - edges - own_margins).max(0.0));
+        }
+        None
+    }
+
     pub(crate) fn percent_basis(&self) -> Option<f32> {
         self.heights.last().copied().flatten()
     }
@@ -1307,6 +1346,12 @@ impl Ctx<'_> {
             Some(basis) => resolve::dimension(value.clone(), basis),
             None => resolve::definite(value),
         };
+        let quirks = self.document.quirks_mode() == noonoo_dom::QuirksMode::Quirks;
+        let fill = if quirks {
+            self.quirks_fill_height(node, &style, margin.top + margin.bottom)
+        } else {
+            None
+        };
         let clamp_height = |height: f32| {
             let mut height = height;
             if let Some(maximum) = height_of(&style.max_height) {
@@ -1314,6 +1359,9 @@ impl Ctx<'_> {
             }
             if let Some(minimum) = height_of(&style.min_height) {
                 height = height.max(to_border_box_height(minimum));
+            }
+            if let Some(fill) = fill {
+                height = height.max(fill);
             }
             height
         };
@@ -1329,8 +1377,18 @@ impl Ctx<'_> {
             .or(specified_height)
             .or(definite_height)
             .map(clamp_height);
-        self.heights
-            .push(definite_border_height.map(|height| (height - vertical).max(0.0)));
+        // CSS Quirks §3.5: in quirks mode an auto-height block hands its
+        // children the percentage basis it was given, so a percentage looks
+        // past it to the nearest ancestor with a height.
+        let passes_basis = quirks
+            && matches!(style.display, Display::Block | Display::ListItem)
+            && !matches!(style.position, Position::Absolute | Position::Fixed);
+        let child_basis = match definite_border_height {
+            Some(height) => Some((height - vertical).max(0.0)),
+            None if passes_basis => basis,
+            None => None,
+        };
+        self.heights.push(child_basis);
 
         let establishes_bfc = self.establishes_bfc(node, &style);
         if establishes_bfc {

@@ -3502,3 +3502,47 @@ fn flow_root_is_a_block_that_keeps_child_margins() {
     let r = tree.get(id(&doc, "r")).unwrap().rect;
     assert_eq!((r.y, r.width, r.height), (0.0, 400.0, 39.2));
 }
+
+fn body_and_root(doc: &Document, tree: &LayoutTree) -> (Rect, Rect) {
+    let body = doc.get_elements_by_tag_name("body")[0];
+    let html = doc.get_elements_by_tag_name("html")[0];
+    (tree.get(body).unwrap().rect, tree.get(html).unwrap().rect)
+}
+
+/// CSS Quirks §3.6–3.7: in quirks mode the root fills the viewport and an
+/// auto-height body fills the root, less its margins.
+#[test]
+fn in_quirks_mode_html_and_body_fill_the_viewport() {
+    let (doc, tree) = page("<p>x</p>", "body { margin: 8px }", 400.0);
+    let (body, html) = body_and_root(&doc, &tree);
+    assert_eq!(html.height, 600.0);
+    assert_eq!((body.y, body.height), (8.0, 584.0));
+    // Content taller than the viewport still wins.
+    let (doc, tree) = page("<p>x</p>", "p { height: 900px }", 400.0);
+    assert_eq!(body_and_root(&doc, &tree).0.height, 900.0);
+    // A set height, or standards mode, doesn't fill.
+    let (doc, tree) = page("<p>x</p>", "body { height: 50px }", 400.0);
+    assert_eq!(body_and_root(&doc, &tree).0.height, 50.0);
+    let (doc, tree) = page("<!doctype html><p>x</p>", "", 400.0);
+    assert_eq!(body_and_root(&doc, &tree).0.height, 19.2);
+}
+
+/// CSS Quirks §3.5: a percentage height looks past auto-height blocks to
+/// the nearest ancestor with a height (the viewport at the top).
+#[test]
+fn in_quirks_mode_percentage_heights_skip_auto_height_blocks() {
+    let (doc, tree) = page(
+        "<div><div id=d></div></div><div style='height:200px'><div><div id=e></div></div></div>",
+        "#d, #e { height: 50% }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "d")).unwrap().rect.height, 300.0);
+    assert_eq!(tree.get(id(&doc, "e")).unwrap().rect.height, 100.0);
+    // Standards mode: auto-height parents leave it auto.
+    let (doc, tree) = page(
+        "<!doctype html><div><div id=d></div></div>",
+        "#d { height: 50% }",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "d")).unwrap().rect.height, 0.0);
+}
