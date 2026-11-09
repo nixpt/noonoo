@@ -1,27 +1,65 @@
 # Noonoo
 
-**A clean-room, modular HTML/CSS rendering engine.**
+**A modular HTML/CSS rendering engine in small, owned Rust crates.**
 
 *Noonoo* — a deliberately unmistakable name: short, memorable, and free on
 every registry this project publishes to.
 
-Noonoo turns markup and stylesheets into laid-out, paintable form. It is a
-from-scratch reimplementation of the ideas in `bliss-engine` (itself a fork of
-upstream Blitz), decomposed into small crates and built to be the **substrate**
-that a UI framework (arniko) and a browser (surfer) build on.
+Noonoo turns markup and stylesheets into laid-out, paintable, accessible form:
+parse → cascade → layout → paint, with an accessibility tree alongside. Every
+stage is its own crate behind a narrow seam, so a host takes only what it
+needs — a DOM and selectors, the cascade, layout, or the whole engine — and
+embeds it in a UI framework, a document viewer, or a browser.
 
-> **Clean room.** No code here is copied from `bliss-engine`, Blitz, or any other
-> rendering engine. Noonoo is written from behaviour and specification. The
-> engines it *replaces* (Servo's *stylo*, *taffy*, *parley*) are not
-> dependencies at all — they were re-owned as small crates. What is borrowed is
-> borrowed deliberately (GPU rasterization, windowing): ordinary crates.io
-> dependencies, pinned in one place, reached through one crate each, and kept
-> out of the default build entirely.
+The engine itself has **no third-party dependencies**: HTML, CSS, selectors,
+layout, text, fonts and images are all owned code. What is borrowed is
+borrowed deliberately (GPU rasterization, windowing, the platform
+accessibility bridge): ordinary crates.io dependencies, each reached through
+one opt-in integration crate and kept out of the default build.
+
+## Features
+
+- **HTML.** An owned tokenizer and tree builder: implied `html`/`head`/`body`,
+  implied end tags and table sections, character references, quirks-mode
+  detection from the doctype, and `set_inner_html`.
+- **DOM.** Stable `NodeId`s, checked mutation, `querySelector`-style queries
+  with full selectors, and event dispatch with bubbling.
+- **CSS cascade.** Selectors with specificity, `@media` (sizes, ranges,
+  orientation, resolution, interaction and preference features),
+  `@font-face`, custom properties and `var()`, `calc()`/`min()`/`max()`/
+  `clamp()`, viewport units, gradients, `:hover`/`:focus`/`:active`, and
+  HTML's presentational attributes (`width`, `height`, `align`, `border`,
+  `cellpadding`, `cellspacing`).
+- **Layout.** Block flow with margin collapsing; inline formatting with
+  baselines and `vertical-align`; floats; flexbox (including the flexible
+  length freeze loop and auto margins); grid; tables (auto layout,
+  `colspan`, `col`/`colgroup` widths, percentage columns,
+  `border-spacing` and `border-collapse`); positioned boxes including
+  `sticky`; overflow and scroll containers; quirks-mode behaviour that
+  legacy pages rely on.
+- **Replaced content and controls.** Images (PNG, JPEG, GIF's first frame,
+  WebP) sized from their attributes before they load; text fields sized by
+  `size`, textareas by `cols`/`rows`, in the browser control font.
+- **Text and fonts.** Line breaking and alignment over a `Shaper` seam;
+  TrueType/OpenType parsing (metrics, `cmap`, kerning, outlines) and
+  per-element face selection from a `FontSet`.
+- **Paint.** Layout to a display list: fills, borders, gradients, text runs or
+  glyph outlines, images, clips, opacity and 2D transforms
+  (`translate`/`scale`/`rotate`).
+- **Accessibility.** An owned accessibility tree (roles, names,
+  descriptions, states, heading levels, bounds) on by default, with an
+  opt-in AccessKit bridge that activates AT-SPI on Linux.
+- **Hosting.** A multi-document shell (layers, input routing, focus,
+  composition), headless tooling (tree dumps, a virtual clock, synthetic
+  input), asynchronous resource loading, htmx-like declarative swaps, and a
+  capability-gated DOM.
+- **More than HTML.** Markdown, CSV/TSV, plain text, XML, SVG (subset), JSON,
+  INI, TOML and CAISON, each into the DOM or a value model.
 
 ## Crates
 
-The engine replaces one ~19k-LOC `bliss-dom` monolith with small, single-purpose
-crates. Depend on the one you need; reach for `noonoo` only when you want all of it.
+Small, single-purpose crates. Depend on the one you need; reach for `noonoo`
+only when you want all of it.
 
 | Crate | Responsibility |
 | --- | --- |
@@ -56,54 +94,28 @@ crates. Depend on the one you need; reach for `noonoo` only when you want all of
 | [`noonoo-shell`](crates/noonoo-shell) | Multi-document host: layers, input routing, focus, hover/active state, composition |
 | [`noonoo`](crates/noonoo) | Umbrella re-export + the `noonoo` command line |
 
-## Why it exists
-
-Two consumers — **arniko** (a reactive UI framework) and **surfer-browser** —
-build on the engine Noonoo replaces, and both carry workarounds for it. Noonoo is
-built to be what they'd rather build on: a decomposed substrate with correct
-events, stable node ids, checked mutation, a working `set_inner_html`, real
-accessibility, and first-class sub-documents, headless tooling, and
-capability-gated DOM. See
-[`docs/CONSUMERS.md`](docs/CONSUMERS.md) and
-[`docs/FEATURE-OWNERSHIP.md`](docs/FEATURE-OWNERSHIP.md).
-
 ## Status
 
-**Working engine, pre-alpha API.** The whole pipeline runs on owned code —
-parse → cascade → layout → paint — with **zero third-party dependencies** in
-the engine's lockfile. Layout covers block, inline, flex, grid, tables (auto
-subset), and floats; the cascade covers custom properties, the math
-functions, viewport units, `@media`, and gradients; character references
-(`&amp;`, numeric) decode in text and attributes; `<br>` breaks lines;
-fonts load via `@font-face`; `:hover`/`:focus`/`:active` style for real;
-and the accessibility tree is owned and on by default (`noonoo-a11y`),
-with the AccessKit bridge opt-in and the Linux window pass activating AT-SPI
-without consumer re-enabling. The GPU and window backends are opt-in
-integrations outside the workspace (`docs/BACKEND.md`). The API is pre-1.0 and
-still moving.
+**Working engine, pre-alpha API (0.20.0, unpublished).** The whole pipeline
+runs on owned code and renders real pages; the API is pre-1.0 and still
+moving. The GPU and window backends are opt-in integrations outside the
+workspace ([`docs/BACKEND.md`](docs/BACKEND.md)).
 
-**Known gaps** — ordinary HTML that this engine will not render correctly
-yet:
+**Known gaps** — ordinary HTML and CSS that this engine will not render
+correctly yet:
 
-- **`transform` is unsupported.** No `transform`/`transform-origin` code
-  exists in style, layout, or paint; a `transform` declaration is ignored
-  and the box lays out untransformed. Hosts must not rely on it (they also
-  lose `translate`/`rotate`-based centering tricks inside `position`).
-- Tables: only the auto-layout subset — `border-spacing`, captions,
-  `table-layout: fixed`, and wrapping stray content inside a table or row
-  are not modelled (table parts outside a table do get an anonymous
-  table), and a `colspan` cell's demand spreads evenly across its columns.
-- `@media` covers sizes (`px`/`em`/`rem`, `min-`/`max-` and range syntax),
-  `aspect-ratio`, `resolution`, `orientation` and the interaction and
-  preference features, answered for a desktop window with no stated
-  preferences; `or`, nested conditions and host-supplied preferences (dark
-  mode, HiDPI) are not supported.
-- The HTML parser implements the common implied end tags and table
-  sections, but not foster parenting or active formatting elements.
-- `@keyframes` animations are not implemented.
-- Images: `<img>` sizes and draws from a loaded source (PNG, JPEG, GIF's
-  first frame, WebP), but `srcset`, `<picture>`, `object-fit`, animation
-  and CSS `url()` backgrounds are not supported.
+- Tables: captions, `table-layout: fixed`, and wrapping stray content inside
+  a table or row are not modelled (table parts outside a table do get an
+  anonymous table); a `colspan` cell's demand spreads evenly across its
+  columns.
+- `@media`: `or`, nested conditions and host-supplied preferences (dark mode,
+  HiDPI) are not supported; preference queries answer for a light desktop
+  window.
+- The HTML parser does not implement foster parenting or active formatting
+  elements.
+- `@keyframes` animations, `srcset`, `<picture>`, `object-fit`, image
+  animation and CSS `url()` backgrounds are not implemented.
+- 3D transforms are not supported.
 
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
@@ -159,7 +171,6 @@ The workspace MSRV is **1.89**. CI checks it explicitly.
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — crate map, data flow, invariants
 - [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md) — the dependency policy
-- [`docs/CONSUMERS.md`](docs/CONSUMERS.md) — arniko & surfer: what they use, what they fight
 - [`docs/FEATURE-OWNERSHIP.md`](docs/FEATURE-OWNERSHIP.md) — what belongs in Noonoo vs. the consumer
 - [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) — the drop-in switch and the api-drift gate
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — slices
