@@ -1,8 +1,10 @@
 //! Block and inline flow.
 
+use std::collections::HashMap;
+
 use noonoo_dom::{NodeData, NodeId};
 use noonoo_geometry::Rect;
-use noonoo_style::{ComputedStyle, Display, Edges, TextAlign, WhiteSpace};
+use noonoo_style::{ComputedStyle, Display, Edges, TextAlign, VerticalAlign, WhiteSpace};
 
 use crate::float;
 use crate::margin;
@@ -379,6 +381,42 @@ fn words_of(line: &str) -> Vec<(&str, Option<&str>)> {
         rest = &after[end..];
     }
     pairs
+}
+
+/// Where `vertical-align` puts an inline-level box.
+#[derive(Clone, Copy)]
+enum Align {
+    /// Raised this far above its parent's baseline (negative lowers).
+    Rise(f32),
+    /// Its top at the line box's top.
+    Top,
+    /// Its bottom at the line box's bottom.
+    Bottom,
+}
+
+/// `style`'s `vertical-align` for a box reaching `above`/`below` its own
+/// baseline, in a parent styled `parent` (CSS 2 §10.8.1). `sub` and
+/// `super` shift as Blink does (a fifth and a third of the parent's font
+/// size, plus a pixel); the x-height `middle` uses is taken as 0.5em.
+fn vertical_align(
+    ctx: &Ctx<'_>,
+    style: &ComputedStyle,
+    parent: &ComputedStyle,
+    above: f32,
+    below: f32,
+) -> Align {
+    match style.vertical_align {
+        VerticalAlign::Baseline => Align::Rise(0.0),
+        VerticalAlign::Sub => Align::Rise(-(parent.font_size / 5.0 + 1.0)),
+        VerticalAlign::Super => Align::Rise(parent.font_size / 3.0 + 1.0),
+        VerticalAlign::TextTop => Align::Rise(ctx.font_metrics(parent).0 - above),
+        VerticalAlign::TextBottom => Align::Rise(below - ctx.font_metrics(parent).1),
+        VerticalAlign::Middle => Align::Rise((below - above) / 2.0 + parent.font_size * 0.25),
+        VerticalAlign::Top => Align::Top,
+        VerticalAlign::Bottom => Align::Bottom,
+        VerticalAlign::Length(px) => Align::Rise(px),
+        VerticalAlign::Percent(percent) => Align::Rise(percent / 100.0 * ctx.line_height_of(style)),
+    }
 }
 
 /// One step of the inline walk: a node to visit, or the end of an inline
@@ -904,10 +942,38 @@ pub(crate) fn layout_inline_run(
             // the line's top, to find their baselines (their last line's,
             // or their bottom margin edge), then moved onto it.
             let (mut up, mut down) = ctx.inline_box(parent_style, line_height);
+            // `vertical-align` raises each inline element from its parent's
+            // baseline; what it holds rides along. Outer fragments come
+            // first, so a parent's rise is known before its children's.
+            let fragments = line_fragments(line);
+            let mut rises: HashMap<NodeId, f32> = HashMap::new();
+            let mut fragment_rises = Vec::with_capacity(fragments.len());
+            for fragment in &fragments {
+                let chain = &line[fragment.first].chain;
+                let parent = fragment.depth.checked_sub(1).map(|d| chain[d]);
+                let parent_rise = parent.and_then(|p| rises.get(&p).copied()).unwrap_or(0.0);
+                let parent_style = parent.map_or(parent_style, |p| ctx.style(p));
+                let style = ctx.style(fragment.element);
+                let (above, below) = ctx.inline_box(style, ctx.line_height_of(style));
+                let rise = parent_rise
+                    + match vertical_align(ctx, style, parent_style, above, below) {
+                        Align::Rise(rise) => rise,
+                        // Not modelled for inline elements: as `baseline`.
+                        Align::Top | Align::Bottom => 0.0,
+                    };
+                rises.insert(fragment.element, rise);
+                fragment_rises.push(rise);
+                up = up.max(above + rise);
+                down = down.max(below - rise);
+            }
             let mut atomics: Vec<Option<usize>> = vec![None; line.len()];
+            // Each item's reach above its own baseline, and where it sits.
             let mut reach_up = Vec::with_capacity(line.len());
+            let mut aligns = Vec::with_capacity(line.len());
             for (position, item) in line.iter().enumerate() {
-                let (above, below) = if let Some(atomic) = item.atomic {
+                let owner = item.chain.last().copied();
+                let owner_rise = owner.and_then(|o| rises.get(&o).copied()).unwrap_or(0.0);
+                let (above, below, align) = if let Some(atomic) = item.atomic {
                     let node = item.node.expect("an atomic inline has a node");
                     let (_, baseline) = ctx.layout_with_baseline(
                         node,
@@ -916,37 +982,56 @@ pub(crate) fn layout_inline_run(
                         atomic.available,
                     );
                     atomics[position] = ctx.tree_index(node);
-                    match baseline {
+                    let (above, below) = match baseline {
                         Some(baseline) => {
                             let above = atomic.margin_top + baseline;
                             (above, item.height - above)
                         }
                         None => (item.height, 0.0),
-                    }
+                    };
+                    let parent = owner.map_or(parent_style, |o| ctx.style(o));
+                    let align = match vertical_align(ctx, ctx.style(node), parent, above, below) {
+                        Align::Rise(rise) => Align::Rise(owner_rise + rise),
+                        edge => edge,
+                    };
+                    (above, below, align)
                 } else {
                     let style = ctx.style(item.style_node);
-                    ctx.inline_box(style, ctx.line_height_of(style))
+                    let (above, below) = ctx.inline_box(style, ctx.line_height_of(style));
+                    (above, below, Align::Rise(owner_rise))
                 };
+                if let Align::Rise(rise) = align {
+                    up = up.max(above + rise);
+                    down = down.max(below - rise);
+                }
                 reach_up.push(above);
-                up = up.max(above);
-                down = down.max(below);
+                aligns.push(align);
             }
-            let fragments = line_fragments(line);
-            for fragment in &fragments {
-                let style = ctx.style(fragment.element);
-                let (above, below) = ctx.inline_box(style, ctx.line_height_of(style));
-                up = up.max(above);
-                down = down.max(below);
+            // `top` and `bottom` boxes align with the line box, which grows
+            // to hold them.
+            for (k, align) in aligns.iter().enumerate() {
+                if matches!(align, Align::Top | Align::Bottom) {
+                    let height = line[k].height;
+                    if height > up + down {
+                        down = height - up;
+                    }
+                }
             }
             let line_h = up + down;
-            // How far below the line's top a box reaching `above` over the
-            // baseline starts (exactly 0 for the one that sets it).
-            let drop = |above: f32| up - above;
+            // How far below the line's top a box reaching `above` over its
+            // baseline, raised `rise`, starts (exactly 0 for the one that
+            // sets the line's top).
+            let drop = |above: f32, rise: f32| up - above - rise;
+            let item_drop = |k: usize| match aligns[k] {
+                Align::Rise(rise) => drop(reach_up[k], rise),
+                Align::Top => 0.0,
+                Align::Bottom => line_h - line[k].height,
+            };
 
             // Each inline element's fragment on this line, outermost first so
             // it paints under what it holds, spanning its items and the edges
             // that start or end here.
-            for fragment in fragments {
+            for (fragment, rise) in fragments.into_iter().zip(fragment_rises) {
                 let element = fragment.element;
                 let edges = InlineEdges::of(ctx, element, width);
                 let (first, last) = (&line[fragment.first], &line[fragment.last]);
@@ -997,7 +1082,7 @@ pub(crate) fn layout_inline_run(
                 // The content area sits on the baseline; vertical padding
                 // and borders reach outside it without making the line
                 // taller (CSS 2 §10.6.1).
-                let top = cursor_y + drop(ascent) - padding.top - border.top;
+                let top = cursor_y + drop(ascent, rise) - padding.top - border.top;
                 let index = ctx.push(LayoutBox {
                     node: Some(element),
                     style_node: element,
@@ -1034,10 +1119,10 @@ pub(crate) fn layout_inline_run(
             let mut open_run: Option<usize> = None;
             for (position, item) in line.iter().enumerate() {
                 // The item's box top: its reach above the baseline.
-                let top = cursor_y + drop(reach_up[position]);
+                let top = cursor_y + item_drop(position);
                 if item.atomic.is_some() {
                     if let Some(index) = atomics[position] {
-                        ctx.shift_subtree(index, 0.0, drop(reach_up[position]));
+                        ctx.shift_subtree(index, 0.0, item_drop(position));
                         indices.push(index);
                     }
                     open_run = None;

@@ -23,6 +23,10 @@ dialog[open] { display: block }
 span, a, em, strong, b, i, u, small, code, kbd, samp, var, sub, sup, label,
 abbr, cite, q, mark, dfn, s, del, ins, time, bdi, bdo, data, ruby { display: inline }
 img, input, button, select, textarea, video, canvas, progress { display: inline-block }
+sub { vertical-align: sub }
+sup { vertical-align: super }
+sub, sup { line-height: normal; font-size: smaller }
+small { font-size: smaller }
 body { margin: 8px }
 p, blockquote, figure, dl, pre, listing, plaintext, xmp, ul, ol, menu, dir {
   margin-top: 1em; margin-bottom: 1em }

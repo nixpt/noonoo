@@ -3682,3 +3682,84 @@ fn an_inline_block_aligns_its_last_lines_baseline() {
     // Bottom edge on the baseline: 29.2 above it, the strut's 6.4 below.
     assert!((tree.get(id(&doc, "d")).unwrap().rect.height - 35.6).abs() < 0.01);
 }
+
+fn near(a: f32, b: f32) -> bool {
+    (a - b).abs() < 0.01
+}
+
+/// `sup` rises a third of its parent's font size plus a pixel (as Blink),
+/// in a 0.8em font with `line-height: normal`.
+#[test]
+fn sup_and_sub_shift_their_text() {
+    // sup: 12.8px font, ascent 10.24, raised 16/3 + 1.
+    let (doc, tree) = page("<!doctype html><div id=d>x<sup>2</sup></div>", "", 400.0);
+    let up = 10.24 + 16.0 / 3.0 + 1.0;
+    assert!(near(text_y(&tree, "2"), 0.0), "{}", text_y(&tree, "2"));
+    assert!(near(text_y(&tree, "x"), up - 12.8));
+    assert!(near(tree.get(id(&doc, "d")).unwrap().rect.height, up + 6.4));
+    // sub: lowered 16/5 + 1 = 4.2; the strut still sets the top.
+    let (doc, tree) = page("<!doctype html><div id=d>x<sub>2</sub></div>", "", 400.0);
+    assert!(near(text_y(&tree, "x"), 0.0));
+    assert!(near(text_y(&tree, "2"), 12.8 - 10.24 + 4.2));
+    assert!(near(
+        tree.get(id(&doc, "d")).unwrap().rect.height,
+        12.8 + 5.12 + 4.2
+    ));
+}
+
+/// `middle` centres a box on the baseline plus half the x-height.
+#[test]
+fn middle_centres_on_the_x_height() {
+    let (doc, tree) = page(
+        "<div id=d>x <span id=b></span></div>",
+        "#b { display: inline-block; width: 10px; height: 30px; vertical-align: middle }",
+        400.0,
+    );
+    // Its middle 4px (half a 0.5em x-height) above the baseline: 19 of it
+    // above, 11 below.
+    assert!(near(tree.get(id(&doc, "b")).unwrap().rect.y, 0.0));
+    assert!(near(text_y(&tree, "x"), 19.0 - 12.8));
+    assert!(near(tree.get(id(&doc, "d")).unwrap().rect.height, 30.0));
+}
+
+/// A length raises (or lowers) a box from the baseline.
+#[test]
+fn a_length_raises_a_box() {
+    let (doc, tree) = page(
+        "<div id=d>x <span id=b></span></div>",
+        "#b { display: inline-block; width: 10px; height: 20px; vertical-align: 10px }",
+        400.0,
+    );
+    assert!(near(tree.get(id(&doc, "b")).unwrap().rect.y, 0.0));
+    assert!(near(text_y(&tree, "x"), 30.0 - 12.8));
+    assert!(near(tree.get(id(&doc, "d")).unwrap().rect.height, 36.4));
+}
+
+/// `top` and `bottom` align with the line box itself, which grows to hold
+/// them.
+#[test]
+fn top_and_bottom_align_with_the_line_box() {
+    let (doc, tree) = page(
+        "<div id=d>x <span id=t></span><span id=b></span></div>",
+        "#t, #b { display: inline-block; width: 10px }
+         #t { height: 40px; vertical-align: top } #b { height: 30px; vertical-align: bottom }",
+        400.0,
+    );
+    assert!(near(tree.get(id(&doc, "d")).unwrap().rect.height, 40.0));
+    assert!(near(tree.get(id(&doc, "t")).unwrap().rect.y, 0.0));
+    assert!(near(tree.get(id(&doc, "b")).unwrap().rect.y, 10.0));
+    assert!(near(text_y(&tree, "x"), 0.0));
+}
+
+/// `text-top` and `text-bottom` align with the parent's content area.
+#[test]
+fn text_top_and_text_bottom_align_with_the_parents_font() {
+    let (doc, tree) = page(
+        "<div>x <span id=t></span><span id=b></span></div>",
+        "#t, #b { display: inline-block; width: 10px; height: 10px }
+         #t { vertical-align: text-top } #b { vertical-align: text-bottom }",
+        400.0,
+    );
+    assert!(near(tree.get(id(&doc, "t")).unwrap().rect.y, 0.0));
+    assert!(near(tree.get(id(&doc, "b")).unwrap().rect.y, 9.2));
+}

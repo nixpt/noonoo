@@ -151,6 +151,8 @@ pub enum Property {
     LetterSpacing,
     /// `text-transform`.
     TextTransform,
+    /// `vertical-align`.
+    VerticalAlign,
     /// `transform`.
     Transform,
     /// `box-shadow`.
@@ -253,6 +255,7 @@ impl Property {
             "white-space" => Self::WhiteSpace,
             "letter-spacing" => Self::LetterSpacing,
             "text-transform" => Self::TextTransform,
+            "vertical-align" => Self::VerticalAlign,
             "transform" => Self::Transform,
             "box-shadow" => Self::BoxShadow,
             "content" => Self::Content,
@@ -347,6 +350,7 @@ impl Property {
             Self::WhiteSpace => "white-space",
             Self::LetterSpacing => "letter-spacing",
             Self::TextTransform => "text-transform",
+            Self::VerticalAlign => "vertical-align",
             Self::Transform => "transform",
             Self::BoxShadow => "box-shadow",
             Self::Content => "content",

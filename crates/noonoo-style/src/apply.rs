@@ -578,6 +578,25 @@ pub(crate) fn apply(
                 }
             }
         }
+        Property::VerticalAlign => {
+            style.vertical_align = match values {
+                [Value::Keyword(k)] => match k.as_str() {
+                    "baseline" => VerticalAlign::Baseline,
+                    "sub" => VerticalAlign::Sub,
+                    "super" => VerticalAlign::Super,
+                    "text-top" => VerticalAlign::TextTop,
+                    "text-bottom" => VerticalAlign::TextBottom,
+                    "middle" => VerticalAlign::Middle,
+                    "top" => VerticalAlign::Top,
+                    "bottom" => VerticalAlign::Bottom,
+                    _ => style.vertical_align,
+                },
+                [Value::Length(l)] => VerticalAlign::Length(to_px(l, font_size, root, viewport)),
+                [Value::Percentage(percent)] => VerticalAlign::Percent(*percent),
+                [Value::Number(number)] if *number == 0.0 => VerticalAlign::Length(0.0),
+                _ => style.vertical_align,
+            };
+        }
         Property::ZIndex => {
             style.z_index = match values {
                 [Value::Number(number)] => ZIndex::Number(*number as i32),
@@ -961,6 +980,7 @@ fn copy_property(dst: &mut ComputedStyle, src: &ComputedStyle, property: &Proper
         Property::WhiteSpace => dst.white_space = src.white_space,
         Property::LetterSpacing => dst.letter_spacing = src.letter_spacing,
         Property::TextTransform => dst.text_transform = src.text_transform,
+        Property::VerticalAlign => dst.vertical_align = src.vertical_align,
         Property::Transform => dst.transform = src.transform.clone(),
         Property::BoxShadow => dst.box_shadow = src.box_shadow.clone(),
         Property::Opacity => dst.opacity = src.opacity,

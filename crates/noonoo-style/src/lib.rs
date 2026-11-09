@@ -68,7 +68,7 @@ pub use computed::{
     Corners, Cursor, Dimension, Display, Edges, Extreme, FlexDirection, FlexWrap, Float, FontStyle,
     Gradient, GradientKind, GradientStop, GridLine, GridRange, JustifyContent, Length,
     LengthOrAuto, LinearDirection, Overflow, Position, RadialShape, RadialSize, TextAlign,
-    TextDecoration, TextTransform, Track, Transform, Visibility, WhiteSpace, ZIndex,
+    TextDecoration, TextTransform, Track, Transform, VerticalAlign, Visibility, WhiteSpace, ZIndex,
 };
 pub use edit::{StyleEditError, remove_style_property, set_style_property};
 

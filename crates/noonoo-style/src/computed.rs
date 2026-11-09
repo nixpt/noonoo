@@ -444,6 +444,33 @@ pub struct BoxShadow {
     pub inset: bool,
 }
 
+/// `vertical-align`: where an inline-level box sits on its line,
+/// relative to its parent's baseline (CSS 2 §10.8.1).
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+pub enum VerticalAlign {
+    /// `baseline`.
+    #[default]
+    Baseline,
+    /// `sub`: lowered as a subscript.
+    Sub,
+    /// `super`: raised as a superscript.
+    Super,
+    /// `text-top`: its top at the parent's content-area top.
+    TextTop,
+    /// `text-bottom`: its bottom at the parent's content-area bottom.
+    TextBottom,
+    /// `middle`: its middle half the parent's x-height above the baseline.
+    Middle,
+    /// `top`: its top at the line box's top.
+    Top,
+    /// `bottom`: its bottom at the line box's bottom.
+    Bottom,
+    /// A length, in pixels: raised by it (negative lowers).
+    Length(f32),
+    /// A percentage of the box's own `line-height`: raised by it.
+    Percent(f32),
+}
+
 /// `text-transform`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum TextTransform {
@@ -734,6 +761,8 @@ pub struct ComputedStyle {
     pub letter_spacing: f32,
     /// `text-transform`.
     pub text_transform: TextTransform,
+    /// `vertical-align`.
+    pub vertical_align: VerticalAlign,
     /// `visibility`.
     pub visibility: Visibility,
     /// `opacity`.
@@ -827,6 +856,7 @@ impl Default for ComputedStyle {
             white_space: WhiteSpace::Normal,
             letter_spacing: 0.0,
             text_transform: TextTransform::None,
+            vertical_align: VerticalAlign::Baseline,
             visibility: Visibility::Visible,
             opacity: 1.0,
             transform: Vec::new(),
