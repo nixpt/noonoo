@@ -4275,3 +4275,22 @@ fn a_percentage_width_unloaded_image_adds_no_intrinsic_width() {
     let width = tree.get(id(&doc, "d")).unwrap().rect.width;
     assert!(near(width, 16.0), "{width}");
 }
+
+/// A float that doesn't fit beside an earlier one drops below it, wherever
+/// the line is: the fit test once rounded away below y = 2 (`y +
+/// f32::EPSILON == y`), so gnu.org's two columns overlapped instead of
+/// stacking as in Chromium.
+#[test]
+fn a_float_too_wide_for_the_line_drops_below_the_last() {
+    let text = "word ".repeat(80);
+    let (doc, tree) = page(
+        &format!(
+            r#"<!doctype html><div><div id=a style="float: left">{text}</div><div id=b style="float: right">word word</div></div>"#
+        ),
+        "body { margin: 8px }",
+        400.0,
+    );
+    let a = tree.get(id(&doc, "a")).unwrap().rect;
+    let b = tree.get(id(&doc, "b")).unwrap().rect;
+    assert!(near(b.y, a.y + a.height), "{a:?} {b:?}");
+}
