@@ -739,6 +739,17 @@ fn is_color_keyword(name: &str) -> bool {
 }
 
 /// Classify the `<width> <style> <color>` tokens of a border shorthand.
+/// A border shorthand's width, style and colour, each part it leaves out
+/// reset to its initial value as shorthands do.
+fn border_parts(values: Vec<Value>) -> (Value, Value, Value) {
+    let (width, style, color) = classify_border(values);
+    (
+        width.unwrap_or_else(|| Value::Keyword("medium".into())),
+        style.unwrap_or_else(|| Value::Keyword("none".into())),
+        color.unwrap_or_else(|| Value::Keyword("currentcolor".into())),
+    )
+}
+
 fn classify_border(values: Vec<Value>) -> (Option<Value>, Option<Value>, Option<Value>) {
     let mut width = None;
     let mut style = None;
@@ -765,7 +776,7 @@ fn classify_border(values: Vec<Value>) -> (Option<Value>, Option<Value>, Option<
 
 /// `border: <width> <style> <color>` → width/style/color on all four sides.
 fn expand_border(values: Vec<Value>, important: bool) -> Vec<Declaration> {
-    let (width, style, color) = classify_border(values);
+    let (width, style, color) = border_parts(values);
 
     let mut out = Vec::new();
     for (value, properties) in [
@@ -797,9 +808,7 @@ fn expand_border(values: Vec<Value>, important: bool) -> Vec<Declaration> {
             ),
         ),
     ] {
-        if let Some(value) = value
-            && let Some(decls) = box_shorthand(vec![value], important, properties)
-        {
+        if let Some(decls) = box_shorthand(vec![value], important, properties) {
             out.extend(decls);
         }
     }
@@ -808,7 +817,7 @@ fn expand_border(values: Vec<Value>, important: bool) -> Vec<Declaration> {
 
 /// `border-<side>: <width> <style> <color>` → that one side's three longhands.
 fn expand_border_side(values: Vec<Value>, important: bool, index: usize) -> Vec<Declaration> {
-    let (width, style, color) = classify_border(values);
+    let (width, style, color) = border_parts(values);
     let widths = sides(
         Property::BorderTopWidth,
         Property::BorderRightWidth,
@@ -834,9 +843,7 @@ fn expand_border_side(values: Vec<Value>, important: bool, index: usize) -> Vec<
         (style, styles[index].clone()),
         (color, colors[index].clone()),
     ] {
-        if let Some(value) = value {
-            out.push(decl(property, vec![value], important));
-        }
+        out.push(decl(property, vec![value], important));
     }
     out
 }
@@ -1078,6 +1085,30 @@ mod tests {
             .find(|d| d.property == Property::BorderTopStyle)
             .unwrap();
         assert_eq!(top_style.values, vec![Value::Keyword("solid".into())]);
+    }
+
+    #[test]
+    fn border_shorthands_reset_what_they_leave_out() {
+        let value_of = |decls: &[Declaration], property: Property| {
+            decls
+                .iter()
+                .find(|d| d.property == property)
+                .map(|d| d.values.clone())
+        };
+        let keyword = |k: &str| Some(vec![Value::Keyword(k.into())]);
+        let decls = parse_declaration("border", "none", false).unwrap();
+        assert_eq!(decls.len(), 12);
+        assert_eq!(
+            value_of(&decls, Property::BorderLeftWidth),
+            keyword("medium")
+        );
+        assert_eq!(
+            value_of(&decls, Property::BorderTopColor),
+            keyword("currentcolor")
+        );
+        let decls = parse_declaration("border-top", "2px", false).unwrap();
+        assert_eq!(decls.len(), 3);
+        assert_eq!(value_of(&decls, Property::BorderTopStyle), keyword("none"));
     }
 
     #[test]
