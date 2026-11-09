@@ -1013,9 +1013,10 @@ impl Ctx<'_> {
         })
     }
 
-    /// A text field's intrinsic content width: `size` characters (20
-    /// unless the attribute is a positive integer), each as wide as a "0"
-    /// in its font, whatever its value (HTML's rendering of text fields).
+    /// A text field's intrinsic content width, whatever its value: `size`
+    /// average characters (20 unless the attribute is a positive integer),
+    /// plus what the font's widest character needs beyond an average one,
+    /// as Chromium sizes them.
     pub(crate) fn text_field_width(&self, node: NodeId, style: &ComputedStyle) -> Option<f32> {
         let element = self.document.element(node)?;
         if !is_text_field(element) {
@@ -1026,10 +1027,10 @@ impl Ctx<'_> {
             .and_then(|size| size.trim().parse::<u32>().ok())
             .filter(|&size| size > 0)
             .unwrap_or(20);
-        let zero = self
+        let (average, widest) = self
             .shaper
-            .advance("0", style.font_request(), style.font_size);
-        Some(size as f32 * zero)
+            .char_widths(style.font_request(), style.font_size);
+        Some(size as f32 * average + (widest - average).max(0.0))
     }
 
     /// Lay out a replaced element's placeholder as its content: one line of

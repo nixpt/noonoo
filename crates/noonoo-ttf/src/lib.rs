@@ -86,6 +86,10 @@ pub struct Font {
     /// The `CBLC` and `CBDT` tables' offsets, when the font has colour
     /// bitmaps.
     color_bitmaps: Option<(usize, usize)>,
+    /// `OS/2.xAvgCharWidth`, if present and positive.
+    average_char_width: Option<i16>,
+    /// `head.xMax - head.xMin`: every glyph fits in this width.
+    bounding_width: i32,
 }
 
 impl Font {
@@ -125,6 +129,10 @@ impl Font {
         }
         reader.skip(2)?; // flags
         let units_per_em = reader.u16()?;
+        reader.skip(16)?; // created, modified
+        let x_min = reader.i16()?;
+        reader.skip(2)?; // yMin
+        let x_max = reader.i16()?;
 
         // `maxp` — glyph count.
         let maxp = table(b"maxp").ok_or_else(|| reader.error("missing maxp table"))?;
@@ -177,6 +185,15 @@ impl Font {
 
         let color_bitmaps = table(b"CBLC").zip(table(b"CBDT"));
 
+        // `OS/2.xAvgCharWidth`, when the table has one worth using.
+        let average_char_width = match table(b"OS/2") {
+            Some(offset) => {
+                reader.seek(offset + 2);
+                reader.i16().ok().filter(|&width| width > 0)
+            }
+            None => None,
+        };
+
         Ok(Font {
             data: data.to_vec(),
             units_per_em,
@@ -191,6 +208,8 @@ impl Font {
             kern,
             cmap,
             color_bitmaps,
+            average_char_width,
+            bounding_width: i32::from(x_max) - i32::from(x_min),
         })
     }
 
@@ -226,6 +245,18 @@ impl Font {
     /// The typographic descender (negative), in font units.
     pub fn descender(&self) -> i16 {
         self.descender
+    }
+
+    /// The average advance of the font's characters (`OS/2.xAvgCharWidth`),
+    /// in font units, if the font records a positive one.
+    pub fn average_char_width(&self) -> Option<i16> {
+        self.average_char_width
+    }
+
+    /// The width of the box every glyph fits in (`head.xMax - head.xMin`),
+    /// in font units.
+    pub fn bounding_width(&self) -> i32 {
+        self.bounding_width
     }
 
     /// The line gap, in font units.

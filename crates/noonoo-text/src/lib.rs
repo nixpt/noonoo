@@ -40,6 +40,14 @@ pub trait Shaper {
         let line = self.line_height(request, font_size);
         (line * 2.0 / 3.0, line / 3.0)
     }
+
+    /// The face's average and widest character advances at `font_size`,
+    /// in pixels, as browsers size text fields by. The default takes a
+    /// "0"'s advance for both.
+    fn char_widths(&self, request: FontRequest, font_size: f32) -> (f32, f32) {
+        let zero = self.advance("0", request, font_size);
+        (zero, zero)
+    }
 }
 
 /// A font request: the families to try, in preference order, plus weight and
@@ -149,3 +157,16 @@ impl Default for TextStyle<'_> {
 
 /// The version of this crate, taken from the workspace.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[cfg(test)]
+mod char_width_tests {
+    use super::*;
+
+    #[test]
+    fn the_default_character_widths_are_a_zeros() {
+        assert_eq!(
+            MetricShaper.char_widths(FontRequest::any(), 16.0),
+            (8.0, 8.0)
+        );
+    }
+}

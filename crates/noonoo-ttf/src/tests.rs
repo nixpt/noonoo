@@ -947,3 +947,36 @@ fn a_universal_face_answers_unknown_families() {
         FontShaper::new(&universal).line_height(request, 20.0)
     );
 }
+
+/// An `OS/2` table carrying only `version` and `xAvgCharWidth`.
+fn os2(average: i16) -> Vec<u8> {
+    let mut t = Vec::new();
+    push_u16(&mut t, 4); // version
+    push_i16(&mut t, average); // xAvgCharWidth
+    t
+}
+
+#[test]
+fn character_widths_come_from_os2_and_the_bounding_box() {
+    // No OS/2: the "0" (here `.notdef`, 500 units) stands in for both.
+    let font = Font::parse(&minimal_font()).unwrap();
+    assert_eq!(font.average_char_width(), None);
+    let shaper = FontShaper::new(&font);
+    assert_eq!(shaper.char_widths(FontRequest::any(), 16.0), (8.0, 8.0));
+    // With one: its average, and the bounding box (0..1000 units) rounded
+    // to whole pixels as the widest character.
+    let data = build(&[
+        (*b"head", head(1000)),
+        (*b"maxp", maxp()),
+        (*b"hhea", hhea()),
+        (*b"hmtx", hmtx()),
+        (*b"cmap", cmap_from('A')),
+        (*b"OS/2", os2(450)),
+    ]);
+    let font = Font::parse(&data).unwrap();
+    assert_eq!(font.average_char_width(), Some(450));
+    assert_eq!(font.bounding_width(), 1000);
+    let (average, widest) = FontShaper::new(&font).char_widths(FontRequest::any(), 15.0);
+    assert!((average - 6.75).abs() < 1e-4, "{average}");
+    assert_eq!(widest, 15.0);
+}

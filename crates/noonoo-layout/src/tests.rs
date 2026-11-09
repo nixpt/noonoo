@@ -3926,3 +3926,39 @@ fn percentage_columns_widen_a_shrink_to_fit_table() {
         [400.0, 8.0, 392.0]
     );
 }
+
+/// A shaper whose average character is 0.5em and widest 2em, as a real
+/// font's `OS/2` average and bounding box differ.
+struct WideGlyphs;
+
+impl Shaper for WideGlyphs {
+    fn advance(&self, text: &str, request: noonoo_text::FontRequest, font_size: f32) -> f32 {
+        MetricShaper.advance(text, request, font_size)
+    }
+
+    fn line_height(&self, _request: noonoo_text::FontRequest, font_size: f32) -> f32 {
+        font_size * 1.2
+    }
+
+    fn char_widths(&self, _request: noonoo_text::FontRequest, font_size: f32) -> (f32, f32) {
+        (font_size * 0.5, font_size * 2.0)
+    }
+}
+
+/// Chromium's text field: `size` average characters, plus the room the
+/// widest character needs beyond an average one (size 1 at 16px of
+/// DejaVu Sans is 45px wide, not 8).
+#[test]
+fn a_text_field_makes_room_for_its_widest_character() {
+    let doc = noonoo_html::parse(r#"<input id="a" size="5"><input id="b">"#);
+    let sheet = noonoo_css::Stylesheet::parse(
+        "body { margin: 0 } input { padding: 0; border: 0; font-size: 16px }",
+    )
+    .unwrap();
+    let styles = noonoo_style::compute(&doc, &[sheet]);
+    let tree = layout(&doc, &styles, Size::new(400.0, 600.0), &WideGlyphs);
+    let width = |name: &str| tree.get(id(&doc, name)).unwrap().content_box().width;
+    // 5 × 8 + (32 − 8), and 20 × 8 + 24.
+    assert_eq!(width("a"), 64.0);
+    assert_eq!(width("b"), 184.0);
+}

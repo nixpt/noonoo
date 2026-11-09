@@ -70,6 +70,24 @@ pub(crate) fn ascent_descent_px(font: &Font, font_size: f32) -> (f32, f32) {
     )
 }
 
+/// `font`'s average and widest character advances at `font_size`, in
+/// pixels, as browsers measure text fields: `OS/2`'s average and the
+/// bounding box's width rounded to whole pixels, or a "0"'s advance for
+/// both when the font records no average.
+pub(crate) fn char_widths_px(font: &Font, font_size: f32) -> (f32, f32) {
+    let scale = scale(font, font_size);
+    match font.average_char_width() {
+        Some(average) => (
+            f32::from(average) * scale,
+            (font.bounding_width() as f32 * scale).round(),
+        ),
+        None => {
+            let zero = advance_units(font, "0") as f32 * scale;
+            (zero, zero)
+        }
+    }
+}
+
 /// A [`Shaper`] over a single [`Font`]'s metrics.
 pub struct FontShaper<'a> {
     font: &'a Font,
@@ -98,6 +116,10 @@ impl Shaper for FontShaper<'_> {
 
     fn metrics(&self, _request: FontRequest, font_size: f32) -> (f32, f32) {
         ascent_descent_px(self.font, font_size)
+    }
+
+    fn char_widths(&self, _request: FontRequest, font_size: f32) -> (f32, f32) {
+        char_widths_px(self.font, font_size)
     }
 }
 
@@ -146,6 +168,16 @@ impl Shaper for FontSetShaper<'_> {
         {
             Some(font) => ascent_descent_px(font, font_size),
             None => (font_size * 0.8, font_size * 0.4),
+        }
+    }
+
+    fn char_widths(&self, request: FontRequest, font_size: f32) -> (f32, f32) {
+        match self
+            .set
+            .select_best(request.families, request.weight, request.italic)
+        {
+            Some(font) => char_widths_px(font, font_size),
+            None => (font_size * 0.5, font_size * 0.5),
         }
     }
 }
