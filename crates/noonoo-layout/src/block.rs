@@ -373,21 +373,23 @@ struct Fragment {
 /// The fragments of `line`'s inline elements, outermost first among those
 /// starting at the same item.
 fn line_fragments(line: &[Item]) -> Vec<Fragment> {
+    // An element has one fragment per line: found by node, not by a search
+    // that made deep nesting with many items cubic.
     let mut fragments: Vec<Fragment> = Vec::new();
+    let mut index: HashMap<NodeId, usize> = HashMap::new();
     for (position, item) in line.iter().enumerate() {
         for (depth, &element) in item.chain.iter().enumerate() {
-            match fragments
-                .iter_mut()
-                .rev()
-                .find(|fragment| fragment.element == element)
-            {
-                Some(fragment) => fragment.last = position,
-                None => fragments.push(Fragment {
-                    element,
-                    depth,
-                    first: position,
-                    last: position,
-                }),
+            match index.get(&element) {
+                Some(&at) => fragments[at].last = position,
+                None => {
+                    index.insert(element, fragments.len());
+                    fragments.push(Fragment {
+                        element,
+                        depth,
+                        first: position,
+                        last: position,
+                    });
+                }
             }
         }
     }
@@ -533,10 +535,17 @@ impl InlineWalk {
             let edges = InlineEdges::of(ctx, element, width);
             let phantom = edges.start() + edges.end() == 0.0;
             // An element split around a block isn't empty, only this run
-            // of it: it marks nothing here.
-            let empty = child_nodes(ctx.document, element)
-                .into_iter()
-                .all(|child| ctx.is_hidden(child) || margin::is_phantom(ctx, child));
+            // of it: it marks nothing here. Its own children decide (blank
+            // text, inline elements); a nested inline's exit judges its
+            // own, so this never walks a subtree.
+            let empty = child_nodes(ctx.document, element).into_iter().all(|child| {
+                ctx.is_hidden(child)
+                    || if ctx.is_text(child) {
+                        ctx.is_collapsible_blank(child)
+                    } else {
+                        ctx.style(child).display == Display::Inline
+                    }
+            });
             if !phantom || empty {
                 let item = Item {
                     node: None,
