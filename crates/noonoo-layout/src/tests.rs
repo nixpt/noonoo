@@ -4005,3 +4005,30 @@ fn img_width_and_height_attributes_size_it_before_it_loads() {
     assert_eq!(size("b").0, 60.0);
     assert_eq!(size("c"), (20.0, 40.0));
 }
+
+/// A collapsed space at the start of an inline element belongs to it:
+/// Chromium's link starts at the space and is a space wider
+/// (info.cern.ch's `<A ...>\nhypermedia</A>`, lite.cnn's `<span> | </span>`).
+#[test]
+fn a_leading_space_inside_an_inline_is_part_of_it() {
+    let (doc, tree) = page(
+        "<p>a<span id=s> b</span> c<span id=t> | </span>d</p>",
+        "p { margin: 0 }",
+        400.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    // MetricShaper: 8px a character.
+    assert_eq!((rect("s").x, rect("s").width), (8.0, 16.0));
+    // "a b c" then " | " (its trailing space collapses into nothing after it,
+    // but it is the span's own), then "d".
+    assert_eq!((rect("t").x, rect("t").width), (40.0, 24.0)); // Outside the span, the space stays outside; a padded span spans its
+    // padding and its space.
+    let (doc, tree) = page(
+        r#"<p>a <span id=u>b</span><span id=v style="padding: 0 5px"> c </span>d</p>"#,
+        "p { margin: 0 }",
+        400.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert_eq!((rect("u").x, rect("u").width), (16.0, 8.0));
+    assert_eq!((rect("v").x, rect("v").width), (24.0, 34.0));
+}

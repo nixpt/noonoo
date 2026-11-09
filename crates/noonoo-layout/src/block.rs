@@ -276,6 +276,23 @@ struct Item {
     /// and the end edges of those it closes: room taken on the line.
     lead: f32,
     trail: f32,
+    /// Where the white space before it falls among the inline edges around
+    /// it, as the source has it.
+    straddle: Straddle,
+}
+
+/// Which inline elements a collapsed space between two items falls in, as
+/// in the source: `a<span> b</span>` puts it inside the span, `a <span>b`
+/// outside, and `<span>a </span>b` inside, at its end. Chromium sizes an
+/// inline element's box to the spaces it holds.
+#[derive(Clone, Copy, Default, Debug)]
+struct Straddle {
+    /// How many of the elements the item opens, outermost first, hold the
+    /// space.
+    opens: usize,
+    /// How many of the elements the item before closes, outermost first,
+    /// hold the space.
+    closes: usize,
 }
 
 impl Item {
@@ -432,6 +449,10 @@ struct InlineWalk {
     /// Whether white space came since the last item: a space goes before
     /// the next one, and the line may break there.
     spaced: bool,
+    /// For that white space: how many open elements had no item yet when it
+    /// came, and how many elements closed since.
+    space_opening: usize,
+    closed_since_space: usize,
     /// CSS Text: a line may break on either side of an atomic inline,
     /// white space or not. Set after one, for the item that follows.
     after_atomic: bool,
@@ -458,6 +479,15 @@ impl InlineWalk {
         self.kept.clear();
         self.kept_width = 0.0;
         self.column = 0;
+    }
+
+    /// White space in the source: the next item gets a space before it.
+    fn space(&mut self) {
+        if !self.spaced {
+            self.spaced = true;
+            self.space_opening = self.opening;
+            self.closed_since_space = 0;
+        }
     }
 
     fn enter(&mut self, element: NodeId) {
@@ -490,6 +520,7 @@ impl InlineWalk {
                     closes: 0,
                     lead: 0.0,
                     trail: 0.0,
+                    straddle: Straddle::default(),
                 };
                 self.push(ctx, width, groups, item, false);
             }
@@ -505,6 +536,9 @@ impl InlineWalk {
         {
             item.closes += 1;
             item.trail += InlineEdges::of(ctx, element, width).end();
+            if self.spaced {
+                self.closed_since_space += 1;
+            }
         }
     }
 
@@ -528,6 +562,12 @@ impl InlineWalk {
             .iter()
             .map(|&element| InlineEdges::of(ctx, element, width).start())
             .sum();
+        if self.spaced && item.preserved.is_none() {
+            item.straddle = Straddle {
+                opens: self.space_opening.min(self.opening),
+                closes: self.closed_since_space,
+            };
+        }
         self.opening = 0;
         self.spaced = false;
         self.after_atomic = atomic;
@@ -696,7 +736,7 @@ pub(crate) fn layout_inline_run(
                     let preserve = crate::preserves_spaces(style.white_space);
                     for (index, (white, word)) in words_of(line).into_iter().enumerate() {
                         if !white.is_empty() {
-                            walk.spaced = true;
+                            walk.space();
                             if preserve {
                                 let kept = crate::expand_tabs(white, walk.column);
                                 walk.column += kept.chars().count();
@@ -736,6 +776,7 @@ pub(crate) fn layout_inline_run(
                                 closes: 0,
                                 lead: 0.0,
                                 trail: 0.0,
+                                straddle: Straddle::default(),
                             };
                             walk.push(ctx, width, &mut groups, item, false);
                         }
@@ -778,6 +819,7 @@ pub(crate) fn layout_inline_run(
                         closes: 0,
                         lead: 0.0,
                         trail: 0.0,
+                        straddle: Straddle::default(),
                     };
                     walk.push(ctx, width, &mut groups, item, true);
                     continue;
@@ -817,6 +859,7 @@ pub(crate) fn layout_inline_run(
                             closes: 0,
                             lead: 0.0,
                             trail: 0.0,
+                            straddle: Straddle::default(),
                         };
                         walk.push(ctx, width, &mut groups, item, false);
                     }
@@ -922,15 +965,21 @@ pub(crate) fn layout_inline_run(
             // Where each item's own box starts, inside its elements' edges.
             let mut cursor_x = band_left + offset.start + leading;
             let mut at = Vec::with_capacity(line.len());
+            // The space each item's white space takes on this line.
+            let mut gaps = Vec::with_capacity(line.len());
             for (position, item) in line.iter().enumerate() {
+                let mut gap = 0.0;
                 if position > 0 {
-                    cursor_x += item.gap(space);
+                    gap = item.gap(space);
                     if item.spaced && item.preserved.is_none() {
-                        cursor_x += offset.gap;
+                        gap += offset.gap;
                     }
                 }
-                cursor_x += item.lead;
+                // Edges around the space reorder but take the same room, so
+                // the item lands in the same place either way.
+                cursor_x += gap + item.lead;
                 at.push(cursor_x);
+                gaps.push(gap);
                 cursor_x += item.width + item.trail;
             }
 
@@ -1051,8 +1100,21 @@ pub(crate) fn layout_inline_run(
                     .filter(|(k, _)| fragment.depth + 1 + k >= last.chain.len() - last.closes)
                     .map(|(_, &inner)| InlineEdges::of(ctx, inner, width).end())
                     .sum();
+                // An element holding the space before its first item, or
+                // after its last, spans it.
+                let opened_from = first.chain.len() - first.opens;
+                let holds_leading = opens && fragment.depth < opened_from + first.straddle.opens;
+                let closed_from = last.chain.len() - last.closes;
+                let next = line.get(fragment.last + 1);
+                let holds_trailing = closes
+                    && next.is_some_and(|next| fragment.depth < closed_from + next.straddle.closes);
                 let left = at[fragment.first]
                     - inner_start
+                    - if holds_leading {
+                        gaps[fragment.first]
+                    } else {
+                        0.0
+                    }
                     - if opens {
                         edges.border.left + edges.padding.left
                     } else {
@@ -1061,6 +1123,11 @@ pub(crate) fn layout_inline_run(
                 let right = at[fragment.last]
                     + last.width
                     + inner_end
+                    + if holds_trailing {
+                        gaps[fragment.last + 1]
+                    } else {
+                        0.0
+                    }
                     + if closes {
                         edges.padding.right + edges.border.right
                     } else {
