@@ -1416,7 +1416,7 @@ fn an_inline_block_contains_its_floats() {
 fn a_table_cell_contains_its_floats() {
     let (doc, tree) = page(
         r#"<table><tr><td><div id="f"></div></td></tr></table><p>after</p>"#,
-        "body { margin: 0 } p { margin: 0 } table { height: 10px }
+        "table { border-spacing: 0 } body { margin: 0 } p { margin: 0 } table { height: 10px }
          td { height: 10px; padding: 0 } #f { float: left; width: 50px; height: 60px }",
         800.0,
     );
@@ -2888,7 +2888,7 @@ fn a_block_inside_an_inline_counts_in_a_shrink_to_fit_width() {
 fn an_auto_width_table_shrinks_to_fit_its_columns() {
     let (doc, tree) = page(
         r#"<table id="t"><tr><td>ab</td><td>c</td></tr><tr><td>d</td><td>efgh</td></tr></table>"#,
-        "td { padding: 0 }",
+        "table { border-spacing: 0 } td { padding: 0 }",
         400.0,
     );
     // Columns: 16 and 32, the widest cell in each.
@@ -2901,7 +2901,7 @@ fn an_auto_width_table_shrinks_to_fit_its_columns() {
 fn a_tables_columns_stretch_to_its_set_width() {
     let (doc, tree) = page(
         r#"<table id="t"><tr><td id="a">ab</td><td id="b">c</td></tr></table>"#,
-        "#t { width: 50% } td { padding: 0 }",
+        "table { border-spacing: 0 } #t { width: 50% } td { padding: 0 }",
         400.0,
     );
     assert_eq!(tree.get(id(&doc, "t")).unwrap().rect.width, 200.0);
@@ -2929,7 +2929,7 @@ fn a_tables_width_attribute_sizes_it() {
 fn a_tables_max_content_width_sums_its_widest_columns() {
     let (doc, tree) = page(
         r#"<div id="f"><table><tr><td>ab</td><td>c</td></tr><tr><td>d</td><td>efgh</td></tr></table></div>"#,
-        "#f { float: left } td { padding: 0 }",
+        "table { border-spacing: 0 } #f { float: left } td { padding: 0 }",
         400.0,
     );
     assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.width, 48.0);
@@ -2966,7 +2966,7 @@ fn text_align_center_does_not_move_blocks() {
 fn cells_take_their_padding_in_table_layout() {
     let (doc, tree) = page(
         r#"<table id="t"><tr><td>ab</td><td></td></tr></table><table id="z" cellpadding="0"><tr><td>ab</td></tr></table>"#,
-        "",
+        "table { border-spacing: 0 }",
         400.0,
     );
     assert_eq!(tree.get(id(&doc, "t")).unwrap().rect.width, 20.0);
@@ -3111,7 +3111,7 @@ fn no_break_spaces_keep_their_width_and_never_break() {
 fn a_no_break_space_holds_together_in_min_content() {
     let (doc, tree) = page(
         "<div style=\"width: 10px\"><table id=\"t\" cellpadding=\"0\"><tr><td>a\u{a0}b c</td></tr></table></div>",
-        "",
+        "table { border-spacing: 0 }",
         400.0,
     );
     assert_eq!(tree.get(id(&doc, "t")).unwrap().rect.width, 24.0);
@@ -3125,7 +3125,7 @@ fn a_no_break_space_holds_together_in_min_content() {
 fn table_columns_never_shrink_below_their_min_content() {
     let (doc, tree) = page(
         r#"<table id="t" style="width: 400px" cellpadding="0"><tr><td id="g" style="white-space: nowrap">Features here</td><td id="l">one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty</td></tr></table>"#,
-        "",
+        "table { border-spacing: 0 }",
         400.0,
     );
     let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
@@ -3142,7 +3142,7 @@ fn table_columns_share_the_space_above_their_minimums() {
         // max 8. The minimums take 24 of 40; a alone wants more, so it
         // gets all 16 left: 16 + 48 * 16 / 48 = 32.
         r#"<table id="t" style="width: 40px" cellpadding="0"><tr><td id="a">aa bb cc</td><td id="b">d</td></tr></table>"#,
-        "",
+        "table { border-spacing: 0 }",
         400.0,
     );
     let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
@@ -3156,7 +3156,7 @@ fn table_columns_share_the_space_above_their_minimums() {
 fn a_table_is_at_least_its_min_content_wide() {
     let (doc, tree) = page(
         r#"<table id="t" style="width: 50px" cellpadding="0"><tr><td>abcdefgh ij</td></tr></table><div style="width: 10px"><table id="u" cellpadding="0"><tr><td>abc d</td><td>ef</td></tr></table></div>"#,
-        "",
+        "table { border-spacing: 0 }",
         400.0,
     );
     assert_eq!(tree.get(id(&doc, "t")).unwrap().rect.width, 64.0);
@@ -3169,7 +3169,7 @@ fn a_table_is_at_least_its_min_content_wide() {
 fn a_cell_fills_its_column_whatever_its_width() {
     let (doc, tree) = page(
         r#"<table style="width: 400px" cellpadding="0"><tr><td id="g" style="width: 1%; white-space: nowrap">Features here</td><td id="l" style="width: 100%">one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty</td></tr></table>"#,
-        "",
+        "table { border-spacing: 0 }",
         400.0,
     );
     let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
@@ -3183,7 +3183,7 @@ fn a_cell_fills_its_column_whatever_its_width() {
 fn a_fixed_width_column_keeps_its_width_in_a_wider_table() {
     let (doc, tree) = page(
         r#"<table style="width: 400px" cellpadding="0"><tr><td id="a" style="width: 20px">a</td><td id="b">bb</td><td id="c">cccc</td></tr></table>"#,
-        "",
+        "table { border-spacing: 0 }",
         400.0,
     );
     let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
@@ -3207,7 +3207,7 @@ fn a_fixed_width_column_keeps_its_width_in_a_wider_table() {
 fn a_percentage_column_takes_its_share_of_the_table() {
     let (doc, tree) = page(
         r#"<table style="width: 400px" cellpadding="0"><tr><td id="a" style="width: 25%">a</td><td id="b">b</td></tr></table>"#,
-        "",
+        "table { border-spacing: 0 }",
         400.0,
     );
     let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
@@ -3220,7 +3220,7 @@ fn a_percentage_column_takes_its_share_of_the_table() {
 fn a_full_width_column_leaves_the_others_their_minimums() {
     let (doc, tree) = page(
         r#"<table style="width: 400px" cellpadding="0"><tr><td id="g" style="white-space: nowrap">Group</td><td id="l" style="width: 100%">x</td></tr></table>"#,
-        "",
+        "table { border-spacing: 0 }",
         400.0,
     );
     let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
@@ -3233,7 +3233,7 @@ fn a_full_width_column_leaves_the_others_their_minimums() {
 fn a_percentage_column_grows_before_auto_columns() {
     let (doc, tree) = page(
         r#"<table style="width: 200px" cellpadding="0"><tr><td id="a" style="width: 50%">aaaa aaaa</td><td id="b">bbbbb bbbbb bbbbb bbbbb bbbbb bbbbb bbbbb bbbbb</td></tr></table>"#,
-        "",
+        "table { border-spacing: 0 }",
         400.0,
     );
     let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
@@ -3762,4 +3762,68 @@ fn text_top_and_text_bottom_align_with_the_parents_font() {
     );
     assert!(near(tree.get(id(&doc, "t")).unwrap().rect.y, 0.0));
     assert!(near(tree.get(id(&doc, "b")).unwrap().rect.y, 9.2));
+}
+
+fn rect_of(doc: &Document, tree: &LayoutTree, name: &str) -> Rect {
+    tree.get(id(doc, name)).unwrap().rect
+}
+
+/// HTML's UA sheet: tables space their cells 2px apart and from the
+/// table's edges (`border-spacing`, CSS 2 §17.6.1).
+#[test]
+fn table_cells_are_spaced_by_border_spacing() {
+    let html = "<table id=t><tr><td id=a>x</td><td id=b>y</td></tr></table>";
+    let (doc, tree) = page(html, "td { padding: 0 }", 400.0);
+    assert_eq!(rect_of(&doc, &tree, "a").x, 2.0);
+    assert_eq!(rect_of(&doc, &tree, "a").y, 2.0);
+    assert_eq!(rect_of(&doc, &tree, "b").x, 12.0);
+    let t = rect_of(&doc, &tree, "t");
+    assert!(near(t.width, 22.0) && near(t.height, 23.2), "{t:?}");
+
+    // Two values: horizontal, then vertical.
+    let (doc, tree) = page(
+        html,
+        "td { padding: 0 } table { border-spacing: 5px 10px }",
+        400.0,
+    );
+    assert_eq!(rect_of(&doc, &tree, "b").x, 18.0);
+    let t = rect_of(&doc, &tree, "t");
+    assert!(near(t.width, 31.0) && near(t.height, 39.2), "{t:?}");
+
+    // `cellspacing` sets it; collapsed borders have none.
+    let spaced = "<table id=t cellspacing=0><tr><td id=a>x</td><td id=b>y</td></tr></table>";
+    let (doc, tree) = page(spaced, "td { padding: 0 }", 400.0);
+    assert_eq!(rect_of(&doc, &tree, "b").x, 8.0);
+    let (doc, tree) = page(
+        html,
+        "td { padding: 0 } table { border-collapse: collapse }",
+        400.0,
+    );
+    assert_eq!(rect_of(&doc, &tree, "b").x, 8.0);
+}
+
+/// A fixed-width table's columns share what the spacing leaves; a cell
+/// spanning columns takes the spacing between them.
+#[test]
+fn spacing_comes_out_of_the_columns_and_into_spanning_cells() {
+    let (doc, tree) = page(
+        "<table width=100><tr><td id=a>x</td><td id=b>y</td></tr></table>",
+        "td { padding: 0 }",
+        400.0,
+    );
+    let (a, b) = (rect_of(&doc, &tree, "a"), rect_of(&doc, &tree, "b"));
+    assert!(near(a.width + b.width, 94.0), "{a:?} {b:?}");
+    assert!(near(b.x, 2.0 + a.width + 2.0));
+    let (doc, tree) = page(
+        "<table><tr><td id=w colspan=2>aaaaaaaaaa</td></tr><tr><td id=a>x</td><td id=b>y</td></tr></table>",
+        "td { padding: 0 }",
+        400.0,
+    );
+    let (w, a, b) = (
+        rect_of(&doc, &tree, "w"),
+        rect_of(&doc, &tree, "a"),
+        rect_of(&doc, &tree, "b"),
+    );
+    assert!(near(w.width, 80.0), "{w:?}");
+    assert!(near(w.width, a.width + 2.0 + b.width));
 }

@@ -81,3 +81,14 @@ fn author_css_overrides_cellpadding() {
         noonoo_style::Length::Px(2.0)
     );
 }
+
+#[test]
+fn tables_space_their_cells_and_cellspacing_sets_it() {
+    let doc = noonoo_html::parse(
+        "<table id=a><tr><td>x</table><table id=b cellspacing=5><tr><td>x</table>",
+    );
+    let styles = noonoo_style::compute(&doc, &[]);
+    let of = |id: &str| styles.get(doc.get_element_by_id(id).unwrap()).unwrap();
+    assert_eq!(of("a").border_spacing, (2.0, 2.0));
+    assert_eq!(of("b").border_spacing, (5.0, 5.0));
+}

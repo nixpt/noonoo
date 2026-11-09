@@ -367,6 +367,11 @@ fn presentational_hints(
     {
         hints.push(("width", width));
     }
+    if element.name == "table"
+        && let Some(spacing) = element.attr("cellspacing").and_then(non_negative_integer)
+    {
+        hints.push(("border-spacing", format!("{spacing}px")));
+    }
     if cell
         && let Some(padding) = owning_table(doc, id)
             .and_then(|table| doc.element(table)?.attr("cellpadding"))

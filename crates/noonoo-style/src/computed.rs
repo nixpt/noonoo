@@ -716,6 +716,9 @@ pub struct ComputedStyle {
     pub display: Display,
     /// `border-collapse`.
     pub border_collapse: BorderCollapse,
+    /// `border-spacing` in pixels, `(horizontal, vertical)`: the gap
+    /// between a separated-borders table's cells, and around them.
+    pub border_spacing: (f32, f32),
     /// `position`.
     pub position: Position,
     /// `float`.
@@ -834,6 +837,7 @@ impl Default for ComputedStyle {
         Self {
             display: Display::Inline,
             border_collapse: BorderCollapse::Separate,
+            border_spacing: (0.0, 0.0),
             position: Position::Static,
             float: Float::None,
             clear: Clear::None,

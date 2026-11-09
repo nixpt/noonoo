@@ -21,7 +21,10 @@
 //!   and the table's own border handles the frame;
 //! - table parts outside a table (cells or rows in a block) are wrapped in
 //!   an anonymous shrink-to-fit table by block flow (see `block.rs`);
-//! - `border-spacing`, captions, `table-layout: fixed`, and the rest of the
+//! - `border-spacing` (separated borders only) sits before, between and
+//!   after the columns and rows; a spanning cell takes the spacing it
+//!   covers;
+//! - captions, `table-layout: fixed`, and the rest of the
 //!   anonymous fixup (stray content inside a table or row) are not
 //!   modelled; stray content contributes nothing.
 
@@ -65,25 +68,29 @@ pub(crate) fn layout_table_children(
     if rows.is_empty() {
         return (Vec::new(), 0.0);
     }
-    let demands = column_demands(ctx, &rows, content_width);
-    let columns = fit_columns(&demands, content_width, fill);
+    let (spacing_x, spacing_y) = spacing(style);
+    let demands = column_demands(ctx, &rows, content_width, spacing_x);
+    let gaps = spacing_x * (demands.minimums.len() + 1) as f32;
+    let columns = fit_columns(&demands, (content_width - gaps).max(0.0), fill);
+    let column_start = |column: usize| column_start(&columns, column, spacing_x);
+    let span_width = |column: usize, span: usize| span_width(&columns, column, span, spacing_x);
 
     // Place the rows. Measure first, so every cell can stretch to its row's
     // height: the measurement is real layout, thrown away.
     let collapse = style.border_collapse == BorderCollapse::Collapse;
     let mut indices = Vec::new();
-    let mut cursor_y = content_y;
+    let mut cursor_y = content_y + spacing_y;
     for (row_index, row) in rows.iter().enumerate() {
         let mut measured = Vec::with_capacity(row.cells.len());
         for cell in &row.cells {
-            let cell_width = span_width(&columns, cell.column, cell.span);
+            let cell_width = span_width(cell.column, cell.span);
             let margin = resolve::margins(&ctx.style(cell.node).margin, content_width);
             let border_box = (cell_width - margin.left - margin.right).max(0.0);
             // The cell fills its column: its own `width` already sized it.
             ctx.flexed_width = Some((cell.node, border_box));
             let height = ctx.measure_height(
                 cell.node,
-                content_x + column_start(&columns, cell.column) + margin.left,
+                content_x + column_start(cell.column) + margin.left,
                 cursor_y,
                 border_box,
                 None,
@@ -95,13 +102,13 @@ pub(crate) fn layout_table_children(
         let row_height = measured.iter().copied().fold(0.0_f32, f32::max);
 
         for (cell, height) in row.cells.iter().zip(&measured) {
-            let cell_width = span_width(&columns, cell.column, cell.span);
+            let cell_width = span_width(cell.column, cell.span);
             let margin = resolve::margins(&ctx.style(cell.node).margin, content_width);
             let border_box = (cell_width - margin.left - margin.right).max(0.0);
             ctx.flexed_width = Some((cell.node, border_box));
             let _height = ctx.layout_element(
                 cell.node,
-                content_x + column_start(&columns, cell.column) + margin.left,
+                content_x + column_start(cell.column) + margin.left,
                 cursor_y + margin.top,
                 border_box,
                 // The cell stretches to its row's height, so a background
@@ -119,22 +126,44 @@ pub(crate) fn layout_table_children(
                 }
             }
         }
-        cursor_y += row_height;
+        cursor_y += row_height + spacing_y;
     }
 
     (indices, cursor_y - content_y)
 }
 
+/// A table's `border-spacing`, `(horizontal, vertical)`: none when its
+/// borders collapse.
+fn spacing(style: &ComputedStyle) -> (f32, f32) {
+    match style.border_collapse {
+        BorderCollapse::Collapse => (0.0, 0.0),
+        BorderCollapse::Separate => style.border_spacing,
+    }
+}
+
 /// A table's max-content content width: its columns' widest demands.
 pub(crate) fn max_content_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
     let rows = collect_rows(ctx, &crate::child_nodes(ctx.document, node));
-    column_demands(ctx, &rows, 0.0).maximums.iter().sum()
+    let (spacing_x, _) = spacing(ctx.style(node));
+    let maximums = column_demands(ctx, &rows, 0.0, spacing_x).maximums;
+    with_spacing(maximums.iter().sum(), maximums.len(), spacing_x)
+}
+
+/// `columns` wide plus the spacing around `count` columns (none without any).
+fn with_spacing(columns: f32, count: usize, spacing_x: f32) -> f32 {
+    if count == 0 {
+        columns
+    } else {
+        columns + spacing_x * (count + 1) as f32
+    }
 }
 
 /// A table's min-content content width: its columns' minimums side by side.
 pub(crate) fn min_content_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
     let rows = collect_rows(ctx, &crate::child_nodes(ctx.document, node));
-    column_demands(ctx, &rows, 0.0).minimums.iter().sum()
+    let (spacing_x, _) = spacing(ctx.style(node));
+    let minimums = column_demands(ctx, &rows, 0.0, spacing_x).minimums;
+    with_spacing(minimums.iter().sum(), minimums.len(), spacing_x)
 }
 
 /// What the columns ask for.
@@ -152,8 +181,9 @@ struct Demands {
 /// Each column's width demands: a cell demands its min-content and
 /// max-content border-box widths (plus its margins, as track sizing counts
 /// outer boxes); a spanning cell spreads its demands evenly across the
-/// columns it covers. A column's maximum is never below its minimum.
-fn column_demands(ctx: &Ctx<'_>, rows: &[Row], content_width: f32) -> Demands {
+/// columns it covers, less the `spacing_x` between them. A column's
+/// maximum is never below its minimum.
+fn column_demands(ctx: &Ctx<'_>, rows: &[Row], content_width: f32, spacing_x: f32) -> Demands {
     let column_count = rows
         .iter()
         .map(|row| row.cells.iter().map(|cell| cell.span).sum::<usize>())
@@ -169,8 +199,12 @@ fn column_demands(ctx: &Ctx<'_>, rows: &[Row], content_width: f32) -> Demands {
             let margin = resolve::margins(&cell_style.margin, content_width);
             let outer = margin.left + margin.right;
             let span = cell.span as f32;
-            let minimum = (float::min_content_of_contents(ctx, cell.node) + outer) / span;
-            let maximum = (float::preferred_width(ctx, cell.node) + outer) / span;
+            let inner_gaps = spacing_x * (span - 1.0);
+            let minimum = ((float::min_content_of_contents(ctx, cell.node) + outer - inner_gaps)
+                / span)
+                .max(0.0);
+            let maximum =
+                ((float::preferred_width(ctx, cell.node) + outer - inner_gaps) / span).max(0.0);
             if cell.span == 1 && cell.column < column_count {
                 match cell_style.width {
                     noonoo_style::Dimension::Px(_) => fixed[cell.column] = true,
@@ -297,17 +331,20 @@ fn grow_toward(columns: &mut [f32], goals: &[f32], room: &mut f32) {
     *room -= wanted * share;
 }
 
-/// The x of `column`'s left edge inside the table's content box (there is no
-/// `border-spacing` in the subset).
-fn column_start(columns: &[f32], column: usize) -> f32 {
-    columns[..column.min(columns.len())].iter().sum()
+/// The x of `column`'s left edge inside the table's content box: the
+/// columns before it, each with `spacing_x` before it, and its own.
+fn column_start(columns: &[f32], column: usize, spacing_x: f32) -> f32 {
+    let before = column.min(columns.len());
+    columns[..before].iter().sum::<f32>() + spacing_x * (before + 1) as f32
 }
 
-/// The total width of `span` columns starting at `column`.
-fn span_width(columns: &[f32], column: usize, span: usize) -> f32 {
+/// The total width of `span` columns starting at `column`, with the
+/// spacing between them.
+fn span_width(columns: &[f32], column: usize, span: usize, spacing_x: f32) -> f32 {
     let start = column.min(columns.len());
     let end = (column + span).min(columns.len());
-    columns[start..end].iter().sum::<f32>().max(0.0)
+    let inner = end.saturating_sub(start).saturating_sub(1);
+    (columns[start..end].iter().sum::<f32>() + spacing_x * inner as f32).max(0.0)
 }
 
 /// The rows of the table: `table-row` children, in document order; a

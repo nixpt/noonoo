@@ -578,6 +578,26 @@ pub(crate) fn apply(
                 }
             }
         }
+        Property::BorderSpacing => {
+            let px = |value: &Value| match value {
+                Value::Length(l) => Some(to_px(l, font_size, root, viewport).max(0.0)),
+                Value::Number(number) if *number == 0.0 => Some(0.0),
+                _ => None,
+            };
+            match values {
+                [both] => {
+                    if let Some(both) = px(both) {
+                        style.border_spacing = (both, both);
+                    }
+                }
+                [horizontal, vertical] => {
+                    if let (Some(h), Some(v)) = (px(horizontal), px(vertical)) {
+                        style.border_spacing = (h, v);
+                    }
+                }
+                _ => {}
+            }
+        }
         Property::VerticalAlign => {
             style.vertical_align = match values {
                 [Value::Keyword(k)] => match k.as_str() {
@@ -893,6 +913,7 @@ fn is_inherited(property: &Property) -> bool {
             | Property::WhiteSpace
             | Property::LetterSpacing
             | Property::TextTransform
+            | Property::BorderSpacing
             | Property::Visibility
             | Property::Cursor
     )
@@ -981,6 +1002,7 @@ fn copy_property(dst: &mut ComputedStyle, src: &ComputedStyle, property: &Proper
         Property::LetterSpacing => dst.letter_spacing = src.letter_spacing,
         Property::TextTransform => dst.text_transform = src.text_transform,
         Property::VerticalAlign => dst.vertical_align = src.vertical_align,
+        Property::BorderSpacing => dst.border_spacing = src.border_spacing,
         Property::Transform => dst.transform = src.transform.clone(),
         Property::BoxShadow => dst.box_shadow = src.box_shadow.clone(),
         Property::Opacity => dst.opacity = src.opacity,
