@@ -1066,6 +1066,9 @@ pub(crate) fn layout_inline_run(
             for (position, item) in line.iter().enumerate() {
                 let owner = item.chain.last().copied();
                 let owner_rise = owner.and_then(|o| rises.get(&o).copied()).unwrap_or(0.0);
+                // How far the item reaches into the line box, where that's
+                // more than its own box (a fallback face's text).
+                let mut reach = None;
                 let (above, below, align) = if let Some(atomic) = item.atomic {
                     let node = item.node.expect("an atomic inline has a node");
                     let (_, baseline) = ctx.layout_with_baseline(
@@ -1091,9 +1094,21 @@ pub(crate) fn layout_inline_run(
                 } else {
                     let style = ctx.style(item.style_node);
                     let (above, below) = ctx.inline_box(style, ctx.line_height_of(style));
+                    // A `normal` line holds the faces its text is drawn
+                    // with, a taller fallback's included; the text box
+                    // itself keeps its selected face's place.
+                    if style.line_height.is_none() && !item.text.is_empty() {
+                        let (ascent, descent) = ctx.shaper.text_metrics(
+                            &item.text,
+                            style.font_request(),
+                            style.font_size,
+                        );
+                        reach = Some((above.max(ascent), below.max(descent)));
+                    }
                     (above, below, Align::Rise(owner_rise))
                 };
                 if let Align::Rise(rise) = align {
+                    let (above, below) = reach.unwrap_or((above, below));
                     up = up.max(above + rise);
                     down = down.max(below - rise);
                 }

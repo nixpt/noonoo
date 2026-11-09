@@ -4294,3 +4294,61 @@ fn a_float_too_wide_for_the_line_drops_below_the_last() {
     let b = tree.get(id(&doc, "b")).unwrap().rect;
     assert!(near(b.y, a.y + a.height), "{a:?} {b:?}");
 }
+
+/// A shaper whose primary face is 15 + 4 px at 16px, with non-ASCII text
+/// drawn from a taller fallback (17 + 7 px), as DejaVu Sans and Noto Sans
+/// Thai are in Chromium's probe.
+struct FallbackFont;
+
+impl Shaper for FallbackFont {
+    fn advance(&self, text: &str, request: noonoo_text::FontRequest, font_size: f32) -> f32 {
+        MetricShaper.advance(text, request, font_size)
+    }
+
+    fn line_height(&self, _request: noonoo_text::FontRequest, font_size: f32) -> f32 {
+        font_size * 19.0 / 16.0
+    }
+
+    fn metrics(&self, _request: noonoo_text::FontRequest, font_size: f32) -> (f32, f32) {
+        (font_size * 15.0 / 16.0, font_size * 4.0 / 16.0)
+    }
+
+    fn text_metrics(
+        &self,
+        text: &str,
+        request: noonoo_text::FontRequest,
+        font_size: f32,
+    ) -> (f32, f32) {
+        if text.is_ascii() {
+            self.metrics(request, font_size)
+        } else {
+            (font_size * 17.0 / 16.0, font_size * 7.0 / 16.0)
+        }
+    }
+}
+
+/// A `normal`-height line grows to hold text from a taller fallback face,
+/// and its baseline drops to fit the face's ascent, as Chromium lays out
+/// Thai, Bengali or CJK beside DejaVu Sans; a fixed line height doesn't.
+#[test]
+fn a_normal_line_holds_its_fallback_faces() {
+    let doc = noonoo_html::parse(
+        r#"<!doctype html><div id=a>abc</div><div id=t>ไทย</div><div id=m>Abc <span>ไทย</span> def</div><div id=f style="line-height: 19px">ไทย</div>"#,
+    );
+    let sheet =
+        noonoo_css::Stylesheet::parse("body { margin: 0 } div { font-size: 16px }").unwrap();
+    let styles = noonoo_style::compute(&doc, &[sheet]);
+    let tree = layout(&doc, &styles, Size::new(400.0, 600.0), &FallbackFont);
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert_eq!(rect("a").height, 19.0);
+    assert_eq!(rect("t").height, 24.0);
+    assert_eq!(rect("m").height, 24.0);
+    assert_eq!(rect("f").height, 19.0);
+    // The text box keeps the primary face's height, 2px below the line top.
+    assert!(
+        near(text_y(&tree, "ไทย") - rect("t").y, 2.0),
+        "{}",
+        text_y(&tree, "ไทย")
+    );
+    assert!(near(text_y(&tree, "Abc") - rect("m").y, 2.0));
+}
