@@ -613,8 +613,11 @@ pub const MAX_TREE_DEPTH: usize = 512;
 /// stack, which an end tag or an implied close never pops.
 fn build(doc: &mut Document, base: NodeId, tokens: Vec<Token>, depth: usize) {
     let mut stack = vec![base];
+    // HTML drops a newline straight after these start tags.
+    let mut drop_newline = false;
 
     for token in tokens {
+        let after_preformatted = std::mem::take(&mut drop_newline);
         match token {
             Token::Doctype { name, .. } => {
                 let node = doc
@@ -628,7 +631,17 @@ fn build(doc: &mut Document, base: NodeId, tokens: Vec<Token>, depth: usize) {
                 let parent = insertion_parent(doc, &stack, depth);
                 let _ = doc.mutate().append_child(parent, node);
             }
-            Token::Text(text) => {
+            Token::Text(mut text) => {
+                if after_preformatted {
+                    if text.starts_with("\r\n") {
+                        text.drain(..2);
+                    } else if text.starts_with(['\n', '\r']) {
+                        text.drain(..1);
+                    }
+                    if text.is_empty() {
+                        continue;
+                    }
+                }
                 if !text.trim().is_empty() {
                     close_head(doc, &mut stack);
                 }
@@ -683,6 +696,7 @@ fn build(doc: &mut Document, base: NodeId, tokens: Vec<Token>, depth: usize) {
                 let _ = doc.mutate().append_child(parent, node);
                 if !self_closing && !is_void(&name) {
                     stack.push(node);
+                    drop_newline = matches!(name.as_str(), "pre" | "listing" | "textarea");
                 }
             }
             Token::EndTag { name } if name == "p" => {
