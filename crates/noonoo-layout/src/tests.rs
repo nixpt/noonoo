@@ -3559,3 +3559,15 @@ fn margins_do_not_collapse_out_of_the_root() {
     assert_eq!((html.y, html.height), (0.0, 16.0 + 19.2 + 16.0));
     assert_eq!(body.y, 16.0);
 }
+
+/// In quirks mode a table cell's `height` is its border box: padding is
+/// inside it. Standards mode adds the padding.
+#[test]
+fn in_quirks_mode_a_cells_height_includes_its_padding() {
+    let css = "td { height: 50px; padding: 10px; border: 0 }";
+    let html = "<table><tr><td id=c>x</td></tr></table>";
+    let (doc, tree) = page(html, css, 400.0);
+    assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.height, 50.0);
+    let (doc, tree) = page(&format!("<!doctype html>{html}"), css, 400.0);
+    assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.height, 70.0);
+}

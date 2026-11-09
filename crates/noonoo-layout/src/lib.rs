@@ -1349,8 +1349,11 @@ impl Ctx<'_> {
         // `box-sizing`), like the widths above. A percentage resolves against
         // the containing block's definite height, and behaves as `auto` when
         // it has none.
+        // In quirks mode a cell's `height` is its border box (padding inside).
+        let border_box_cell = style.display == Display::TableCell && self.is_quirks();
         let to_border_box_height = |height: f32| match style.box_sizing {
             BoxSizing::BorderBox => height,
+            BoxSizing::ContentBox if border_box_cell => height.max(vertical),
             BoxSizing::ContentBox => height + vertical,
         };
         let basis = self.percent_basis();
