@@ -4449,3 +4449,38 @@ fn justify_content_aligns_overflowing_items() {
     let column_top = rect("col").y - (40.0);
     assert_eq!(column_top, -50.0, "{:?}", rect("col"));
 }
+
+/// A closed `<select>` is a control, not a box of options: as wide as its
+/// widest option's label (whole pixels) plus Chromium's 20px for the inner
+/// padding and arrow, a line tall plus a pixel above and below, showing the
+/// selected option's label; the options themselves make no boxes
+/// (rust-lang.org's language picker spread its options across the page).
+#[test]
+fn a_dropdown_select_shows_its_selected_label() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div><select id="s"><option id="o">ab</option><option selected>abcd</option></select><select id="e"></select></div>"#,
+        "select { font-size: 16px }",
+        400.0,
+    );
+    let select = tree.get(id(&doc, "s")).unwrap();
+    let content = select.content_box();
+    assert!(near(content.width, 52.0), "{content:?}");
+    assert!(near(content.height, 21.2), "{content:?}");
+    assert_eq!(select.border.left, 1.0, "the UA's 1px border");
+    assert!(tree.get(id(&doc, "o")).is_none(), "options make no boxes");
+    let label = tree
+        .boxes()
+        .iter()
+        .find(|b| b.text.as_deref() == Some("abcd"))
+        .expect("the selected label is drawn");
+    assert!(
+        near(label.rect.x, content.x + 4.0) && near(label.rect.y, content.y + 1.0),
+        "{:?}",
+        label.rect
+    );
+    // An empty select is just the padding and arrow.
+    assert!(near(
+        tree.get(id(&doc, "e")).unwrap().content_box().width,
+        20.0
+    ));
+}
