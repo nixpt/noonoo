@@ -4629,3 +4629,25 @@ fn flex_lines_hold_their_items_margins() {
     assert!(near(d.y, 74.0) && near(d.height, 0.0), "{d:?}");
     assert!(near(tree.get(id(&doc, "f")).unwrap().rect.height, 78.0));
 }
+
+/// Internal table elements have no margins (CSS 2.1 §17.5): a cell's
+/// margin neither widens its column nor deepens its row (noonoo#9).
+#[test]
+fn table_cells_have_no_margins() {
+    let (doc, tree) = page(
+        r#"<!doctype html><table id="t"><tr><td id="a">a</td><td id="b">b</td></tr></table><table id="u"><tr><td>a</td><td>b</td></tr></table>"#,
+        "td { margin: 3px 5px 6px 7px } #u td { margin: 0 }",
+        400.0,
+    );
+    let t = tree.get(id(&doc, "t")).unwrap().rect;
+    let u = tree.get(id(&doc, "u")).unwrap().rect;
+    assert!(
+        near(t.width, u.width) && near(t.height, u.height),
+        "{t:?} {u:?}"
+    );
+    let a = tree.get(id(&doc, "a")).unwrap().rect;
+    let b = tree.get(id(&doc, "b")).unwrap().rect;
+    // Cells sit at the border spacing, edge to edge with their columns.
+    assert!(near(a.y, t.y + 2.0) && near(a.x, t.x + 2.0), "{a:?}");
+    assert!(near(b.x, a.x + a.width + 2.0), "{b:?}");
+}

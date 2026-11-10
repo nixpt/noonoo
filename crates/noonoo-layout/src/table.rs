@@ -8,7 +8,8 @@
 //! - rows come from `table-row` children; a `table-row-group`
 //!   (`thead`/`tbody`/`tfoot`) is transparent — its rows lay out in its
 //!   place, and the group's own box is not pushed;
-//! - a cell's demand is its max-content border-box width plus its margins;
+//! - a cell's demand is its max-content border-box width: internal table
+//!   elements have no margins (CSS 2.1 §17.5), so a cell's are ignored;
 //!   a column's width is the widest demand placed on it, and a `colspan`
 //!   cell spreads its demand evenly across the columns it covers (an
 //!   accepted approximation of the spec's distribution);
@@ -75,7 +76,7 @@ pub(crate) fn layout_table_children(
     }
     let (spacing_x, spacing_y) = spacing(style);
     let declared = declared_columns(ctx, children);
-    let demands = column_demands(ctx, &rows, &declared, content_width, spacing_x);
+    let demands = column_demands(ctx, &rows, &declared, spacing_x);
     let gaps = spacing_x * (demands.minimums.len() + 1) as f32;
     let columns = fit_columns(&demands, (content_width - gaps).max(0.0), fill);
     let column_start = |column: usize| column_start(&columns, column, spacing_x);
@@ -89,40 +90,33 @@ pub(crate) fn layout_table_children(
     for (row_index, row) in rows.iter().enumerate() {
         let mut measured = Vec::with_capacity(row.cells.len());
         for cell in &row.cells {
-            let cell_width = span_width(cell.column, cell.span);
-            let margin = resolve::margins(&ctx.style(cell.node).margin, content_width);
-            let border_box = (cell_width - margin.left - margin.right).max(0.0);
             // The cell fills its column: its own `width` already sized it.
+            let border_box = span_width(cell.column, cell.span);
             ctx.flexed_width = Some((cell.node, border_box));
             let height = ctx.measure_height(
                 cell.node,
-                content_x + column_start(cell.column) + margin.left,
+                content_x + column_start(cell.column),
                 cursor_y,
                 border_box,
                 None,
             );
             ctx.flexed_width = None;
-            measured.push(height + margin.top + margin.bottom);
+            measured.push(height);
         }
         ctx.prune_pending();
         let row_height = measured.iter().copied().fold(row.height, f32::max);
 
         for (cell, height) in row.cells.iter().zip(&measured) {
-            let cell_width = span_width(cell.column, cell.span);
-            let margin = resolve::margins(&ctx.style(cell.node).margin, content_width);
-            let border_box = (cell_width - margin.left - margin.right).max(0.0);
+            let border_box = span_width(cell.column, cell.span);
             ctx.flexed_width = Some((cell.node, border_box));
             let _height = ctx.layout_element(
                 cell.node,
-                content_x + column_start(cell.column) + margin.left,
-                cursor_y + margin.top,
+                content_x + column_start(cell.column),
+                cursor_y,
                 border_box,
                 // The cell stretches to its row's height, so a background
                 // fills it even when the neighbours are taller.
-                Some(
-                    (row_height - margin.top - margin.bottom)
-                        .max(*height - margin.top - margin.bottom),
-                ),
+                Some(row_height.max(*height)),
             );
             ctx.flexed_width = None;
             if let Some(index) = ctx.tree_index(cell.node) {
@@ -180,7 +174,7 @@ pub(crate) fn max_content_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
     let rows = collect_rows(ctx, &children);
     let declared = declared_columns(ctx, &children);
     let (spacing_x, _) = spacing(ctx.style(node));
-    let demands = column_demands(ctx, &rows, &declared, 0.0, spacing_x);
+    let demands = column_demands(ctx, &rows, &declared, spacing_x);
     let columns = demands.maximums.iter().sum::<f32>();
     with_spacing(
         columns.max(widened_by_percents(&demands)),
@@ -236,7 +230,7 @@ pub(crate) fn min_content_width(ctx: &Ctx<'_>, node: NodeId) -> f32 {
     let rows = collect_rows(ctx, &children);
     let declared = declared_columns(ctx, &children);
     let (spacing_x, _) = spacing(ctx.style(node));
-    let minimums = column_demands(ctx, &rows, &declared, 0.0, spacing_x).minimums;
+    let minimums = column_demands(ctx, &rows, &declared, spacing_x).minimums;
     with_spacing(minimums.iter().sum(), minimums.len(), spacing_x)
 }
 
@@ -253,19 +247,13 @@ struct Demands {
 }
 
 /// Each column's width demands: a cell demands its min-content and
-/// max-content border-box widths (plus its margins, as track sizing counts
-/// outer boxes); a spanning cell spreads its demands evenly across the
+/// max-content border-box widths (a cell has no margins, CSS 2.1 §17.5);
+/// a spanning cell spreads its demands evenly across the
 /// columns it covers, less the `spacing_x` between them. A `declared`
 /// column width (from `col`/`colgroup`) counts as a cell's. A column with
 /// a pixel width wants that width, or its minimum if wider; otherwise a
 /// column's maximum is never below its minimum.
-fn column_demands(
-    ctx: &Ctx<'_>,
-    rows: &[Row],
-    declared: &[Dimension],
-    content_width: f32,
-    spacing_x: f32,
-) -> Demands {
+fn column_demands(ctx: &Ctx<'_>, rows: &[Row], declared: &[Dimension], spacing_x: f32) -> Demands {
     let column_count = rows
         .iter()
         .map(|row| row.cells.iter().map(|cell| cell.span).sum::<usize>())
@@ -288,15 +276,11 @@ fn column_demands(
     for row in rows {
         for cell in &row.cells {
             let cell_style = ctx.style(cell.node);
-            let margin = resolve::margins(&cell_style.margin, content_width);
-            let outer = margin.left + margin.right;
             let span = cell.span as f32;
             let inner_gaps = spacing_x * (span - 1.0);
-            let minimum = ((float::min_content_of_contents(ctx, cell.node) + outer - inner_gaps)
-                / span)
-                .max(0.0);
-            let maximum =
-                ((float::preferred_width(ctx, cell.node) + outer - inner_gaps) / span).max(0.0);
+            let minimum =
+                ((float::min_content_of_contents(ctx, cell.node) - inner_gaps) / span).max(0.0);
+            let maximum = ((float::preferred_width(ctx, cell.node) - inner_gaps) / span).max(0.0);
             if cell.span == 1 && cell.column < column_count {
                 match cell_style.width {
                     Dimension::Px(_) => raise(&mut fixed_widths[cell.column], maximum),
