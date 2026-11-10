@@ -4484,3 +4484,33 @@ fn a_dropdown_select_shows_its_selected_label() {
         20.0
     ));
 }
+
+#[test]
+fn a_select_without_appearance_drops_its_arrow_and_inner_padding() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div><select id="s"><option>abcd</option></select><select id="w"><option>abcd</option></select></div>"#,
+        "select { font-size: 16px } #s { -webkit-appearance: none; appearance: none; padding: 2px 6px }",
+        400.0,
+    );
+    let select = tree.get(id(&doc, "s")).unwrap();
+    let content = select.content_box();
+    // Just the label: no 20px of arrow, no 1px of inner padding.
+    assert!(near(content.width, 32.0), "{content:?}");
+    assert!(near(content.height, 19.2), "{content:?}");
+    assert_eq!(select.padding.left, 6.0);
+    let label = tree
+        .boxes()
+        .iter()
+        .find(|b| b.text.as_deref() == Some("abcd") && b.style_node == id(&doc, "s"))
+        .expect("the label is still drawn");
+    assert!(
+        near(label.rect.x, content.x) && near(label.rect.y, content.y),
+        "{:?}",
+        label.rect
+    );
+    // `auto` keeps the drop-down's chrome.
+    assert!(near(
+        tree.get(id(&doc, "w")).unwrap().content_box().width,
+        52.0
+    ));
+}

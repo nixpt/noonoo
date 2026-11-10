@@ -216,6 +216,15 @@ const DROPDOWN_INSET: (f32, f32) = (4.0, 1.0);
 
 /// Whether `element` is a closed select (a drop-down): no `multiple` and a
 /// `size` of at most 1. Otherwise it's a list box.
+/// 1 when a control draws as the native widget, with its built-in
+/// padding and arrow; 0 under `appearance: none`, a plain box.
+fn native(style: &ComputedStyle) -> f32 {
+    match style.appearance {
+        noonoo_style::Appearance::Auto => 1.0,
+        noonoo_style::Appearance::None => 0.0,
+    }
+}
+
 fn is_dropdown(element: &noonoo_dom::ElementData) -> bool {
     element.name == "select"
         && element.attr("multiple").is_none()
@@ -1069,7 +1078,7 @@ impl Ctx<'_> {
                 .iter()
                 .map(|label| self.advance(label, style))
                 .fold(0.0f32, f32::max);
-            return Some(widest.ceil() + DROPDOWN_CHROME);
+            return Some(widest.ceil() + DROPDOWN_CHROME * native(style));
         }
         if !is_text_field(element) {
             return None;
@@ -1100,7 +1109,7 @@ impl Ctx<'_> {
     ) -> Option<f32> {
         let element = self.document.element(node)?;
         if is_dropdown(element) {
-            return Some(self.line_height_of(style) + 2.0 * DROPDOWN_INSET.1);
+            return Some(self.line_height_of(style) + 2.0 * DROPDOWN_INSET.1 * native(style));
         }
         if element.name != "textarea" {
             return self
@@ -1186,7 +1195,12 @@ impl Ctx<'_> {
             .document
             .element(node)
             .filter(|element| is_dropdown(element))
-            .map_or((0.0, 0.0), |_| DROPDOWN_INSET);
+            .map_or((0.0, 0.0), |_| {
+                (
+                    DROPDOWN_INSET.0 * native(style),
+                    DROPDOWN_INSET.1 * native(style),
+                )
+            });
         let index = self.push(LayoutBox {
             node: None,
             style_node: node,

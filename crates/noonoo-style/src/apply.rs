@@ -460,6 +460,14 @@ pub(crate) fn apply(
                 };
             }
         }
+        Property::Appearance => {
+            if let Some(k) = keyword(values) {
+                style.appearance = match k {
+                    "none" => Appearance::None,
+                    _ => Appearance::Auto,
+                };
+            }
+        }
         Property::FlexDirection => {
             if let Some(k) = keyword(values) {
                 style.flex_direction = match k {
@@ -980,6 +988,7 @@ fn copy_property(dst: &mut ComputedStyle, src: &ComputedStyle, property: &Proper
             dst.border_radius.bottom_left = src.border_radius.bottom_left.clone()
         }
         Property::BoxSizing => dst.box_sizing = src.box_sizing,
+        Property::Appearance => dst.appearance = src.appearance,
         Property::FlexDirection => dst.flex_direction = src.flex_direction,
         Property::FlexWrap => dst.flex_wrap = src.flex_wrap,
         Property::FlexGrow => dst.flex_grow = src.flex_grow,

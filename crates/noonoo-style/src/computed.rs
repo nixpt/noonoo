@@ -399,6 +399,16 @@ pub enum BoxSizing {
     BorderBox,
 }
 
+/// `appearance`: whether a form control is drawn as the platform's
+/// widget, with its built-in padding and arrows, or as a plain box.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Appearance {
+    /// `auto` and the widget keywords: the native widget.
+    Auto,
+    /// `none`: just the box the page styles.
+    None,
+}
+
 /// `text-align`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum TextAlign {
@@ -806,6 +816,8 @@ pub struct ComputedStyle {
     pub border_radius: Corners<Length>,
     /// `box-sizing`.
     pub box_sizing: BoxSizing,
+    /// `appearance`.
+    pub appearance: Appearance,
     /// `flex-direction`.
     pub flex_direction: FlexDirection,
     /// `flex-wrap`.
@@ -883,6 +895,7 @@ impl Default for ComputedStyle {
             border_color: Edges::all(Color::BLACK),
             border_radius: Corners::all(Length::ZERO),
             box_sizing: BoxSizing::ContentBox,
+            appearance: Appearance::Auto,
             flex_direction: FlexDirection::Row,
             flex_wrap: FlexWrap::NoWrap,
             flex_grow: 0.0,
