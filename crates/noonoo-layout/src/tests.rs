@@ -4857,3 +4857,29 @@ fn the_leading_above_the_content_area_is_floored() {
         );
     }
 }
+
+/// A `<br>` is a line break whatever its `display` (bar `none`, which
+/// leaves none), `float`, `position` or box edges, as Chromium has it.
+#[test]
+fn a_br_breaks_the_line_whatever_its_display() {
+    for (css, lines) in [
+        ("", 2),
+        ("display: block", 2),
+        (
+            "display: flex; margin: 10px; padding: 5px; border: 2px solid",
+            2,
+        ),
+        ("display: inline-block; width: 50px; height: 30px", 2),
+        ("float: left; width: 50px; height: 30px", 2),
+        ("position: absolute", 2),
+        ("display: none", 1),
+    ] {
+        let (doc, tree) = page(
+            &format!("<!doctype html><div id=d>one<br style='{css}'>two</div>"),
+            "div { line-height: 20px; width: 300px }",
+            400.0,
+        );
+        let height = rect_of(&doc, &tree, "d").height;
+        assert_eq!(height, 20.0 * lines as f32, "{css}");
+    }
+}
