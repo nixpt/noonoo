@@ -4975,3 +4975,29 @@ fn a_floated_broken_image_keeps_its_sizes() {
     assert_eq!((a.width, a.height), (32.0, 30.0));
     assert_eq!((b.width, b.height), (40.0, 30.0));
 }
+
+/// A float in an inline run (after white space, say) is its container's
+/// child: placed but never attached, it once neither painted nor had a
+/// client rect (gnu.org's package logos, floated in an indented `<h4>`).
+#[test]
+fn a_float_after_white_space_has_a_box() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div> <span id=f style="float:left">ff</span> G</div>"#,
+        "body { margin: 0 }",
+        400.0,
+    );
+    // Reached from the tree's roots, so it paints and has a client rect.
+    let float = tree
+        .bounding_client_rect(id(&doc, "f"))
+        .expect("the float's box");
+    assert_eq!((float.x, float.width), (0.0, 16.0));
+    let (doc, tree) = page(
+        r#"<!doctype html><div> <span id=f style="float:left">ff</span> </div>"#,
+        "body { margin: 0 }",
+        400.0,
+    );
+    assert!(
+        tree.bounding_client_rect(id(&doc, "f")).is_some(),
+        "alone on its run"
+    );
+}
