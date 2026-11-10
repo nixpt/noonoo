@@ -347,6 +347,10 @@ fn paint_box(
 ) {
     let boxes = layout.boxes();
     let b = &boxes[index];
+    // A split inline's stretch beside a block is geometry only.
+    if b.kind == BoxKind::Split {
+        return;
+    }
     let style = styles.get(b.style_node);
     let rect = b.rect.translate(-tx, -ty);
     // An `opacity` below 1 composites the box's whole subtree as one group.
@@ -1331,6 +1335,18 @@ mod tests {
             .collect();
         // 4 + "ab" (16) + 4, the text run painting none of its own.
         assert_eq!(red, [Rect::new(0.0, 0.0, 24.0, 19.2)]);
+    }
+
+    #[test]
+    fn a_split_inline_paints_nothing_beside_its_block() {
+        let list = render(
+            r#"<a href=x><div></div></a>"#,
+            "a { background-color: #ff0000 } div { height: 10px }",
+        );
+        let red = list.commands().iter().any(
+            |c| matches!(c, Command::FillRect { color, .. } if *color == Color::rgb(255, 0, 0)),
+        );
+        assert!(!red, "{:?}", list.commands());
     }
 
     fn transforms(list: &CommandList) -> Vec<[f32; 6]> {
