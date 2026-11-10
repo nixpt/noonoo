@@ -283,6 +283,19 @@ pub struct LayoutTree {
     page_scroll: Point,
     /// The image each `<img>` with a loaded source draws.
     images: HashMap<NodeId, EncodedImage>,
+    /// What collapsed tables and their cells paint for borders (see
+    /// [`LayoutTree::collapsed_borders`]).
+    collapsed: HashMap<NodeId, Vec<BorderSegment>>,
+}
+
+/// One resolved edge of a table with `border-collapse: collapse`: a band of
+/// its winning border's colour, placed against the table's border box.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BorderSegment {
+    /// Where it goes, from the table's border-box origin.
+    pub rect: Rect,
+    /// The winning border's colour.
+    pub color: noonoo_css::Color,
 }
 
 /// A `position: sticky` box and how far it's currently shifted from its
@@ -299,6 +312,14 @@ impl LayoutTree {
     /// whose source was loaded (see [`layout_with_images`]).
     pub fn image(&self, node: NodeId) -> Option<&EncodedImage> {
         self.images.get(&node)
+    }
+
+    /// The borders `node` paints in place of its own, if it's a table with
+    /// `border-collapse: collapse` or one of its cells: the table's resolved
+    /// edges, each from the table's border-box origin, and nothing for a
+    /// cell. `None` for any other box, which paints its own borders.
+    pub fn collapsed_borders(&self, node: NodeId) -> Option<&[BorderSegment]> {
+        self.collapsed.get(&node).map(Vec::as_slice)
     }
 
     /// The box for `node`, if it produced one.
@@ -741,7 +762,10 @@ pub fn layout_with_images(
         heights: vec![Some(viewport.height)],
         flexed: None,
         flexed_width: None,
+        collapsed: HashMap::new(),
+        grids: HashMap::new(),
     };
+    resolve_collapsed_tables(&mut ctx);
     // The root's children share one block formatting context.
     ctx.push_bfc();
 
@@ -782,6 +806,51 @@ pub fn layout_with_images(
     ctx.tree.viewport = viewport;
     ctx.tree.update_sticky();
     ctx.tree
+}
+
+/// Resolve every table with `border-collapse: collapse` before layout: each
+/// of its cells (and the table) lays out with half of each resolved border
+/// line around it, and without padding for the table, as the collapsing
+/// model has (see `table.rs`).
+fn resolve_collapsed_tables(ctx: &mut Ctx<'_>) {
+    let mut stack = vec![ctx.document.root()];
+    let mut tables = Vec::new();
+    while let Some(node) = stack.pop() {
+        if let Some(style) = ctx.styles.get(node)
+            && style.display == Display::Table
+            && style.border_collapse == noonoo_style::BorderCollapse::Collapse
+        {
+            tables.push(node);
+        }
+        stack.extend(child_nodes(ctx.document, node));
+    }
+    for table in tables {
+        let Some((grid, borders)) = table::resolve_collapsed(ctx, table) else {
+            continue;
+        };
+        for (node, border) in borders {
+            let mut style = Box::new(ctx.style(node).clone());
+            let solid = |width: f32| {
+                if width > 0.0 {
+                    noonoo_style::BorderStyle::Solid
+                } else {
+                    noonoo_style::BorderStyle::None
+                }
+            };
+            style.border_style = noonoo_style::Edges {
+                top: solid(border.top),
+                right: solid(border.right),
+                bottom: solid(border.bottom),
+                left: solid(border.left),
+            };
+            style.border_width = border;
+            if node == table {
+                style.padding = noonoo_style::Edges::all(noonoo_style::Length::ZERO);
+            }
+            ctx.collapsed.insert(node, style);
+        }
+        ctx.grids.insert(table, grid);
+    }
 }
 
 /// A copy of `document` with each generated box inserted where its
@@ -871,6 +940,12 @@ pub(crate) struct Ctx<'a> {
     /// A row flex container's decided main size for one item (its border
     /// box): it overrides a specified width, as `flexed` does a height.
     pub flexed_width: Option<(NodeId, f32)>,
+    /// The styles cells and tables with collapsed borders lay out with:
+    /// their own, with each border half of its resolved grid line (see
+    /// `table.rs`). [`Ctx::style`] hands these out in place of the real ones.
+    collapsed: HashMap<NodeId, Box<ComputedStyle>>,
+    /// Each collapsed table's resolved border grid, for painting.
+    grids: HashMap<NodeId, table::Grid>,
 }
 
 impl Ctx<'_> {
@@ -978,6 +1053,11 @@ impl Ctx<'_> {
     }
 
     pub fn style(&self, node: NodeId) -> &ComputedStyle {
+        if !self.collapsed.is_empty()
+            && let Some(style) = self.collapsed.get(&node)
+        {
+            return style;
+        }
         self.styles
             .get(node)
             .expect("layout only visits styled elements")

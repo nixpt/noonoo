@@ -1199,18 +1199,34 @@ fn table_cells_lay_out_in_rows_and_columns() {
 #[test]
 fn border_collapse_paints_a_shared_edge_once() {
     let (doc, tree) = page(
-        r#"<table><tr><td id="a">a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>"#,
+        r#"<table id="t"><tr><td id="a">a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>"#,
         "table { border-collapse: collapse } td { border: 1px solid #000 }",
         400.0,
     );
     let td = id(&doc, "a");
+    // Each cell's box takes half of every line around it ...
     let border = tree.get(td).unwrap().border;
-    // `a` has a neighbour to its right and one below: it keeps only its own
-    // top and left — the shared edges belong to `b` and `c`.
-    assert_eq!(border.right, 0.0);
-    assert_eq!(border.bottom, 0.0);
-    assert_eq!(border.left, 1.0);
-    assert_eq!(border.top, 1.0);
+    assert_eq!(
+        (border.top, border.right, border.bottom, border.left),
+        (0.5, 0.5, 0.5, 0.5)
+    );
+    // ... and paints none of its own: the table paints each edge once,
+    // 3 column lines x 2 rows and 3 row lines x 2 columns.
+    assert_eq!(tree.collapsed_borders(td), Some(&[][..]));
+    let segments = tree.collapsed_borders(id(&doc, "t")).unwrap();
+    assert_eq!(segments.len(), 12);
+    let table = tree.get(id(&doc, "t")).unwrap().rect;
+    // The middle line sits on the cells' boundary, 1px wide across it.
+    let a = tree.get(td).unwrap().rect;
+    let middle = segments
+        .iter()
+        .find(|segment| segment.rect.height > 1.0 && segment.rect.x > 1.0)
+        .unwrap();
+    assert!(
+        near(table.x + middle.rect.x + 0.5, a.right()),
+        "{middle:?} {a:?}"
+    );
+    assert_eq!(middle.rect.width, 1.0);
 }
 
 // ── Atomic inline-level boxes: inline-block, inline-flex, form controls ────
@@ -4692,4 +4708,68 @@ fn an_inline_svg_is_sized_from_its_attributes_and_view_box() {
     }
     // Its children are SVG content, not CSS boxes.
     assert!(tree.get(id(&doc, "pl")).is_none());
+}
+
+/// The collapsing border model (CSS 2.1 §17.6.2), as Chromium lays it
+/// out (noonoo#8): a shared edge is one border, the wider (or `hidden`)
+/// winning, the table's own competing on the outside; a column or row
+/// line is its widest edge, and each cell's box (and the table's) takes
+/// half of the lines around it.
+#[test]
+fn collapsed_borders_are_shared_and_split_in_half() {
+    let (doc, tree) = page(
+        r#"<!doctype html>
+        <table id="t1"><tr><td id="a1">a</td><td id="b1">b</td><td>c</td></tr></table>
+        <table id="t2"><tr><td id="a2">a</td><td id="b2">b</td></tr></table>
+        <table id="t4"><tr><td id="a4">a</td><td id="b4">b</td></tr></table>
+        <table id="t6"><tr><td id="a6">a</td><td id="b6">b</td></tr><tr><td id="c6">c</td><td>d</td></tr></table>"#,
+        "body { margin: 0 } table { border-collapse: collapse; margin-bottom: 10px; padding: 7px }
+         td { padding: 0; width: 20px; border: 2px solid black }
+         #t2 { border: 6px solid red }
+         #t4 td { border-width: 4px } #b4 { border-left-style: hidden }
+         #t6 { border: 1px solid red } #t6 td { border-width: 4px } #t6 #a6 { border-top-width: 10px }",
+        800.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    let near_rect = |name: &str, x: f32, y: f32, w: f32, h: f32| {
+        let r = rect(name);
+        assert!(
+            near(r.x, x) && near(r.y, y) && near(r.width, w) && near(r.height, h),
+            "{name}: {r:?} vs {x},{y} {w}x{h}"
+        );
+    };
+    // Three 2px cells: 20 + 1 + 1 each, the frame's halves outside them.
+    near_rect("t1", 0.0, 0.0, 68.0, 23.2);
+    near_rect("a1", 1.0, 1.0, 22.0, 19.2 + 2.0);
+    near_rect("b1", 23.0, 1.0, 22.0, 21.2);
+    // The table's 6px wins the outside: half of it on each side.
+    let t2 = rect("t2");
+    near_rect("t2", 0.0, t2.y, 54.0, 31.2);
+    near_rect("a2", 3.0, t2.y + 3.0, 24.0, 25.2);
+    near_rect("b2", 27.0, t2.y + 3.0, 24.0, 25.2);
+    // `hidden` wins its edge: nothing between the cells.
+    let t4 = rect("t4");
+    near_rect("t4", 0.0, t4.y, 48.0, 27.2);
+    near_rect("b4", 24.0, t4.y + 2.0, 22.0, 23.2);
+    // A row's line is its widest edge: both cells take its 5px half.
+    let t6 = rect("t6");
+    near_rect("t6", 0.0, t6.y, 52.0, 5.0 + 26.2 + 23.2 + 2.0);
+    near_rect("a6", 2.0, t6.y + 5.0, 24.0, 26.2);
+    near_rect("b6", 26.0, t6.y + 5.0, 24.0, 26.2);
+    near_rect("c6", 2.0, t6.y + 31.2, 24.0, 23.2);
+}
+
+/// A cell's `height` is the least it is (CSS 2.1 §17.5.3): taller content
+/// makes the cell, and its row, taller, as in Chromium.
+#[test]
+fn a_cells_height_is_a_minimum() {
+    let (doc, tree) = page(
+        r#"<!doctype html><table><tr><td id="a">a</td><td id="b">b</td></tr></table><table><tr><td id="c">c</td></tr></table>"#,
+        "td { padding: 0; height: 10px } #c { height: 40px }",
+        400.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert!(near(rect("a").height, 19.2), "{:?}", rect("a"));
+    assert!(near(rect("b").height, 19.2), "{:?}", rect("b"));
+    assert!(near(rect("c").height, 40.0), "{:?}", rect("c"));
 }

@@ -20,9 +20,14 @@
 //!   content box, or stretch proportionally when the table's width leaves
 //!   leftover space — the §17.5.2 distribution;
 //! - cells in a row stretch to the row's tallest border-box height;
-//! - `border-collapse: collapse` paints a shared edge once: the cell to the
-//!   left of (or above) an internal edge drops its right (bottom) border,
-//!   and the table's own border handles the frame;
+//! - `border-collapse: collapse` is CSS 2.1's collapsing model, as
+//!   Chromium lays it out: a shared edge is one border (`hidden` wins, then
+//!   the wider, then the stronger style, then the cell nearer the top
+//!   left; the table's own border competes on the outside), a column or
+//!   row line is as wide as its widest edge, and each cell (and the table)
+//!   takes half of the lines around it as its border; the resolved edges
+//!   are painted from [`crate::BorderSegment`]s. Row, row-group and column
+//!   borders don't take part, and the table's padding is dropped;
 //! - table parts outside a table (cells or rows in a block) are wrapped in
 //!   an anonymous shrink-to-fit table by block flow (see `block.rs`);
 //! - `border-spacing` (separated borders only) sits before, between and
@@ -32,10 +37,14 @@
 //!   anonymous fixup (stray content inside a table or row) are not
 //!   modelled; stray content contributes nothing.
 
+use noonoo_css::Color;
 use noonoo_dom::NodeId;
-use noonoo_style::{BorderCollapse, ComputedStyle, Dimension, Display, VerticalAlign};
+use noonoo_geometry::Rect;
+use noonoo_style::{
+    BorderCollapse, BorderStyle, ComputedStyle, Dimension, Display, Edges, VerticalAlign,
+};
 
-use crate::{Ctx, float, resolve};
+use crate::{BorderSegment, Ctx, float, resolve};
 
 /// One cell of one row, with the columns its `colspan` covers.
 struct Cell {
@@ -84,10 +93,11 @@ pub(crate) fn layout_table_children(
 
     // Place the rows. Measure first, so every cell can stretch to its row's
     // height: the measurement is real layout, thrown away.
-    let collapse = style.border_collapse == BorderCollapse::Collapse;
     let mut indices = Vec::new();
     let mut cursor_y = content_y + spacing_y;
-    for (row_index, row) in rows.iter().enumerate() {
+    let mut row_tops = Vec::with_capacity(rows.len() + 1);
+    for row in &rows {
+        row_tops.push(cursor_y);
         let mut measured = Vec::with_capacity(row.cells.len());
         for cell in &row.cells {
             // The cell fills its column: its own `width` already sized it.
@@ -101,7 +111,7 @@ pub(crate) fn layout_table_children(
                 None,
             );
             ctx.flexed_width = None;
-            measured.push(height);
+            measured.push(at_least_its_content(ctx, cell.node, height));
         }
         ctx.prune_pending();
         let row_height = measured.iter().copied().fold(row.height, f32::max);
@@ -122,15 +132,324 @@ pub(crate) fn layout_table_children(
             if let Some(index) = ctx.tree_index(cell.node) {
                 align_cell_content(ctx, cell.node, index, ctx.style(cell.node).vertical_align);
                 indices.push(index);
-                if collapse {
-                    mask_collapsed_borders(ctx, index, cell, &rows, row_index);
-                }
             }
         }
         cursor_y += row_height + spacing_y;
     }
+    row_tops.push(cursor_y);
+    // A collapsed table is its children's parent (an anonymous table's
+    // parent is a block, which has no grid).
+    if let Some(table) = children
+        .first()
+        .and_then(|&child| ctx.document.tree().parent(child))
+    {
+        record_collapsed(ctx, table, &rows, &columns, &row_tops, content_x, content_y);
+    }
 
     (indices, cursor_y - content_y)
+}
+
+/// Note what a collapsed table and its cells paint: the cells nothing of
+/// their own, the table each resolved edge, centred on its grid line and
+/// placed against the table's border box (`content_x`/`content_y` less the
+/// halves of its outer lines).
+fn record_collapsed(
+    ctx: &mut Ctx<'_>,
+    table: NodeId,
+    rows: &[Row],
+    columns: &[f32],
+    row_tops: &[f32],
+    content_x: f32,
+    content_y: f32,
+) {
+    let Some(grid) = ctx.grids.get(&table) else {
+        return;
+    };
+    let lines_x: Vec<f32> = (0..=grid.column_lines.len().saturating_sub(1))
+        .map(|line| content_x + columns.iter().take(line).sum::<f32>())
+        .collect();
+    let origin_x = content_x - grid.column_lines[0] / 2.0;
+    let origin_y = content_y - grid.row_lines[0] / 2.0;
+    let mut segments = Vec::new();
+    for (row, edges) in grid.vertical.iter().enumerate() {
+        let (top, bottom) = (row_tops[row], row_tops[row + 1]);
+        let (above, below) = (grid.row_lines[row] / 2.0, grid.row_lines[row + 1] / 2.0);
+        for (line, edge) in edges.iter().enumerate() {
+            if edge.width > 0.0 {
+                segments.push(BorderSegment {
+                    rect: Rect::new(
+                        lines_x[line] - edge.width / 2.0 - origin_x,
+                        top - above - origin_y,
+                        edge.width,
+                        bottom - top + above + below,
+                    ),
+                    color: edge.color,
+                });
+            }
+        }
+    }
+    for (line, edges) in grid.horizontal.iter().enumerate() {
+        for (column, edge) in edges.iter().enumerate() {
+            if edge.width > 0.0 {
+                segments.push(BorderSegment {
+                    rect: Rect::new(
+                        lines_x[column] - origin_x,
+                        row_tops[line] - edge.width / 2.0 - origin_y,
+                        lines_x[column + 1] - lines_x[column],
+                        edge.width,
+                    ),
+                    color: edge.color,
+                });
+            }
+        }
+    }
+    ctx.tree.collapsed.insert(table, segments);
+    for row in rows {
+        for cell in &row.cells {
+            ctx.tree.collapsed.insert(cell.node, Vec::new());
+        }
+    }
+}
+
+/// One resolved edge of a collapsed table: its width and the winner's
+/// colour.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Edge {
+    width: f32,
+    color: Color,
+}
+
+impl Default for Edge {
+    fn default() -> Self {
+        Edge {
+            width: 0.0,
+            color: Color::BLACK,
+        }
+    }
+}
+
+/// A collapsed table's resolved border grid.
+pub(crate) struct Grid {
+    /// `vertical[row][line]`: the edge on column line `line` in `row`.
+    vertical: Vec<Vec<Edge>>,
+    /// `horizontal[line][column]`: the edge on row line `line` over
+    /// `column`.
+    horizontal: Vec<Vec<Edge>>,
+    /// Each column line's width: its widest edge.
+    column_lines: Vec<f32>,
+    /// Each row line's width.
+    row_lines: Vec<f32>,
+}
+
+/// The cell of `row` covering `column`, if any.
+fn covering(row: &Row, column: usize) -> Option<&Cell> {
+    row.cells
+        .iter()
+        .find(|cell| cell.column <= column && column < cell.column + cell.span)
+}
+
+/// A collapsed table's grid, and the border each of its cells (and the
+/// table) lays out with.
+pub(crate) type Resolved = (Grid, Vec<(NodeId, Edges<f32>)>);
+
+/// A border side as a candidate for a collapsed edge.
+type Candidate = (f32, BorderStyle, Color);
+
+fn top(style: &ComputedStyle) -> Candidate {
+    (
+        resolve::borders(style).top,
+        style.border_style.top,
+        style.border_color.top,
+    )
+}
+fn right(style: &ComputedStyle) -> Candidate {
+    (
+        resolve::borders(style).right,
+        style.border_style.right,
+        style.border_color.right,
+    )
+}
+fn bottom(style: &ComputedStyle) -> Candidate {
+    (
+        resolve::borders(style).bottom,
+        style.border_style.bottom,
+        style.border_color.bottom,
+    )
+}
+fn left(style: &ComputedStyle) -> Candidate {
+    (
+        resolve::borders(style).left,
+        style.border_style.left,
+        style.border_color.left,
+    )
+}
+
+/// CSS 2.1 §17.6.2.1's ranking of border styles, strongest last.
+fn style_rank(style: BorderStyle) -> u8 {
+    match style {
+        BorderStyle::None | BorderStyle::Hidden => 0,
+        BorderStyle::Inset => 1,
+        BorderStyle::Groove => 2,
+        BorderStyle::Outset => 3,
+        BorderStyle::Ridge => 4,
+        BorderStyle::Dotted => 5,
+        BorderStyle::Dashed => 6,
+        BorderStyle::Solid => 7,
+        BorderStyle::Double => 8,
+    }
+}
+
+/// The edge `candidates` collapse to (§17.6.2.1): any `hidden` hides it;
+/// otherwise the widest, then the strongest style, then the first listed.
+fn collapse_edge(candidates: &[Candidate]) -> Edge {
+    if candidates
+        .iter()
+        .any(|(_, style, _)| *style == BorderStyle::Hidden)
+    {
+        return Edge::default();
+    }
+    let mut best: Option<Candidate> = None;
+    for &candidate in candidates {
+        let wins = best.is_none_or(|(width, style, _)| {
+            candidate.0 > width
+                || (candidate.0 == width && style_rank(candidate.1) > style_rank(style))
+        });
+        if wins && candidate.0 > 0.0 {
+            best = Some(candidate);
+        }
+    }
+    best.map_or_else(Edge::default, |(width, _, color)| Edge { width, color })
+}
+
+/// Resolve collapsed table `table`'s border grid, and the border each of
+/// its cells (and the table itself) keeps: half of each line around it.
+pub(crate) fn resolve_collapsed(ctx: &Ctx<'_>, table: NodeId) -> Option<Resolved> {
+    let children = crate::child_nodes(ctx.document, table);
+    let rows = collect_rows(ctx, &children);
+    if rows.is_empty() {
+        return None;
+    }
+    let table_style = ctx.style(table);
+    let columns = rows
+        .iter()
+        .map(|row| {
+            row.cells
+                .iter()
+                .map(|cell| cell.column + cell.span)
+                .max()
+                .unwrap_or(0)
+        })
+        .max()
+        .unwrap_or(0);
+
+    let mut vertical = Vec::with_capacity(rows.len());
+    for row in &rows {
+        let mut edges = Vec::with_capacity(columns + 1);
+        for line in 0..=columns {
+            let inside = row
+                .cells
+                .iter()
+                .any(|cell| cell.column < line && line < cell.column + cell.span);
+            if inside {
+                edges.push(Edge::default());
+                continue;
+            }
+            let mut candidates = Vec::with_capacity(3);
+            if let Some(cell) = row
+                .cells
+                .iter()
+                .find(|cell| cell.column + cell.span == line)
+            {
+                candidates.push(right(ctx.style(cell.node)));
+            }
+            if let Some(cell) = row.cells.iter().find(|cell| cell.column == line) {
+                candidates.push(left(ctx.style(cell.node)));
+            }
+            if line == 0 {
+                candidates.push(left(table_style));
+            }
+            if line == columns {
+                candidates.push(right(table_style));
+            }
+            edges.push(collapse_edge(&candidates));
+        }
+        vertical.push(edges);
+    }
+    let mut horizontal = Vec::with_capacity(rows.len() + 1);
+    for line in 0..=rows.len() {
+        let mut edges = Vec::with_capacity(columns);
+        for column in 0..columns {
+            let mut candidates = Vec::with_capacity(3);
+            if let Some(cell) = line.checked_sub(1).and_then(|r| covering(&rows[r], column)) {
+                candidates.push(bottom(ctx.style(cell.node)));
+            }
+            if let Some(cell) = rows.get(line).and_then(|row| covering(row, column)) {
+                candidates.push(top(ctx.style(cell.node)));
+            }
+            if line == 0 {
+                candidates.push(top(table_style));
+            }
+            if line == rows.len() {
+                candidates.push(bottom(table_style));
+            }
+            edges.push(collapse_edge(&candidates));
+        }
+        horizontal.push(edges);
+    }
+    let widest = |edges: &mut dyn Iterator<Item = f32>| edges.fold(0.0_f32, f32::max);
+    let column_lines: Vec<f32> = (0..=columns)
+        .map(|line| widest(&mut vertical.iter().map(|edges: &Vec<Edge>| edges[line].width)))
+        .collect();
+    let row_lines: Vec<f32> = horizontal
+        .iter()
+        .map(|edges| widest(&mut edges.iter().map(|edge| edge.width)))
+        .collect();
+
+    let mut borders = Vec::new();
+    for (index, row) in rows.iter().enumerate() {
+        for cell in &row.cells {
+            borders.push((
+                cell.node,
+                Edges {
+                    top: row_lines[index] / 2.0,
+                    right: column_lines[cell.column + cell.span] / 2.0,
+                    bottom: row_lines[index + 1] / 2.0,
+                    left: column_lines[cell.column] / 2.0,
+                },
+            ));
+        }
+    }
+    borders.push((
+        table,
+        Edges {
+            top: row_lines[0] / 2.0,
+            right: column_lines[columns] / 2.0,
+            bottom: row_lines[rows.len()] / 2.0,
+            left: column_lines[0] / 2.0,
+        },
+    ));
+    Some((
+        Grid {
+            vertical,
+            horizontal,
+            column_lines,
+            row_lines,
+        },
+        borders,
+    ))
+}
+
+/// A measured cell's border-box `height`, or more when its content is
+/// taller: a cell's `height` is the least it is (CSS 2.1 §17.5.3), so the
+/// row grows to hold it.
+fn at_least_its_content(ctx: &Ctx<'_>, node: NodeId, height: f32) -> f32 {
+    let Some(&content) = ctx.cell_contents.get(&node) else {
+        return height;
+    };
+    let style = ctx.style(node);
+    let padding = resolve::paddings(&style.padding, 0.0);
+    let border = resolve::borders(style);
+    height.max(content + padding.top + padding.bottom + border.top + border.bottom)
 }
 
 /// Move a laid-out cell's content down within its content box as its
@@ -541,38 +860,4 @@ fn span_of(ctx: &Ctx<'_>, node: NodeId, attribute: &str) -> usize {
         .and_then(|value| value.parse::<usize>().ok())
         .unwrap_or(1)
         .clamp(1, MAX_SPAN)
-}
-
-/// In `collapse` mode the cell to the left of (or above) a shared edge drops
-/// its right (bottom) border: the neighbour paints its own, so the edge is
-/// drawn once. The table's own border handles the frame.
-fn mask_collapsed_borders(
-    ctx: &mut Ctx<'_>,
-    index: usize,
-    cell: &Cell,
-    rows: &[Row],
-    row_index: usize,
-) {
-    let has_right_neighbour = rows[row_index]
-        .cells
-        .iter()
-        .any(|other| other.column == cell.column + cell.span);
-    let has_below_neighbour = rows
-        .get(row_index + 1)
-        .is_some_and(|next| covers(next, cell.column, cell.span));
-    let border = &mut ctx.tree.boxes[index].border;
-    if has_right_neighbour {
-        border.right = 0.0;
-    }
-    if has_below_neighbour {
-        border.bottom = 0.0;
-    }
-}
-
-/// Whether a row has any cell overlapping the columns `[column, column + span)`.
-fn covers(row: &Row, column: usize, span: usize) -> bool {
-    let (start, end) = (column, column + span);
-    row.cells
-        .iter()
-        .any(|other| other.column < end && other.column + other.span > start)
 }
