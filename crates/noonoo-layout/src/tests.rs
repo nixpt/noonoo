@@ -5076,3 +5076,44 @@ fn vertical_align_middle_uses_the_fonts_x_height() {
     // Half the x-height higher: 6px with 0.75em, 4px with 0.5em.
     assert_eq!(y(&MetricShaper) - y(&TallX), 2.0);
 }
+
+/// An inline element split around a block (Hacker News's `<a><div
+/// class=votearrow>`): as in Chromium, its rect spans the container's
+/// content width beside each block, from the block's border top to its
+/// border bottom, joined with its own inline fragments. That stretch is a
+/// `Split` box: never painted, never hit.
+#[test]
+fn an_inline_split_around_a_block_spans_the_line_beside_it() {
+    let css =
+        "#c { width: 200px; padding: 5px } #b { width: 10px; height: 10px; margin: 3px 2px 6px }";
+    let (doc, tree) = page(
+        "<div id=c><a id=a href=x><div id=b></div></a></div>",
+        css,
+        400.0,
+    );
+    let a = id(&doc, "a");
+    assert_eq!(
+        tree.bounding_client_rect(a),
+        Some(Rect::new(5.0, 8.0, 200.0, 10.0))
+    );
+    assert!(
+        tree.boxes()
+            .iter()
+            .filter(|b| b.node == Some(a))
+            .all(|b| b.kind == BoxKind::Split)
+    );
+    // Beside the block, the hit is the container, not the link.
+    assert_eq!(tree.hit_test(Point::new(150.0, 12.0)), Some(id(&doc, "c")));
+    assert_eq!(tree.hit_test(Point::new(10.0, 12.0)), Some(id(&doc, "b")));
+
+    // Two blocks: one stretch each, joined.
+    let (doc, tree) = page(
+        "<div id=c><a id=a href=x><div style='height: 10px'></div><div style='height: 20px'></div></a></div>",
+        "#c { width: 200px; padding: 5px }",
+        400.0,
+    );
+    assert_eq!(
+        tree.bounding_client_rect(id(&doc, "a")),
+        Some(Rect::new(5.0, 5.0, 200.0, 30.0))
+    );
+}
