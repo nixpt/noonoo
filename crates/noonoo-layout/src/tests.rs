@@ -4290,19 +4290,18 @@ fn a_block_video_holds_its_place() {
     assert!(near(y, 144.0), "{y}");
 }
 
-/// An image that hasn't loaded and has a percentage width has no natural
-/// size, so its alt text adds nothing to a shrink-to-fit width: the box
-/// shrinks to its other content and the image takes its share of that, as
-/// in Chromium (gnu.org's distro thumbnails).
+/// An inline image that failed to load shows its alt text after the icon
+/// and ignores its percentage width, so a shrink-to-fit box grows to hold
+/// the text, as in Chromium once loading fails (304px here).
 #[test]
-fn a_percentage_width_unloaded_image_adds_no_intrinsic_width() {
+fn a_broken_image_with_a_percentage_width_shrinks_to_its_alt_text() {
     let (doc, tree) = page(
         r#"<!doctype html><div id=d><img alt="a long description of the screenshot"><br>xx</div>"#,
         "body { margin: 0 } div { display: inline-block; font-size: 16px } img { width: 50% }",
         800.0,
     );
     let width = tree.get(id(&doc, "d")).unwrap().rect.width;
-    assert!(near(width, 16.0), "{width}");
+    assert!(near(width, 304.0), "{width}");
 }
 
 /// A float that doesn't fit beside an earlier one drops below it, wherever
@@ -4880,6 +4879,41 @@ fn a_br_breaks_the_line_whatever_its_display() {
         let height = rect_of(&doc, &tree, "d").height;
         assert_eq!(height, 20.0 * lines as f32, "{css}");
     }
+}
+
+/// An image that didn't load lays out as Chromium's does once it fails. In
+/// standards mode its sizes don't count: its alt text sits in a
+/// shrink-to-fit box after a 16px icon, `alt=""` leaves nothing, and no alt
+/// leaves the 16px icon. In quirks mode a width or height makes it a box of
+/// that size, square when only one is given.
+#[test]
+fn a_broken_image_lays_out_as_chromium_shows_it() {
+    let images = r#"<div><img id=a alt="ab" src="x"></div>
+        <div><img id=b alt="ab" src="x" style="width:80px;height:30px"></div>
+        <div><img id=c alt="ab" src="x" style="height:30px"></div>
+        <div><img id=e alt="" src="x" style="width:80px"></div>
+        <div><img id=g src="x"></div>
+        <div><img id=h src="x" width=80></div>"#;
+    let css = "div { line-height: 20px }";
+    let size = |doc: &Document, tree: &LayoutTree, name: &str| {
+        let r = rect_of(doc, tree, name);
+        (r.width, r.height)
+    };
+    // The 16px test font's "ab" is 16px wide.
+    let (doc, tree) = page(&format!("<!doctype html>{images}"), css, 400.0);
+    assert_eq!(size(&doc, &tree, "a"), (32.0, 20.0));
+    assert_eq!(size(&doc, &tree, "b"), (32.0, 20.0));
+    assert_eq!(size(&doc, &tree, "c"), (32.0, 20.0));
+    assert_eq!(size(&doc, &tree, "e"), (0.0, 0.0));
+    assert_eq!(size(&doc, &tree, "g"), (16.0, 16.0));
+    assert_eq!(size(&doc, &tree, "h"), (16.0, 16.0));
+    let (doc, tree) = page(images, css, 400.0);
+    assert_eq!(size(&doc, &tree, "a"), (32.0, 20.0));
+    assert_eq!(size(&doc, &tree, "b"), (80.0, 30.0));
+    assert_eq!(size(&doc, &tree, "c"), (30.0, 30.0));
+    assert_eq!(size(&doc, &tree, "e"), (80.0, 80.0));
+    assert_eq!(size(&doc, &tree, "g"), (16.0, 16.0));
+    assert_eq!(size(&doc, &tree, "h"), (80.0, 80.0));
 }
 
 /// A shaper that kerns "w." 2px tighter, as DejaVu Sans does.

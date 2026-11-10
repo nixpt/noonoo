@@ -8,7 +8,7 @@
 //! an axis that wasn't given.
 
 use noonoo_dom::NodeId;
-use noonoo_style::{BoxSizing, ComputedStyle, Dimension};
+use noonoo_style::{BoxSizing, ComputedStyle, Dimension, Display, Length};
 
 use crate::image::Image;
 use crate::{Ctx, resolve};
@@ -187,6 +187,7 @@ impl Ctx<'_> {
             element.name.as_str(),
             "img" | "video" | "canvas" | "iframe" | "embed" | "object"
         ) || self.image(node).is_some()
+            || self.broken_image(node) == Some(Broken::AltInline)
         {
             return None;
         }
@@ -209,6 +210,99 @@ impl Ctx<'_> {
             && self.image(node).is_none()
     }
 
+    /// How Chromium shows `<img>` `node` once its image fails to load, or
+    /// `None` if it isn't such an image (or isn't displayed). Decided from
+    /// its own computed style, before [`Ctx::resolve_broken_images`]
+    /// adjusts it.
+    pub(crate) fn broken_image(&self, node: NodeId) -> Option<Broken> {
+        let element = self.document.element(node)?;
+        if element.name != "img" || self.image(node).is_some() {
+            return None;
+        }
+        let style = self.styles.get(node)?;
+        if style.display == Display::None {
+            return None;
+        }
+        let (width, height) = (
+            style.width != Dimension::Auto,
+            style.height != Dimension::Auto,
+        );
+        let alt = element.attr("alt");
+        Some(if self.is_quirks() && (width || height) {
+            Broken::Square
+        } else if alt.is_some_and(|alt| !alt.is_empty()) {
+            if crate::is_atomic_inline(style.display) || style.display == Display::Inline {
+                Broken::AltInline
+            } else {
+                Broken::AltBlock
+            }
+        } else if width && height {
+            Broken::Sized
+        } else if alt.is_none()
+            && element
+                .attr("src")
+                .is_some_and(|src| !src.trim().is_empty())
+        {
+            Broken::Icon
+        } else {
+            Broken::Nothing
+        })
+    }
+
+    /// Give each `<img>` whose image didn't load the style Chromium lays it
+    /// out with once loading fails (see [`Broken`]).
+    pub(crate) fn resolve_broken_images(&mut self) {
+        let mut stack = vec![self.document.root()];
+        let mut broken = Vec::new();
+        while let Some(node) = stack.pop() {
+            if let Some(kind) = self.broken_image(node) {
+                broken.push((node, kind));
+            }
+            stack.extend(crate::child_nodes(self.document, node));
+        }
+        for (node, kind) in broken {
+            let mut style = Box::new(self.style(node).clone());
+            let fixed = |style: &mut ComputedStyle, side: f32| {
+                style.width = Dimension::Px(side);
+                style.height = Dimension::Px(side);
+                style.min_width = Dimension::Auto;
+                style.max_width = Dimension::Auto;
+                style.min_height = Dimension::Auto;
+                style.max_height = Dimension::Auto;
+            };
+            let icon_room = |style: &mut ComputedStyle| {
+                let left = match style.padding.left {
+                    Length::Px(px) => px,
+                    _ => 0.0,
+                };
+                style.padding.left = Length::Px(left + BROKEN_ICON);
+            };
+            match kind {
+                Broken::Square => {
+                    if style.width == Dimension::Auto {
+                        style.width = style.height.clone();
+                    } else if style.height == Dimension::Auto {
+                        style.height = style.width.clone();
+                    }
+                }
+                Broken::AltInline => {
+                    style.width = Dimension::Auto;
+                    style.height = Dimension::Auto;
+                    style.min_width = Dimension::Auto;
+                    style.max_width = Dimension::Auto;
+                    style.min_height = Dimension::Auto;
+                    style.max_height = Dimension::Auto;
+                    icon_room(&mut style);
+                }
+                Broken::AltBlock => icon_room(&mut style),
+                Broken::Sized => {}
+                Broken::Icon => fixed(&mut style, BROKEN_ICON),
+                Broken::Nothing => fixed(&mut style, 0.0),
+            }
+            self.collapsed.insert(node, style);
+        }
+    }
+
     /// Note the image `node` draws; its box has no content to lay out.
     pub(crate) fn record_image(&mut self, node: NodeId) -> (Vec<usize>, f32) {
         if let Some(image) = self.image(node) {
@@ -217,6 +311,30 @@ impl Ctx<'_> {
         }
         (Vec::new(), 0.0)
     }
+}
+
+/// The side of the icon Chromium shows for an image that didn't load.
+const BROKEN_ICON: f32 = 16.0;
+
+/// How Chromium shows an `<img>` whose image failed to load. In quirks
+/// mode a width or height makes it a box of that size; otherwise its alt
+/// text shows, or with none a box of its width and height, or an icon.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Broken {
+    /// Quirks mode, a width or height given: a box of that size, square
+    /// when only one is.
+    Square,
+    /// Its alt text, inline: a shrink-to-fit box holding the text after a
+    /// 16px icon, its sizes (and their attributes' ratio) ignored.
+    AltInline,
+    /// Its alt text in a block-level box, which keeps its sizes.
+    AltBlock,
+    /// No alt text, and a width and a height: a box of that size.
+    Sized,
+    /// No alt attribute, and a source: the 16px icon.
+    Icon,
+    /// `alt=""`, or no source: an empty box on the baseline.
+    Nothing,
 }
 
 /// The default object size, for replaced content with no natural size.
