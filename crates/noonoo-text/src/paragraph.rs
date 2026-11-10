@@ -97,22 +97,19 @@ pub fn is_breaking_space(c: char) -> bool {
 }
 
 /// `word` split at its break opportunities, each piece keeping the
-/// character it breaks after: after a breaking space, and after a hyphen
-/// between a letter and a letter (UAX #14's HY and BA hyphens), not before
-/// a digit, at the word's start or inside a run of hyphens. The pieces sit
-/// with no space between them.
+/// characters before its break: where Chromium would break it (see
+/// `breaks.rs`). The pieces sit with no space between them.
 pub fn break_pieces(word: &str) -> impl Iterator<Item = &str> {
-    BreakPieces { rest: word }
-}
-
-/// A hyphen a line may break after: hyphen-minus, U+2010 HYPHEN and the en
-/// dash. U+2011 is the no-break hyphen.
-fn is_breaking_hyphen(c: char) -> bool {
-    matches!(c, '-' | '\u{2010}' | '\u{2013}')
+    BreakPieces {
+        rest: word,
+        before: None,
+    }
 }
 
 struct BreakPieces<'a> {
     rest: &'a str,
+    /// The character before `rest`, once the word has been broken.
+    before: Option<char>,
 }
 
 impl<'a> Iterator for BreakPieces<'a> {
@@ -122,21 +119,19 @@ impl<'a> Iterator for BreakPieces<'a> {
         if self.rest.is_empty() {
             return None;
         }
-        let mut prev: Option<char> = None;
-        let mut chars = self.rest.char_indices().peekable();
-        while let Some((at, c)) = chars.next() {
-            let next = chars.peek().map(|&(_, next)| next);
-            let breaks = is_breaking_space(c)
-                || (is_breaking_hyphen(c)
-                    && prev.is_some_and(|p| !is_breaking_hyphen(p) && !p.is_whitespace())
-                    && next.is_some_and(|n| !n.is_ascii_digit() && !is_breaking_hyphen(n)));
-            if breaks {
-                let end = at + c.len_utf8();
+        let mut before = self.before;
+        let mut chars = self.rest.chars().peekable();
+        let mut end = 0;
+        while let Some(c) = chars.next() {
+            end += c.len_utf8();
+            let Some(&next) = chars.peek() else { break };
+            if crate::breaks::breaks_between(before, c, next) {
                 let (piece, rest) = self.rest.split_at(end);
                 self.rest = rest;
+                self.before = Some(c);
                 return Some(piece);
             }
-            prev = Some(c);
+            before = Some(c);
         }
         Some(std::mem::take(&mut self.rest))
     }
@@ -341,21 +336,61 @@ mod tests {
         assert_eq!(paragraph.lines.len(), 1);
     }
 
+    /// Where Chromium breaks a word, measured in a 1px-wide box: its ASCII
+    /// pair table, and ICU's classes beyond ASCII.
     #[test]
-    fn a_hyphen_between_letters_is_a_break_opportunity() {
-        // UAX #14: a break after a hyphen (HY, BA), as rust-lang.org's
-        // "auto-" / "completion" wraps in Chromium; not before a digit, at
-        // a word's start, or inside a run of hyphens.
+    fn a_word_breaks_where_chromium_breaks_it() {
         let pieces = |word| crate::break_pieces(word).collect::<Vec<_>>();
-        assert_eq!(pieces("auto-completion"), ["auto-", "completion"]);
-        assert_eq!(pieces("multi-editor-ish"), ["multi-", "editor-", "ish"]);
-        assert_eq!(
-            pieces("a\u{2010}b\u{2013}c"),
-            ["a\u{2010}", "b\u{2013}", "c"]
-        );
-        for whole in ["-flag", "x-1", "a--b", "end-", "-", "a\u{2011}b"] {
-            assert_eq!(pieces(whole), [whole], "{whole}");
+        let cases: &[(&str, &[&str])] = &[
+            // Hyphens: after one, before anything but a closing mark.
+            ("auto-completion", &["auto-", "completion"]),
+            ("multi-editor-ish", &["multi-", "editor-", "ish"]),
+            ("a--b", &["a-", "-", "b"]),
+            ("-flag", &["-", "flag"]),
+            ("end-", &["end-"]),
+            // Before a digit only after a letter or digit: gnu.org's
+            // "fsd-2026-11-06-irc" wraps inside, "-1" and "$-1" don't.
+            ("x-1", &["x-", "1"]),
+            ("1-2-3", &["1-", "2-", "3"]),
+            ("fsd-2026", &["fsd-", "2026"]),
+            ("-1", &["-1"]),
+            ("$-1", &["$-1"]),
+            ("(-1)", &["(-1)"]),
+            ("a-$1", &["a-$1"]),
+            // "?" breaks before a letter, digit or opening bracket; "!",
+            // "/" and the rest don't.
+            ("foo?bar=baz", &["foo?", "bar=baz"]),
+            ("a?1", &["a?", "1"]),
+            ("a?(b", &["a?", "(b"]),
+            ("a?!b", &["a?!b"]),
+            ("a!?b", &["a!?", "b"]),
+            ("ab!cd", &["ab!cd"]),
+            ("http://www.fsf.org/events", &["http://www.fsf.org/events"]),
+            // Dashes and marks beyond ASCII break after, before a letter,
+            // digit or opening bracket.
+            ("a\u{2010}b\u{2013}c", &["a\u{2010}", "b\u{2013}", "c"]),
+            ("a\u{2013}1", &["a\u{2013}", "1"]),
+            ("a\u{2011}b", &["a\u{2011}b"]),
+            ("a\u{203d}b", &["a\u{203d}", "b"]),
+            ("a\u{2026}b", &["a\u{2026}", "b"]),
+            ("a\u{2026}.", &["a\u{2026}."]),
+            // An em dash breaks on both sides, but not inside a pair of them
+            // or after an opening bracket or quote.
+            ("ab\u{2014}cd", &["ab", "\u{2014}", "cd"]),
+            ("ab\u{2014}\u{2014}cd", &["ab", "\u{2014}\u{2014}", "cd"]),
+            ("(\u{2014})", &["(\u{2014})"]),
+            // CJK breaks between characters, not before its closing marks.
+            (
+                "\u{4e00}\u{3042}\u{3002}x",
+                &["\u{4e00}", "\u{3042}\u{3002}", "x"],
+            ),
+            // A zero-width space breaks; a no-break space doesn't.
+            ("a\u{200b}.", &["a\u{200b}", "."]),
+            ("a\u{a0}b", &["a\u{a0}b"]),
+            ("a\u{2003}b-c", &["a\u{2003}", "b-", "c"]),
+        ];
+        for (word, expected) in cases {
+            assert_eq!(pieces(word), *expected, "{word:?}");
         }
-        assert_eq!(pieces("a\u{2003}b-c"), ["a\u{2003}", "b-", "c"]);
     }
 }
