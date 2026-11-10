@@ -263,7 +263,11 @@ fn parse_weight(values: &[Value]) -> Option<u16> {
 
 fn split_at_rule(prelude: &str) -> (String, String) {
     let name = prelude.trim_start_matches('@');
-    let name_end = name.find(|c: char| c.is_whitespace()).unwrap_or(name.len());
+    // The name is an identifier: it ends at the first character that can't
+    // go on one, a space or the `(` of `@media(min-width:0)` alike.
+    let name_end = name
+        .find(|c: char| !(c.is_alphanumeric() || c == '-' || c == '_' || !c.is_ascii()))
+        .unwrap_or(name.len());
     (
         name[..name_end].to_owned(),
         name[name_end..].trim().to_owned(),
@@ -440,6 +444,27 @@ mod tests {
         assert_eq!(name, "media");
         assert_eq!(prelude, "screen");
         assert!(block.as_deref().unwrap().contains("color: blue"));
+    }
+
+    /// An at-rule's name ends where a name can't go on, so `@media(…)`
+    /// with no space is `@media` (gnu.org writes all of its this way).
+    #[test]
+    fn an_at_rule_name_ends_at_its_prelude() {
+        let sheet =
+            Stylesheet::parse("@media(min-width:0){a{color:blue}} @supports(display:grid){}")
+                .unwrap();
+        let names = sheet
+            .rules
+            .iter()
+            .map(|rule| match rule {
+                Rule::At { name, prelude, .. } => (name.as_str(), prelude.as_str()),
+                Rule::Qualified { .. } => panic!("expected at-rules"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            names,
+            [("media", "(min-width:0)"), ("supports", "(display:grid)")]
+        );
     }
 
     #[test]
