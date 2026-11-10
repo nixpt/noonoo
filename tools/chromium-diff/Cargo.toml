@@ -1,0 +1,18 @@
+[package]
+name = "noonoo-chromium-diff"
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+description = "Noonoo tooling: dump noonoo's boxes for a page, to diff against headless Chromium's."
+
+# Deliberately OUTSIDE the noonoo workspace (root `exclude`) and off CI: it
+# reads system fonts and is driven by `cmp.py`, which runs headless Chromium.
+# Nothing in the engine depends on it.
+[workspace]
+
+[dependencies]
+noonoo-engine = { path = "../../crates/noonoo-engine" }
+noonoo-geometry = { path = "../../crates/noonoo-geometry" }
+noonoo-layout = { path = "../../crates/noonoo-layout" }
+noonoo-ttf = { path = "../../crates/noonoo-ttf" }
