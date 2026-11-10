@@ -144,7 +144,20 @@ fn color(values: &[Value]) -> Option<noonoo_css::Color> {
     }
 }
 
+/// A border width's computed value, snapped as CSS Values 4 has it (and
+/// Chromium does): above 0 but under one device pixel it becomes one,
+/// otherwise it's floored to whole device pixels. noonoo lays out at one
+/// device pixel per CSS pixel.
 fn border_width_px(values: &[Value], font_size: f32, viewport: Viewport) -> Option<f32> {
+    let width = unsnapped_border_width(values, font_size, viewport)?;
+    Some(if width > 0.0 && width < 1.0 {
+        1.0
+    } else {
+        width.floor()
+    })
+}
+
+fn unsnapped_border_width(values: &[Value], font_size: f32, viewport: Viewport) -> Option<f32> {
     if let Some((name, args)) = math_fn(values) {
         let value = calc::evaluate_function(name, args, font_size, 16.0, viewport)?;
         // Border widths must be absolute; percentages have no reference here.

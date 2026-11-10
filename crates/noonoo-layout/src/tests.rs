@@ -4382,8 +4382,9 @@ fn a_normal_line_holds_its_fallback_faces() {
 }
 
 /// An empty inline element still gets a zero-width box where it sits on
-/// its line, as Chromium reports Hacker News's empty `unv_` spans, but it
-/// never makes a line of its own or changes one's height.
+/// its line, as Chromium reports Hacker News's empty `unv_` spans. It
+/// never makes a line of its own, but in standards mode its font counts
+/// toward the height of a line it shares, as in Chromium.
 #[test]
 fn an_empty_inline_element_has_a_box_but_no_line() {
     let (doc, tree) = page(
@@ -4397,12 +4398,9 @@ fn an_empty_inline_element_has_a_box_but_no_line() {
     assert!(near(rect("d").unwrap().height, 19.2));
     // After a break, it starts no new line.
     assert!(near(rect("q").unwrap().height, 19.2), "{:?}", rect("q"));
-    // Nor does a larger font of its own raise its line.
-    assert!(
-        near(rect("s").unwrap().height, 9.6 * 16.0 / 16.0),
-        "{:?}",
-        rect("s")
-    );
+    // A larger font of its own raises the line it shares: 30px's 24px
+    // ascent and 12px descent.
+    assert!(near(rect("s").unwrap().height, 36.0), "{:?}", rect("s"));
 }
 
 /// Clearance puts a box's border edge at the float's bottom when the
@@ -4916,4 +4914,47 @@ fn a_broken_image_lays_out_as_chromium_shows_it() {
     assert_eq!(size(&doc, &tree, "e"), (80.0, 80.0));
     assert_eq!(size(&doc, &tree, "g"), (16.0, 16.0));
     assert_eq!(size(&doc, &tree, "h"), (80.0, 80.0));
+}
+
+/// A shaper that kerns "w." 2px tighter, as DejaVu Sans does.
+struct PairKerning;
+
+impl Shaper for PairKerning {
+    fn advance(&self, text: &str, _request: noonoo_text::FontRequest, _font_size: f32) -> f32 {
+        text.chars().count() as f32 * 10.0 - 2.0 * text.matches("w.").count() as f32
+    }
+
+    fn line_height(&self, _request: noonoo_text::FontRequest, _font_size: f32) -> f32 {
+        20.0
+    }
+}
+
+/// Chromium shapes text across inline element boundaries in one font, so
+/// a pair split by `</a>` kerns: the element ends where the kerned glyph
+/// does, and a shrink-wrapped box measures it the same way.
+#[test]
+fn a_pair_split_by_an_element_boundary_kerns() {
+    let doc = noonoo_html::parse(
+        r#"<!doctype html><div id="f" style="float: left"><span id="s">ow</span>. <b id="b">ow</b>.<span id="e">w</span><em></em>.</div>"#,
+    );
+    let sheet = noonoo_css::Stylesheet::parse("body { margin: 0 }").unwrap();
+    let styles = noonoo_style::compute(&doc, &[sheet]);
+    let tree = layout(&doc, &styles, Size::new(800.0, 600.0), &PairKerning);
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert_eq!(rect("s").width, 18.0);
+    // A bold run is another font: no pair across into the plain ".".
+    assert_eq!(rect("b").width, 20.0);
+    // An empty element between doesn't part a pair.
+    let e = rect("e");
+    assert_eq!(e.width, 8.0);
+    // "ow" (18) "." (10) " " (10) "ow" (20) "." (10), and "w" (8) and ".":
+    // one line.
+    let f = rect("f");
+    assert_eq!((f.width, f.height), (86.0, 20.0));
+    let dot = tree
+        .boxes()
+        .iter()
+        .find(|b| b.text.as_deref() == Some("."))
+        .expect("the full stop's run");
+    assert_eq!(dot.rect.x, 18.0);
 }
