@@ -92,17 +92,17 @@ fn an_arrived_image_is_laid_out_and_painted() {
     let held = Held::default();
     engine.set_loader(held.clone());
     engine.load_resources();
-    // Still loading: the alt text holds the place.
-    assert_eq!(width_of(&engine, "a"), 24.0);
-    held.answer("a.png", Ok(png(40, 30)));
+    // Still loading: the alt text holds the place, after the 16px icon.
+    assert_eq!(width_of(&engine, "a"), 16.0 + 24.0);
+    held.answer("a.png", Ok(png(50, 30)));
     assert!(engine.poll_resources(), "a new image changes the layout");
-    assert_eq!(width_of(&engine, "a"), 40.0);
+    assert_eq!(width_of(&engine, "a"), 50.0);
     assert!(!engine.poll_resources());
     let list = engine.paint(VIEW, &MetricShaper);
     assert!(
         list.commands()
             .iter()
-            .any(|c| matches!(c, Command::DrawImage { rect, .. } if rect.width == 40.0))
+            .any(|c| matches!(c, Command::DrawImage { rect, .. } if rect.width == 50.0))
     );
 }
 
@@ -117,8 +117,9 @@ fn failed_and_undecodable_loads_keep_the_alt_text_and_are_not_retried() {
     held.answer("a.png", Err(LoadError::Io("404".into())));
     held.answer("b.png", Ok(b"not an image".to_vec()));
     assert!(!engine.poll_resources());
-    assert_eq!(width_of(&engine, "a"), 24.0);
-    assert_eq!(width_of(&engine, "b"), 24.0);
+    // The alt text, after the 16px icon.
+    assert_eq!(width_of(&engine, "a"), 16.0 + 24.0);
+    assert_eq!(width_of(&engine, "b"), 16.0 + 24.0);
     assert_eq!(engine.load_resources(), 0);
 }
 

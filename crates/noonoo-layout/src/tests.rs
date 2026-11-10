@@ -5040,3 +5040,58 @@ fn an_element_opening_at_a_line_break_counts_on_the_line_before() {
     let after = height("aaaa <span>bbbb</span>");
     assert!(near(after, 24.0 + one), "{after} vs {}", 24.0 + one);
 }
+
+/// An inline image that didn't load shows its alt text in a box that
+/// keeps its min and max sizes (not `width` or `height`), the text wrapping
+/// around the 16px icon floated at its start, as in Chromium (rust-lang.org's
+/// `max-width: 8rem` feature icons).
+#[test]
+fn a_broken_images_alt_text_wraps_within_its_max_width() {
+    let css = "body { margin: 0 } div { width: 400px; font-size: 16px; line-height: 20px }";
+    let runs = |tree: &LayoutTree| -> Vec<(String, f32, f32)> {
+        tree.boxes()
+            .iter()
+            .filter(|b| b.kind == BoxKind::Text)
+            .map(|b| (b.text.clone().unwrap_or_default(), b.rect.x, b.rect.y))
+            .collect()
+    };
+    // 64px wide: "aaaa" beside the icon, the rest below it, a word a line.
+    let (doc, tree) = page(
+        r#"<!doctype html><div><img id=i src=x alt="aaaa bbbb cccc" style="max-width: 64px"></div>"#,
+        css,
+        800.0,
+    );
+    let image = tree.get(id(&doc, "i")).unwrap().rect;
+    assert_eq!((image.width, image.height), (64.0, 60.0));
+    assert_eq!(
+        runs(&tree),
+        [
+            ("aaaa".to_owned(), 16.0, 0.0),
+            ("bbbb".to_owned(), 0.0, 20.0),
+            ("cccc".to_owned(), 0.0, 40.0)
+        ]
+    );
+    // `width` is ignored, `min-width` kept; `max-height` clamps.
+    let (doc, tree) = page(
+        r#"<!doctype html><div><img id=i src=x alt="aaaa bbbb cccc" style="width: 10px; min-width: 200px"></div>"#,
+        css,
+        800.0,
+    );
+    let image = tree.get(id(&doc, "i")).unwrap().rect;
+    assert_eq!((image.width, image.height), (200.0, 20.0));
+    let (doc, tree) = page(
+        r#"<!doctype html><div><img id=i src=x alt="aaaa bbbb cccc" style="max-width: 64px; max-height: 30px"></div>"#,
+        css,
+        800.0,
+    );
+    assert_eq!(tree.get(id(&doc, "i")).unwrap().rect.height, 30.0);
+    // A word too long to sit beside the icon drops below it.
+    let (doc, tree) = page(
+        r#"<!doctype html><div><img id=i src=x alt="aaaaaaaaaaaa" style="max-width: 64px"></div>"#,
+        css,
+        800.0,
+    );
+    let image = tree.get(id(&doc, "i")).unwrap().rect;
+    assert_eq!((image.width, image.height), (64.0, 36.0));
+    assert_eq!(runs(&tree), [("aaaaaaaaaaaa".to_owned(), 0.0, 16.0)]);
+}
