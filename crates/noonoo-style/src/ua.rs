@@ -62,6 +62,16 @@ a { color: #0000ee; text-decoration: underline }
 input[type="hidden"] { display: none !important }
 hr { color: gray; border: 1px inset; margin: 0.5em auto; overflow: hidden }
 select { border: 1px solid #767676; background-color: white }
+select[multiple], select[size] { overflow-y: auto; vertical-align: text-bottom }
+select[size="0"]:not([multiple]), select[size="1"]:not([multiple]) {
+    overflow-y: visible; vertical-align: baseline
+}
+option { display: block; padding: 0 2px 1px; min-height: 1.2em; white-space: nowrap }
+optgroup > option { padding-left: 20px }
+optgroup::before {
+    content: attr(label); display: block; font-weight: bold;
+    padding: 0 2px 1px; min-height: 1.2em; white-space: nowrap
+}
 input:not([type]), input[type="text"], input[type="search"], input[type="email"],
 input[type="url"], input[type="tel"], input[type="password"], input[type="number"]
 { padding: 1px 2px; border: 2px inset #767676 }
