@@ -4604,3 +4604,28 @@ fn a_list_box_optgroup_is_a_label_row_over_indented_options() {
     let content = tree.get(id(&doc, "s")).unwrap().content_box();
     assert!(near(content.height, 3.0 * 20.2), "{content:?}");
 }
+
+/// A flex line is as tall as its items' margin boxes, and `center` and
+/// `end` align those margin boxes (CSS Flexbox 9.4 step 8, 9.6):
+/// rust-lang.org's nav lost a list's 16px margins between its lines.
+#[test]
+fn flex_lines_hold_their_items_margins() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div id="f"><div id="a"></div><div id="b"></div><div id="c"></div><div id="d"></div></div>"#,
+        "body { margin: 0 } #f { display: flex; flex-wrap: wrap; align-items: center; width: 100px }
+         #f > div { width: 100px; height: 10px }
+         #a { margin-top: 3px } #b { margin: 16px 0 } #c { align-self: flex-end; margin-bottom: 5px }
+         #f > #d { align-self: stretch; height: auto; margin: 4px 0 }",
+        400.0,
+    );
+    let y = |name: &str| tree.get(id(&doc, name)).unwrap().rect.y;
+    assert!(near(y("a"), 3.0), "{}", y("a"));
+    // Line 2 starts at 13 and is 42 tall, `b` centred in it.
+    assert!(near(y("b"), 13.0 + 16.0), "{}", y("b"));
+    // Line 3 starts at 55; `c` ends 5px above its end.
+    assert!(near(y("c"), 55.0), "{}", y("c"));
+    // Line 4 starts at 70: `d` stretches to nothing between its margins.
+    let d = tree.get(id(&doc, "d")).unwrap().rect;
+    assert!(near(d.y, 74.0) && near(d.height, 0.0), "{d:?}");
+    assert!(near(tree.get(id(&doc, "f")).unwrap().rect.height, 78.0));
+}

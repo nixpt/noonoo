@@ -591,25 +591,36 @@ fn layout_row(
         // Cross sizes first: an item is positioned (and stretched) within the
         // line, so its height must be known before it is placed. The
         // measurement is real layout, thrown away.
+        // Each item's border-box height and its top and bottom margins: the
+        // line holds the margin boxes (CSS Flexbox 9.4 step 8).
         let mut cross = Vec::with_capacity(n);
+        let mut vertical = Vec::with_capacity(n);
         let mut measure_x = content_x + start;
         for (k, &i) in line.iter().enumerate() {
             measure_x += margins[k].0;
-            let height = match &items[i] {
-                Item::Text { text, .. } => runs::height(ctx, text, style, line_bases[k]),
+            let (height, margin) = match &items[i] {
+                Item::Text { text, .. } => {
+                    (runs::height(ctx, text, style, line_bases[k]), (0.0, 0.0))
+                }
                 Item::Element(node) => {
+                    let margin = resolve::margins(&ctx.style(*node).margin, content_width);
                     ctx.flexed_width = Some((*node, line_bases[k]));
                     let height =
                         ctx.measure_height(*node, measure_x, cursor_y, line_bases[k], None);
                     ctx.flexed_width = None;
-                    height
+                    (height, (margin.top, margin.bottom))
                 }
             };
             cross.push(height);
+            vertical.push(margin);
             measure_x += line_bases[k] + margins[k].1 + gap + extra;
         }
         ctx.prune_pending();
-        let mut line_height = cross.iter().copied().fold(0.0_f32, f32::max);
+        let mut line_height = cross
+            .iter()
+            .zip(&vertical)
+            .map(|(height, (top, bottom))| height + top + bottom)
+            .fold(0.0_f32, f32::max);
         // A single-line container with a definite height has one line of
         // exactly that height (CSS Flexbox 9.4, step 15).
         if style.flex_wrap == FlexWrap::NoWrap
@@ -627,11 +638,14 @@ fn layout_row(
                 let item_style = ctx.style(items[i].node());
                 item_style.align_self.unwrap_or(style.align_items)
             };
+            // Where the margin box goes; the border box is `top` below.
+            let (top, bottom) = vertical[k];
+            let outer = cross[k] + top + bottom;
             let (y, definite) = match item_align {
-                AlignItems::Stretch => (cursor_y, Some(line_height)),
+                AlignItems::Stretch => (cursor_y, Some((line_height - top - bottom).max(0.0))),
                 AlignItems::Start | AlignItems::Baseline => (cursor_y, None),
-                AlignItems::Center => (cursor_y + (line_height - cross[k]) / 2.0, None),
-                AlignItems::End => (cursor_y + line_height - cross[k], None),
+                AlignItems::Center => (cursor_y + (line_height - outer) / 2.0, None),
+                AlignItems::End => (cursor_y + line_height - outer, None),
             };
 
             match &items[i] {
@@ -648,9 +662,8 @@ fn layout_row(
                     ));
                 }
                 Item::Element(node) => {
-                    let margin = resolve::margins(&ctx.style(*node).margin, content_width);
                     ctx.flexed_width = Some((*node, line_bases[k]));
-                    ctx.layout_element(*node, x, y + margin.top, line_bases[k], definite);
+                    ctx.layout_element(*node, x, y + top, line_bases[k], definite);
                     ctx.flexed_width = None;
                     if let Some(index) = ctx.tree_index(*node) {
                         indices.push(index);
