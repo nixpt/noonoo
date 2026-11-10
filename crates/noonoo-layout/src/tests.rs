@@ -4958,3 +4958,20 @@ fn a_pair_split_by_an_element_boundary_kerns() {
         .expect("the full stop's run");
     assert_eq!(dot.rect.x, 18.0);
 }
+
+/// A floated image that didn't load is block-level, so like a block it
+/// keeps its sizes around its alt text, as in Chromium (gnu.org's package
+/// logos float left with a height of 1.3em).
+#[test]
+fn a_floated_broken_image_keeps_its_sizes() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div><img id=a src="x" alt="ab" style="height:30px">text</div>
+        <div style="clear:both"><img id=b src="x" alt="ab" width=40 height=30>text</div>"#,
+        "body { margin: 0 } img { float: left }",
+        400.0,
+    );
+    let a = rect_of(&doc, &tree, "a");
+    let b = rect_of(&doc, &tree, "b");
+    assert_eq!((a.width, a.height), (32.0, 30.0));
+    assert_eq!((b.width, b.height), (40.0, 30.0));
+}
