@@ -1323,10 +1323,14 @@ impl Ctx<'_> {
         text: &str,
         content_x: f32,
         content_y: f32,
+        content_width: f32,
     ) -> (Vec<usize>, f32) {
         let height = self.line_height_of(style);
         if text.is_empty() {
             return (Vec::new(), height);
+        }
+        if self.broken_image(node) == Some(replaced::Broken::AltInline) {
+            return self.layout_alt_text(node, style, text, content_x, content_y, content_width);
         }
         let width = self.advance(text, style);
         // A drop-down's label sits inside its padding and clear of the arrow.
@@ -1866,6 +1870,7 @@ impl Ctx<'_> {
                 placeholder.as_deref().unwrap_or_default(),
                 content_x,
                 content_y,
+                content_width,
             ),
             Display::Flex | Display::InlineFlex => flex::layout_flex_children(
                 self,
@@ -2142,6 +2147,7 @@ impl Ctx<'_> {
                 placeholder.as_deref().unwrap_or_default(),
                 content_x,
                 content_y,
+                content_width,
             ),
             Display::Flex | Display::InlineFlex => flex::layout_flex_children(
                 self,

@@ -287,14 +287,11 @@ impl Ctx<'_> {
                         style.height = style.width.clone();
                     }
                 }
+                // Its min and max sizes hold; the icon floats inside it
+                // (see `Ctx::layout_alt_text`).
                 Broken::AltInline => {
                     style.width = Dimension::Auto;
                     style.height = Dimension::Auto;
-                    style.min_width = Dimension::Auto;
-                    style.max_width = Dimension::Auto;
-                    style.min_height = Dimension::Auto;
-                    style.max_height = Dimension::Auto;
-                    icon_room(&mut style);
                 }
                 // The icon sits inside a width it is given.
                 Broken::AltBlock if style.width == Dimension::Auto => icon_room(&mut style),
@@ -305,6 +302,88 @@ impl Ctx<'_> {
             }
             self.collapsed.insert(node, style);
         }
+    }
+
+    /// Lay out the alt text of an inline image that didn't load as Chromium
+    /// does: wrapped to `content_width` around the 16px icon floated at its
+    /// start. A line beside the icon starts after it; a first word too wide
+    /// to sit there drops below it. Each line is one text box; the content
+    /// is at least as tall as the icon, which it contains.
+    pub(crate) fn layout_alt_text(
+        &mut self,
+        node: NodeId,
+        style: &ComputedStyle,
+        text: &str,
+        content_x: f32,
+        content_y: f32,
+        content_width: f32,
+    ) -> (Vec<usize>, f32) {
+        let line_height = self.line_height_of(style);
+        let space = self.advance(" ", style);
+        // Each piece a line may end after, with the space before it.
+        let pieces: Vec<(&str, f32, f32)> = noonoo_text::collapsible_words(text)
+            .flat_map(|word| {
+                noonoo_text::break_pieces(word)
+                    .enumerate()
+                    .map(move |(k, piece)| (piece, if k == 0 { space } else { 0.0 }))
+            })
+            .map(|(piece, gap)| (piece, gap, self.advance(piece, style)))
+            .collect();
+        let mut indices = Vec::new();
+        let mut y = 0.0;
+        let mut next = 0;
+        while next < pieces.len() {
+            let mut left = if y < BROKEN_ICON { BROKEN_ICON } else { 0.0 };
+            if pieces[next].2 > content_width - left && left > 0.0 {
+                y = BROKEN_ICON;
+                left = 0.0;
+            }
+            let room = content_width - left;
+            let mut line = pieces[next].0.to_owned();
+            let mut used = pieces[next].2;
+            next += 1;
+            // Measured as one run, as the box's intrinsic width was: piece
+            // by piece, the sum can come out a hair wider than the box.
+            while let Some(&(piece, gap, _)) = pieces.get(next) {
+                let mut longer = line.clone();
+                if gap > 0.0 {
+                    longer.push(' ');
+                }
+                longer.push_str(piece);
+                let width = self.advance(&longer, style);
+                if width > room + 0.01 {
+                    break;
+                }
+                line = longer;
+                used = width;
+                next += 1;
+            }
+            indices.push(self.push(crate::LayoutBox {
+                node: None,
+                style_node: node,
+                kind: crate::BoxKind::Text,
+                rect: noonoo_geometry::Rect::new(
+                    content_x + left,
+                    content_y + y,
+                    used,
+                    line_height,
+                ),
+                text: Some(line),
+                margin: crate::block::no_edges(),
+                padding: crate::block::no_edges(),
+                border: crate::block::no_edges(),
+                clips: false,
+                scroll_max_x: 0.0,
+                scroll_max_y: 0.0,
+                scroll_x: 0.0,
+                scroll_y: 0.0,
+                z_tier: 1,
+                z_index: 0,
+                children: Vec::new(),
+            }));
+            y += line_height;
+        }
+        (indices, y.max(BROKEN_ICON))
     }
 
     /// Note the image `node` draws; its box has no content to lay out.
@@ -318,7 +397,7 @@ impl Ctx<'_> {
 }
 
 /// The side of the icon Chromium shows for an image that didn't load.
-const BROKEN_ICON: f32 = 16.0;
+pub(crate) const BROKEN_ICON: f32 = 16.0;
 
 /// How Chromium shows an `<img>` whose image failed to load. In quirks
 /// mode a width or height makes it a box of that size; otherwise its alt
@@ -328,8 +407,9 @@ pub(crate) enum Broken {
     /// Quirks mode, a width or height given: a box of that size, square
     /// when only one is.
     Square,
-    /// Its alt text, inline: a shrink-to-fit box holding the text after a
-    /// 16px icon, its sizes (and their attributes' ratio) ignored.
+    /// Its alt text, inline: a shrink-to-fit box whose text wraps around a
+    /// 16px icon floated at its start; `width`, `height` (and their
+    /// attributes' ratio) are ignored, the min and max sizes kept.
     AltInline,
     /// Its alt text in a block-level box (floated and absolutely positioned
     /// ones too), which keeps its sizes.
