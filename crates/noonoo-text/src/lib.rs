@@ -13,6 +13,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+mod breaks;
 mod paragraph;
 
 pub use paragraph::{
