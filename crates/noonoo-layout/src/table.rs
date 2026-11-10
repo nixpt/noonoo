@@ -111,7 +111,7 @@ pub(crate) fn layout_table_children(
                 None,
             );
             ctx.flexed_width = None;
-            measured.push(height);
+            measured.push(at_least_its_content(ctx, cell.node, height));
         }
         ctx.prune_pending();
         let row_height = measured.iter().copied().fold(row.height, f32::max);
@@ -437,6 +437,19 @@ pub(crate) fn resolve_collapsed(ctx: &Ctx<'_>, table: NodeId) -> Option<Resolved
         },
         borders,
     ))
+}
+
+/// A measured cell's border-box `height`, or more when its content is
+/// taller: a cell's `height` is the least it is (CSS 2.1 §17.5.3), so the
+/// row grows to hold it.
+fn at_least_its_content(ctx: &Ctx<'_>, node: NodeId, height: f32) -> f32 {
+    let Some(&content) = ctx.cell_contents.get(&node) else {
+        return height;
+    };
+    let style = ctx.style(node);
+    let padding = resolve::paddings(&style.padding, 0.0);
+    let border = resolve::borders(style);
+    height.max(content + padding.top + padding.bottom + border.top + border.bottom)
 }
 
 /// Move a laid-out cell's content down within its content box as its

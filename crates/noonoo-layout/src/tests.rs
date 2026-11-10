@@ -4758,3 +4758,18 @@ fn collapsed_borders_are_shared_and_split_in_half() {
     near_rect("b6", 26.0, t6.y + 5.0, 24.0, 26.2);
     near_rect("c6", 2.0, t6.y + 31.2, 24.0, 23.2);
 }
+
+/// A cell's `height` is the least it is (CSS 2.1 §17.5.3): taller content
+/// makes the cell, and its row, taller, as in Chromium.
+#[test]
+fn a_cells_height_is_a_minimum() {
+    let (doc, tree) = page(
+        r#"<!doctype html><table><tr><td id="a">a</td><td id="b">b</td></tr></table><table><tr><td id="c">c</td></tr></table>"#,
+        "td { padding: 0; height: 10px } #c { height: 40px }",
+        400.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert!(near(rect("a").height, 19.2), "{:?}", rect("a"));
+    assert!(near(rect("b").height, 19.2), "{:?}", rect("b"));
+    assert!(near(rect("c").height, 40.0), "{:?}", rect("c"));
+}
