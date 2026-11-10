@@ -5001,3 +5001,42 @@ fn a_float_after_white_space_has_a_box() {
         "alone on its run"
     );
 }
+
+/// Chromium lays out in 1/64px units: a length truncates to a whole number
+/// of them, so a `.9em` margin at 16px is 921/64 = 14.390625px, not 14.4,
+/// and danluu.com's 200-item list drifts 1.9px from Chromium without it.
+#[test]
+fn lengths_truncate_to_sixty_fourths_of_a_pixel() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div></div><div></div><div></div><div></div><div id=last></div>"#,
+        "div { height: 10px; margin: 0 0 .9em; font-size: 16px }",
+        400.0,
+    );
+    let y = tree.get(id(&doc, "last")).unwrap().rect.y;
+    assert_eq!(y, 4.0 * (10.0 + 921.0 / 64.0));
+}
+
+/// A line that breaks at a space inside an inline element ends with that
+/// element's start: Chromium counts its box on the line, though the space
+/// collapses there (gnu.org's ` <href>` link suffixes in 10pt).
+#[test]
+fn an_element_opening_at_a_line_break_counts_on_the_line_before() {
+    let css = "div { width: 40px; line-height: 24px } span { font-size: 8px }";
+    let height = |html: &str| {
+        let (doc, tree) = page(
+            &format!("<!doctype html><div id=d>{html}</div>"),
+            css,
+            400.0,
+        );
+        tree.get(id(&doc, "d")).unwrap().rect.height
+    };
+    // One line holding the small span: taller than 24px.
+    let one = height("a <span>b</span>");
+    assert!(one > 24.0, "{one}");
+    // The span opens before the break: both lines hold it.
+    let opened = height("aaaa<span> bbbb</span>");
+    assert!(near(opened, 2.0 * one), "{opened} vs {}", 2.0 * one);
+    // The space is outside the span: only the second line holds it.
+    let after = height("aaaa <span>bbbb</span>");
+    assert!(near(after, 24.0 + one), "{after} vs {}", 24.0 + one);
+}

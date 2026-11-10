@@ -2,9 +2,16 @@
 
 use noonoo_style::{ComputedStyle, Dimension, Edges, Length, LengthOrAuto, Overflow};
 
+/// `px` truncated toward zero to a whole number of 1/64 px, the unit
+/// Chromium lays out in (its `LayoutUnit`): a `.9em` margin at 16px is
+/// 14.390625px there, and a long list of them drifts without this.
+pub(crate) fn snap(px: f32) -> f32 {
+    (px * 64.0).trunc() / 64.0
+}
+
 /// Resolve a dimension against a reference length; `auto` is `None`.
 pub fn dimension(value: Dimension, reference: f32) -> Option<f32> {
-    value.resolve(reference).map(|value| value.max(0.0))
+    value.resolve(reference).map(|value| snap(value.max(0.0)))
 }
 
 /// Resolve a dimension that must not depend on a percentage.
@@ -15,17 +22,17 @@ pub fn dimension(value: Dimension, reference: f32) -> Option<f32> {
 pub fn definite(value: &Dimension) -> Option<f32> {
     match value {
         Dimension::Auto | Dimension::Percent(_) => None,
-        Dimension::Calc { px, percent } => (percent == &0.0).then_some(*px),
+        Dimension::Calc { px, percent } => (percent == &0.0).then_some(snap(*px)),
         Dimension::Extreme { terms, .. } => terms
             .iter()
             .all(|term| term.percent == 0.0)
-            .then(|| value.resolve(0.0).unwrap_or(0.0)),
-        Dimension::Px(px) => Some(*px),
+            .then(|| snap(value.resolve(0.0).unwrap_or(0.0))),
+        Dimension::Px(px) => Some(snap(*px)),
     }
 }
 
 fn length(value: Length, reference: f32) -> f32 {
-    value.resolve(reference)
+    snap(value.resolve(reference))
 }
 
 /// Resolve margins against the containing block's width.
@@ -33,7 +40,7 @@ fn length(value: Length, reference: f32) -> f32 {
 /// Unlike [`dimension`], margins may be negative, so no clamp is applied;
 /// `auto` resolves to zero.
 pub fn margins(edges: &Edges<LengthOrAuto>, reference: f32) -> Edges<f32> {
-    let resolve = |value: &Dimension| value.resolve(reference).unwrap_or(0.0);
+    let resolve = |value: &Dimension| snap(value.resolve(reference).unwrap_or(0.0));
     Edges {
         top: resolve(&edges.top),
         right: resolve(&edges.right),
@@ -94,9 +101,9 @@ pub fn borders(style: &ComputedStyle) -> Edges<f32> {
 /// containing-block height yet, passes the width for both.
 pub fn insets(edges: &Edges<Dimension>, width: f32, height: f32) -> Edges<Option<f32>> {
     Edges {
-        top: edges.top.resolve(height),
-        right: edges.right.resolve(width),
-        bottom: edges.bottom.resolve(height),
-        left: edges.left.resolve(width),
+        top: edges.top.resolve(height).map(snap),
+        right: edges.right.resolve(width).map(snap),
+        bottom: edges.bottom.resolve(height).map(snap),
+        left: edges.left.resolve(width).map(snap),
     }
 }

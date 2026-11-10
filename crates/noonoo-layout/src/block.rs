@@ -1183,6 +1183,40 @@ pub(crate) fn layout_inline_run(
                     down = down.max(below - rise);
                 }
             }
+            // A break at a space inside elements the next item opens
+            // (`a<span> b`) ends this line with their starts: Chromium
+            // counts their boxes here too, though the space collapses.
+            if let Some(next) = rest
+                .get(line_len)
+                .filter(|next| next.spaced && next.preserved.is_none() && next.straddle.opens > 0)
+            {
+                let first = next.chain.len() - next.opens;
+                for depth in first..first + next.straddle.opens {
+                    let element = next.chain[depth];
+                    let parent = depth.checked_sub(1).map(|d| next.chain[d]);
+                    let parent_rise = parent.and_then(|p| rises.get(&p).copied()).unwrap_or(0.0);
+                    let parent_style = parent.map_or(parent_style, |p| ctx.style(p));
+                    let style = ctx.style(element);
+                    let (above, below) = ctx.inline_box(style, ctx.line_height_of(style));
+                    let rise = parent_rise
+                        + match vertical_align(ctx, style, parent_style, above, below) {
+                            Align::Rise(rise) => rise,
+                            Align::Top | Align::Bottom => 0.0,
+                        };
+                    rises.insert(element, rise);
+                    // Holding no text here, it counts as an empty box does.
+                    let counts = !phantoms_only && !quirks || {
+                        let edges = InlineEdges::of(ctx, element, width);
+                        edges.start() > 0.0
+                            || edges.padding.top + edges.padding.bottom > 0.0
+                            || edges.border.top + edges.border.bottom > 0.0
+                    };
+                    if counts {
+                        up = up.max(above + rise);
+                        down = down.max(below - rise);
+                    }
+                }
+            }
             let mut atomics: Vec<Option<usize>> = vec![None; line.len()];
             // Each item's reach above its own baseline, and where it sits.
             let mut reach_up = Vec::with_capacity(line.len());
