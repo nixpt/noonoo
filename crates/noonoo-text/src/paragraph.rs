@@ -96,10 +96,50 @@ pub fn is_breaking_space(c: char) -> bool {
     matches!(c, '\u{1680}' | '\u{2000}'..='\u{2006}' | '\u{2008}'..='\u{200a}' | '\u{205f}' | '\u{3000}')
 }
 
-/// `word` split after each breaking space, the space kept at the end of its
-/// piece: the pieces are break opportunities with no space between them.
+/// `word` split at its break opportunities, each piece keeping the
+/// character it breaks after: after a breaking space, and after a hyphen
+/// between a letter and a letter (UAX #14's HY and BA hyphens), not before
+/// a digit, at the word's start or inside a run of hyphens. The pieces sit
+/// with no space between them.
 pub fn break_pieces(word: &str) -> impl Iterator<Item = &str> {
-    word.split_inclusive(is_breaking_space)
+    BreakPieces { rest: word }
+}
+
+/// A hyphen a line may break after: hyphen-minus, U+2010 HYPHEN and the en
+/// dash. U+2011 is the no-break hyphen.
+fn is_breaking_hyphen(c: char) -> bool {
+    matches!(c, '-' | '\u{2010}' | '\u{2013}')
+}
+
+struct BreakPieces<'a> {
+    rest: &'a str,
+}
+
+impl<'a> Iterator for BreakPieces<'a> {
+    type Item = &'a str;
+
+    fn next(&mut self) -> Option<&'a str> {
+        if self.rest.is_empty() {
+            return None;
+        }
+        let mut prev: Option<char> = None;
+        let mut chars = self.rest.char_indices().peekable();
+        while let Some((at, c)) = chars.next() {
+            let next = chars.peek().map(|&(_, next)| next);
+            let breaks = is_breaking_space(c)
+                || (is_breaking_hyphen(c)
+                    && prev.is_some_and(|p| !is_breaking_hyphen(p) && !p.is_whitespace())
+                    && next.is_some_and(|n| !n.is_ascii_digit() && !is_breaking_hyphen(n)));
+            if breaks {
+                let end = at + c.len_utf8();
+                let (piece, rest) = self.rest.split_at(end);
+                self.rest = rest;
+                return Some(piece);
+            }
+            prev = Some(c);
+        }
+        Some(std::mem::take(&mut self.rest))
+    }
 }
 
 /// The words of `text` between runs of collapsible white space.
@@ -299,5 +339,23 @@ mod tests {
         style.white_space = WhiteSpace::NoWrap;
         let paragraph = layout_paragraph("aaaa bbbb cccc dddd", &style, 20.0, &MetricShaper);
         assert_eq!(paragraph.lines.len(), 1);
+    }
+
+    #[test]
+    fn a_hyphen_between_letters_is_a_break_opportunity() {
+        // UAX #14: a break after a hyphen (HY, BA), as rust-lang.org's
+        // "auto-" / "completion" wraps in Chromium; not before a digit, at
+        // a word's start, or inside a run of hyphens.
+        let pieces = |word| crate::break_pieces(word).collect::<Vec<_>>();
+        assert_eq!(pieces("auto-completion"), ["auto-", "completion"]);
+        assert_eq!(pieces("multi-editor-ish"), ["multi-", "editor-", "ish"]);
+        assert_eq!(
+            pieces("a\u{2010}b\u{2013}c"),
+            ["a\u{2010}", "b\u{2013}", "c"]
+        );
+        for whole in ["-flag", "x-1", "a--b", "end-", "-", "a\u{2011}b"] {
+            assert_eq!(pieces(whole), [whole], "{whole}");
+        }
+        assert_eq!(pieces("a\u{2003}b-c"), ["a\u{2003}", "b-", "c"]);
     }
 }
