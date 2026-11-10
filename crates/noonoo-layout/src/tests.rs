@@ -4881,3 +4881,46 @@ fn a_br_breaks_the_line_whatever_its_display() {
         assert_eq!(height, 20.0 * lines as f32, "{css}");
     }
 }
+
+/// A shaper that kerns "w." 2px tighter, as DejaVu Sans does.
+struct PairKerning;
+
+impl Shaper for PairKerning {
+    fn advance(&self, text: &str, _request: noonoo_text::FontRequest, _font_size: f32) -> f32 {
+        text.chars().count() as f32 * 10.0 - 2.0 * text.matches("w.").count() as f32
+    }
+
+    fn line_height(&self, _request: noonoo_text::FontRequest, _font_size: f32) -> f32 {
+        20.0
+    }
+}
+
+/// Chromium shapes text across inline element boundaries in one font, so
+/// a pair split by `</a>` kerns: the element ends where the kerned glyph
+/// does, and a shrink-wrapped box measures it the same way.
+#[test]
+fn a_pair_split_by_an_element_boundary_kerns() {
+    let doc = noonoo_html::parse(
+        r#"<!doctype html><div id="f" style="float: left"><span id="s">ow</span>. <b id="b">ow</b>.<span id="e">w</span><em></em>.</div>"#,
+    );
+    let sheet = noonoo_css::Stylesheet::parse("body { margin: 0 }").unwrap();
+    let styles = noonoo_style::compute(&doc, &[sheet]);
+    let tree = layout(&doc, &styles, Size::new(800.0, 600.0), &PairKerning);
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert_eq!(rect("s").width, 18.0);
+    // A bold run is another font: no pair across into the plain ".".
+    assert_eq!(rect("b").width, 20.0);
+    // An empty element between doesn't part a pair.
+    let e = rect("e");
+    assert_eq!(e.width, 8.0);
+    // "ow" (18) "." (10) " " (10) "ow" (20) "." (10), and "w" (8) and ".":
+    // one line.
+    let f = rect("f");
+    assert_eq!((f.width, f.height), (86.0, 20.0));
+    let dot = tree
+        .boxes()
+        .iter()
+        .find(|b| b.text.as_deref() == Some("."))
+        .expect("the full stop's run");
+    assert_eq!(dot.rect.x, 18.0);
+}
