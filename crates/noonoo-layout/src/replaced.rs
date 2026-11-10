@@ -23,10 +23,71 @@ impl Ctx<'_> {
         self.images.get(element.attr("src")?)
     }
 
-    /// The content-box size of `node` if it's an image with a loaded
-    /// source. Widths resolve against `width_basis` (infinite while
-    /// measuring a preferred width, where percentages don't count) and
-    /// heights against `height_basis`, when it's definite.
+    /// The natural size and ratio of replaced content: a loaded image's
+    /// pixels; an outer `<svg>`'s `viewBox` ratio (its `width` and
+    /// `height` arrive as CSS sizes); a `<canvas>`'s 300x150 bitmap unless
+    /// its attributes size it. `None` when `node` isn't replaced content
+    /// noonoo sizes this way.
+    fn natural(&self, node: NodeId) -> Option<Natural> {
+        if let Some(image) = self.image(node) {
+            let (width, height) = (image.width as f32, image.height as f32);
+            return Some(Natural {
+                width: Some(width),
+                height: Some(height),
+                ratio: Some(width / height),
+            });
+        }
+        let element = self.document.element(node)?;
+        match element.name.as_str() {
+            "svg" if !self.inside_svg(node) => Some(Natural {
+                width: None,
+                height: None,
+                // HTML parsing lowercases it: noonoo doesn't yet case-adjust
+                // SVG attributes in foreign content.
+                ratio: element
+                    .attr("viewBox")
+                    .or_else(|| element.attr("viewbox"))
+                    .and_then(view_box_ratio),
+            }),
+            "canvas" => {
+                let pixels = |name: &str, default: f32| {
+                    element
+                        .attr(name)
+                        .and_then(|value| value.trim().parse::<u32>().ok())
+                        .map_or(default, |value| value as f32)
+                };
+                let (width, height) = (pixels("width", 300.0), pixels("height", 150.0));
+                Some(Natural {
+                    width: Some(width),
+                    height: Some(height),
+                    ratio: (height > 0.0).then(|| width / height),
+                })
+            }
+            _ => None,
+        }
+    }
+
+    /// Whether `node` sits inside an `<svg>`: an inner one is SVG content.
+    fn inside_svg(&self, node: NodeId) -> bool {
+        let mut at = self.document.tree().parent(node);
+        while let Some(parent) = at {
+            if self
+                .document
+                .element(parent)
+                .is_some_and(|e| e.name == "svg")
+            {
+                return true;
+            }
+            at = self.document.tree().parent(parent);
+        }
+        false
+    }
+
+    /// The content-box size of `node` if it's replaced content: an image
+    /// with a loaded source, an outer `<svg>` or a `<canvas>`. Widths
+    /// resolve against `width_basis` (infinite while measuring a preferred
+    /// width, where percentages don't count) and heights against
+    /// `height_basis`, when it's definite.
     pub(crate) fn image_size(
         &self,
         node: NodeId,
@@ -34,7 +95,7 @@ impl Ctx<'_> {
         width_basis: f32,
         height_basis: Option<f32>,
     ) -> Option<(f32, f32)> {
-        let image = self.image(node)?;
+        let natural = self.natural(node)?;
         let padding_basis = if width_basis.is_finite() {
             width_basis
         } else {
@@ -63,12 +124,28 @@ impl Ctx<'_> {
         let width = width_of(&style.width);
         let height = height_of(&style.height);
 
-        let ratio = image.width as f32 / image.height as f32;
+        // CSS's default sizing: a missing axis follows the other through
+        // the ratio, else takes the natural size, else the 300x150 default
+        // object size; with a ratio and no size at all, the content fills
+        // the available width (and has no intrinsic width).
+        let ratio = natural.ratio;
+        let natural_width = natural.width.unwrap_or(DEFAULT_WIDTH);
+        let natural_height = natural.height.unwrap_or(DEFAULT_HEIGHT);
         let (mut w, mut h) = match (width, height) {
             (Some(w), Some(h)) => (w, h),
-            (Some(w), None) => (w, w / ratio),
-            (None, Some(h)) => (h * ratio, h),
-            (None, None) => (image.width as f32, image.height as f32),
+            (Some(w), None) => (w, ratio.map_or(natural_height, |ratio| w / ratio)),
+            (None, Some(h)) => (ratio.map_or(natural_width, |ratio| h * ratio), h),
+            (None, None) => match (natural.width, natural.height, ratio) {
+                (None, None, Some(ratio)) if width_basis.is_finite() => {
+                    let w = (width_basis - horizontal).max(0.0);
+                    (w, w / ratio)
+                }
+                // Measuring intrinsic widths: it has none, so a shrink-to-fit
+                // box around it (a float, an inline-block) is 0 wide, as in
+                // Chromium.
+                (None, None, Some(_)) => (0.0, 0.0),
+                _ => (natural_width, natural_height),
+            },
         };
         let clamp = |value: f32, min: Option<f32>, max: Option<f32>| {
             // `min` wins over `max`, as for any box.
@@ -78,7 +155,9 @@ impl Ctx<'_> {
         let clamped = clamp(w, width_of(&style.min_width), width_of(&style.max_width));
         if clamped != w {
             w = clamped;
-            if height.is_none() {
+            if height.is_none()
+                && let Some(ratio) = ratio
+            {
                 h = w / ratio;
             }
         }
@@ -89,7 +168,9 @@ impl Ctx<'_> {
         );
         if clamped != h {
             h = clamped;
-            if width.is_none() {
+            if width.is_none()
+                && let Some(ratio) = ratio
+            {
                 w = h * ratio;
             }
         }
@@ -135,5 +216,30 @@ impl Ctx<'_> {
             self.tree.images.insert(node, encoded);
         }
         (Vec::new(), 0.0)
+    }
+}
+
+/// The default object size, for replaced content with no natural size.
+const DEFAULT_WIDTH: f32 = 300.0;
+const DEFAULT_HEIGHT: f32 = 150.0;
+
+/// Replaced content's natural dimensions, each optional.
+struct Natural {
+    width: Option<f32>,
+    height: Option<f32>,
+    ratio: Option<f32>,
+}
+
+/// The width-to-height ratio of an SVG `viewBox="min-x min-y width
+/// height"`, when both are positive.
+fn view_box_ratio(view_box: &str) -> Option<f32> {
+    let numbers: Vec<f32> = view_box
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .filter(|part| !part.is_empty())
+        .map(|part| part.parse().ok())
+        .collect::<Option<_>>()?;
+    match numbers[..] {
+        [_, _, width, height] if width > 0.0 && height > 0.0 => Some(width / height),
+        _ => None,
     }
 }

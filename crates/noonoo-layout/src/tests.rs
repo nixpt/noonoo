@@ -4604,3 +4604,92 @@ fn a_list_box_optgroup_is_a_label_row_over_indented_options() {
     let content = tree.get(id(&doc, "s")).unwrap().content_box();
     assert!(near(content.height, 3.0 * 20.2), "{content:?}");
 }
+
+/// A flex line is as tall as its items' margin boxes, and `center` and
+/// `end` align those margin boxes (CSS Flexbox 9.4 step 8, 9.6):
+/// rust-lang.org's nav lost a list's 16px margins between its lines.
+#[test]
+fn flex_lines_hold_their_items_margins() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div id="f"><div id="a"></div><div id="b"></div><div id="c"></div><div id="d"></div></div>"#,
+        "body { margin: 0 } #f { display: flex; flex-wrap: wrap; align-items: center; width: 100px }
+         #f > div { width: 100px; height: 10px }
+         #a { margin-top: 3px } #b { margin: 16px 0 } #c { align-self: flex-end; margin-bottom: 5px }
+         #f > #d { align-self: stretch; height: auto; margin: 4px 0 }",
+        400.0,
+    );
+    let y = |name: &str| tree.get(id(&doc, name)).unwrap().rect.y;
+    assert!(near(y("a"), 3.0), "{}", y("a"));
+    // Line 2 starts at 13 and is 42 tall, `b` centred in it.
+    assert!(near(y("b"), 13.0 + 16.0), "{}", y("b"));
+    // Line 3 starts at 55; `c` ends 5px above its end.
+    assert!(near(y("c"), 55.0), "{}", y("c"));
+    // Line 4 starts at 70: `d` stretches to nothing between its margins.
+    let d = tree.get(id(&doc, "d")).unwrap().rect;
+    assert!(near(d.y, 74.0) && near(d.height, 0.0), "{d:?}");
+    assert!(near(tree.get(id(&doc, "f")).unwrap().rect.height, 78.0));
+}
+
+/// Internal table elements have no margins (CSS 2.1 §17.5): a cell's
+/// margin neither widens its column nor deepens its row (noonoo#9).
+#[test]
+fn table_cells_have_no_margins() {
+    let (doc, tree) = page(
+        r#"<!doctype html><table id="t"><tr><td id="a">a</td><td id="b">b</td></tr></table><table id="u"><tr><td>a</td><td>b</td></tr></table>"#,
+        "td { margin: 3px 5px 6px 7px } #u td { margin: 0 }",
+        400.0,
+    );
+    let t = tree.get(id(&doc, "t")).unwrap().rect;
+    let u = tree.get(id(&doc, "u")).unwrap().rect;
+    assert!(
+        near(t.width, u.width) && near(t.height, u.height),
+        "{t:?} {u:?}"
+    );
+    let a = tree.get(id(&doc, "a")).unwrap().rect;
+    let b = tree.get(id(&doc, "b")).unwrap().rect;
+    // Cells sit at the border spacing, edge to edge with their columns.
+    assert!(near(a.y, t.y + 2.0) && near(a.x, t.x + 2.0), "{a:?}");
+    assert!(near(b.x, a.x + a.width + 2.0), "{b:?}");
+}
+
+/// An outer `<svg>` is replaced content sized as Chromium sizes it
+/// (noonoo#7): its `width`/`height` attributes, the `viewBox` ratio for a
+/// missing axis, the available width for a ratio alone, and 300x150 with
+/// nothing to go on. A `<canvas>` is 300x150 unless its attributes say.
+#[test]
+fn an_inline_svg_is_sized_from_its_attributes_and_view_box() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div style="width: 500px">
+        <p>trend <svg id="a" width="80" height="20" viewBox="0 0 80 20"><polyline id="pl" points="0,20 40,0 80,10"/></svg> end</p>
+        <p><svg id="b"><text>hi</text></svg></p>
+        <p><svg id="c" viewBox="0 0 100 50"></svg></p>
+        <p><svg id="d" width="100" viewBox="0 0 100 50"></svg></p>
+        <p><svg id="e" width="50%" height="10"></svg></p>
+        <p><svg id="f" style="width: 40px" viewBox="0 0 20 10"></svg></p>
+        <p><canvas id="g"></canvas><canvas id="h" width="30" height="10"></canvas></p></div>"#,
+        "",
+        800.0,
+    );
+    let size = |name: &str| {
+        let rect = tree.get(id(&doc, name)).unwrap().rect;
+        (rect.width, rect.height)
+    };
+    for (name, expected) in [
+        ("a", (80.0, 20.0)),
+        ("b", (300.0, 150.0)),
+        ("c", (500.0, 250.0)),
+        ("d", (100.0, 50.0)),
+        ("e", (250.0, 10.0)),
+        ("f", (40.0, 20.0)),
+        ("g", (300.0, 150.0)),
+        ("h", (30.0, 10.0)),
+    ] {
+        let (w, h) = size(name);
+        assert!(
+            near(w, expected.0) && near(h, expected.1),
+            "{name}: {w}x{h}"
+        );
+    }
+    // Its children are SVG content, not CSS boxes.
+    assert!(tree.get(id(&doc, "pl")).is_none());
+}
