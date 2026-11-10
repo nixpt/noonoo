@@ -716,19 +716,47 @@ fn expand_flex_flow(values: Vec<Value>, important: bool) -> Vec<Declaration> {
     out
 }
 
+/// `flex` (CSS Flexbox §7.1): `none` is `0 0 auto`, `auto` is `1 1 auto`,
+/// `initial` is `0 1 auto`; otherwise up to two numbers (grow, then
+/// shrink, which defaults to 1) and a basis in either order, the basis
+/// `0%` when only numbers are given.
 fn expand_flex(values: Vec<Value>, important: bool) -> Vec<Declaration> {
-    match values.as_slice() {
-        [only] => vec![decl(Property::FlexGrow, vec![only.clone()], important)],
-        [grow, shrink] => vec![
-            decl(Property::FlexGrow, vec![grow.clone()], important),
-            decl(Property::FlexShrink, vec![shrink.clone()], important),
-        ],
-        [grow, shrink, basis] => vec![
-            decl(Property::FlexGrow, vec![grow.clone()], important),
-            decl(Property::FlexShrink, vec![shrink.clone()], important),
-            decl(Property::FlexBasis, vec![basis.clone()], important),
-        ],
-        _ => vec![decl(Property::FlexGrow, values, important)],
+    let number = |value: f32| Value::Number(value);
+    let auto = || Value::Keyword("auto".into());
+    let longhands = |grow: Value, shrink: Value, basis: Value| {
+        vec![
+            decl(Property::FlexGrow, vec![grow], important),
+            decl(Property::FlexShrink, vec![shrink], important),
+            decl(Property::FlexBasis, vec![basis], important),
+        ]
+    };
+    if let [Value::Keyword(keyword)] = values.as_slice() {
+        match keyword.to_ascii_lowercase().as_str() {
+            "none" => return longhands(number(0.0), number(0.0), auto()),
+            "auto" => return longhands(number(1.0), number(1.0), auto()),
+            "initial" => return longhands(number(0.0), number(1.0), auto()),
+            "inherit" | "unset" | "revert" => {
+                let keyword = Value::Keyword(keyword.clone());
+                return longhands(keyword.clone(), keyword.clone(), keyword);
+            }
+            _ => {}
+        }
+    }
+    let mut numbers = Vec::new();
+    let mut basis = None;
+    for value in values {
+        match value {
+            Value::Number(_) if numbers.len() < 2 => numbers.push(value),
+            other => basis = Some(other),
+        }
+    }
+    let mut numbers = numbers.into_iter();
+    let grow = numbers.next();
+    let shrink = numbers.next().unwrap_or_else(|| number(1.0));
+    match (grow, basis) {
+        (Some(grow), basis) => longhands(grow, shrink, basis.unwrap_or(Value::Percentage(0.0))),
+        (None, Some(basis)) => longhands(number(1.0), shrink, basis),
+        (None, None) => Vec::new(),
     }
 }
 
@@ -1286,5 +1314,42 @@ mod tests {
         // A shorthand that names no line resets it to none.
         let none = parse_declaration("text-decoration", "#ff0000", false).unwrap();
         assert_eq!(none[0].values, vec![Value::Keyword("none".into())]);
+    }
+
+    /// `flex` sets all three longhands: `none`, `auto`, `initial`, a lone
+    /// number (basis 0%), a lone basis, and the two-value forms, as CSS
+    /// Flexbox §7.1 gives them. `flex: none` left `flex-shrink` at 1, so an
+    /// inflexible item shrank anyway (rust-lang.org's nav).
+    #[test]
+    fn flex_expands_to_grow_shrink_and_basis() {
+        let flex = |value: &str| {
+            let decls = parse_declaration("flex", value, false).unwrap();
+            assert_eq!(
+                props(&decls),
+                vec!["flex-grow", "flex-shrink", "flex-basis"],
+                "{value}"
+            );
+            decls
+                .into_iter()
+                .map(|d| d.values[0].clone())
+                .collect::<Vec<_>>()
+        };
+        let n = Value::Number;
+        let auto = || Value::Keyword("auto".into());
+        let px = |v| {
+            Value::Length(Length {
+                value: v,
+                unit: LengthUnit::Px,
+            })
+        };
+        assert_eq!(flex("none"), vec![n(0.0), n(0.0), auto()]);
+        assert_eq!(flex("auto"), vec![n(1.0), n(1.0), auto()]);
+        assert_eq!(flex("initial"), vec![n(0.0), n(1.0), auto()]);
+        assert_eq!(flex("2"), vec![n(2.0), n(1.0), Value::Percentage(0.0)]);
+        assert_eq!(flex("30px"), vec![n(1.0), n(1.0), px(30.0)]);
+        assert_eq!(flex("2 3"), vec![n(2.0), n(3.0), Value::Percentage(0.0)]);
+        assert_eq!(flex("2 30px"), vec![n(2.0), n(1.0), px(30.0)]);
+        assert_eq!(flex("2 3 30px"), vec![n(2.0), n(3.0), px(30.0)]);
+        assert_eq!(flex("30px 2 3"), vec![n(2.0), n(3.0), px(30.0)]);
     }
 }

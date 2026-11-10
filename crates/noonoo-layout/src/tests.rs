@@ -2822,8 +2822,11 @@ fn an_empty_inline_element_with_edges_still_has_a_box() {
             ("c".to_owned(), 26.0)
         ]
     );
-    // Without edges an empty element takes nothing, and draws no run.
-    assert!(fragments(&doc, &tree, "plain").is_empty());
+    // Without edges an empty element takes no room and draws no run, but
+    // keeps a zero-width box where it sits, as in Chromium.
+    let plain = fragments(&doc, &tree, "plain");
+    assert_eq!(plain.len(), 1);
+    assert_eq!((plain[0].rect.x, plain[0].rect.width), (26.0, 0.0));
     assert!(tree.boxes().iter().all(|b| b.text.as_deref() != Some("")));
 }
 
@@ -4293,4 +4296,156 @@ fn a_float_too_wide_for_the_line_drops_below_the_last() {
     let a = tree.get(id(&doc, "a")).unwrap().rect;
     let b = tree.get(id(&doc, "b")).unwrap().rect;
     assert!(near(b.y, a.y + a.height), "{a:?} {b:?}");
+}
+
+/// A shaper whose primary face is 15 + 4 px at 16px, with non-ASCII text
+/// drawn from a taller fallback (17 + 7 px), as DejaVu Sans and Noto Sans
+/// Thai are in Chromium's probe.
+struct FallbackFont;
+
+impl Shaper for FallbackFont {
+    fn advance(&self, text: &str, request: noonoo_text::FontRequest, font_size: f32) -> f32 {
+        MetricShaper.advance(text, request, font_size)
+    }
+
+    fn line_height(&self, _request: noonoo_text::FontRequest, font_size: f32) -> f32 {
+        font_size * 19.0 / 16.0
+    }
+
+    fn metrics(&self, _request: noonoo_text::FontRequest, font_size: f32) -> (f32, f32) {
+        (font_size * 15.0 / 16.0, font_size * 4.0 / 16.0)
+    }
+
+    fn text_metrics(
+        &self,
+        text: &str,
+        request: noonoo_text::FontRequest,
+        font_size: f32,
+    ) -> (f32, f32) {
+        if text.is_ascii() {
+            self.metrics(request, font_size)
+        } else {
+            (font_size * 17.0 / 16.0, font_size * 7.0 / 16.0)
+        }
+    }
+}
+
+/// A `normal`-height line grows to hold text from a taller fallback face,
+/// and its baseline drops to fit the face's ascent, as Chromium lays out
+/// Thai, Bengali or CJK beside DejaVu Sans; a fixed line height doesn't.
+#[test]
+fn a_normal_line_holds_its_fallback_faces() {
+    let doc = noonoo_html::parse(
+        r#"<!doctype html><div id=a>abc</div><div id=t>ไทย</div><div id=m>Abc <span>ไทย</span> def</div><div id=f style="line-height: 19px">ไทย</div>"#,
+    );
+    let sheet =
+        noonoo_css::Stylesheet::parse("body { margin: 0 } div { font-size: 16px }").unwrap();
+    let styles = noonoo_style::compute(&doc, &[sheet]);
+    let tree = layout(&doc, &styles, Size::new(400.0, 600.0), &FallbackFont);
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert_eq!(rect("a").height, 19.0);
+    assert_eq!(rect("t").height, 24.0);
+    assert_eq!(rect("m").height, 24.0);
+    assert_eq!(rect("f").height, 19.0);
+    // The text box keeps the primary face's height, 2px below the line top.
+    assert!(
+        near(text_y(&tree, "ไทย") - rect("t").y, 2.0),
+        "{}",
+        text_y(&tree, "ไทย")
+    );
+    assert!(near(text_y(&tree, "Abc") - rect("m").y, 2.0));
+}
+
+/// An empty inline element still gets a zero-width box where it sits on
+/// its line, as Chromium reports Hacker News's empty `unv_` spans, but it
+/// never makes a line of its own or changes one's height.
+#[test]
+fn an_empty_inline_element_has_a_box_but_no_line() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div id=d>ab <span id=e></span>cd</div><div id=q>ab<br><span id=t></span></div><div id=s style="font-size: 8px">ab <span id=u style="font-size: 30px"></span></div>"#,
+        "div { font-size: 16px }",
+        400.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).map(|b| b.rect);
+    let e = rect("e").expect("the empty span has a box");
+    assert!(near(e.x, 24.0) && e.width == 0.0, "{e:?}");
+    assert!(near(rect("d").unwrap().height, 19.2));
+    // After a break, it starts no new line.
+    assert!(near(rect("q").unwrap().height, 19.2), "{:?}", rect("q"));
+    // Nor does a larger font of its own raise its line.
+    assert!(
+        near(rect("s").unwrap().height, 9.6 * 16.0 / 16.0),
+        "{:?}",
+        rect("s")
+    );
+}
+
+/// Clearance puts a box's border edge at the float's bottom when the
+/// margins before it wouldn't get it there, and those margins are spent in
+/// it (CSS 2 §9.5.2): gnu.org's `<div style="clear: both">` after its
+/// floated button sat a paragraph margin too low.
+#[test]
+fn clearance_absorbs_the_margins_above_it() {
+    let float =
+        r#"<div style="float: left; width: 10px; height: 50px; margin-bottom: 32px"></div>"#;
+    let (doc, tree) = page(
+        &format!(
+            r#"<!doctype html><div><p style="margin: 0 0 16px">a</p>{float}<div id=c style="clear: both"></div><div id=n>b</div></div><div><p style="margin: 0 0 16px">a</p>{float}<div id=t style="clear: both; margin-top: 10px">c</div></div>"#
+        ),
+        "div, p { font-size: 16px }",
+        400.0,
+    );
+    let y = |name: &str| tree.get(id(&doc, name)).unwrap().rect.y;
+    // The float sits at 19.2 + 16; its margin box ends 82px lower.
+    assert!(near(y("c"), 117.2), "{}", y("c"));
+    assert!(near(y("n"), 117.2), "{}", y("n"));
+    let second = 117.2 + 19.2;
+    assert!(
+        near(y("t"), second + 117.2),
+        "{} vs {}",
+        y("t"),
+        second + 117.2
+    );
+}
+
+/// A text control counts whole-pixel average characters, as Chromium rounds
+/// the font's average width (Hacker News's 13.33px search field was 4px
+/// narrow).
+#[test]
+fn a_text_controls_average_character_is_whole_pixels() {
+    let (doc, tree) = page(
+        r#"<p><input id="a"><textarea id="t" cols="10"></textarea></p>"#,
+        // MetricShaper: a 13.4px "0" is 6.7px wide, counted as 7.
+        "input, textarea { padding: 0; border: 0; font-size: 13.4px }",
+        400.0,
+    );
+    let width = |name: &str| tree.get(id(&doc, name)).unwrap().content_box().width;
+    assert!(near(width("a"), 140.0), "{}", width("a"));
+    assert!(near(width("t"), 85.0), "{}", width("t"));
+}
+
+/// `justify-content` keeps aligning when the items overflow (its default
+/// alignment is unsafe): `flex-end` pushes the overflow out the start,
+/// `center` out both sides, and the `space-*` values fall back to `start`
+/// or `center`, as in Chromium (rust-lang.org's nav list).
+#[test]
+fn justify_content_aligns_overflowing_items() {
+    let row = |justify: &str| {
+        format!(
+            r#"<div style="display: flex; width: 100px; justify-content: {justify}"><div id="{justify}" style="flex: none; width: 150px; height: 10px"></div></div>"#
+        )
+    };
+    let html: String = ["flex-end", "center", "space-between", "space-around"]
+        .iter()
+        .map(|j| row(j))
+        .collect::<String>()
+        + r#"<div style="display: flex; flex-direction: column; height: 100px; justify-content: flex-end"><div id="col" style="flex: none; height: 150px"></div></div>"#;
+    let (doc, tree) = page(&format!("<!doctype html>{html}"), "", 400.0);
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert_eq!(rect("flex-end").x, -50.0);
+    assert_eq!(rect("center").x, -25.0);
+    assert_eq!(rect("space-between").x, 0.0);
+    assert_eq!(rect("space-around").x, -25.0);
+    let column_top = rect("col").y - (40.0);
+    assert_eq!(column_top, -50.0, "{:?}", rect("col"));
 }

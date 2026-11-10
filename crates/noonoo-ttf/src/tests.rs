@@ -980,3 +980,37 @@ fn character_widths_come_from_os2_and_the_bounding_box() {
     assert!((average - 6.75).abs() < 1e-4, "{average}");
     assert_eq!(widest, 15.0);
 }
+
+#[test]
+fn a_runs_metrics_reach_as_far_as_its_fallback_faces() {
+    let primary = Font::parse(&minimal_font()).unwrap();
+    // The same outlines over a 500-unit em: twice as tall at a given size.
+    let tall = Font::parse(&font_mapping(500, 'C')).unwrap();
+    let demo = vec!["Demo".to_owned()];
+
+    let mut set = FontSet::new();
+    set.add("Demo", 400, false, &primary);
+    let shaper = FontSetShaper::new(&set);
+    // 800 / -200 units over 1000 at 20px; 'C' is the primary's `.notdef`.
+    assert_eq!(
+        shaper.text_metrics("AC", demo_request(&demo), 20.0),
+        (16.0, 4.0)
+    );
+
+    set.add_fallback(&tall);
+    let shaper = FontSetShaper::new(&set);
+    // 'C' comes from the fallback: 800 / -200 units over 500 at 20px.
+    assert_eq!(
+        shaper.text_metrics("AC", demo_request(&demo), 20.0),
+        (32.0, 8.0)
+    );
+    // A run the selected face covers keeps its metrics.
+    assert_eq!(
+        shaper.text_metrics("AB", demo_request(&demo), 20.0),
+        (16.0, 4.0)
+    );
+    assert_eq!(
+        shaper.text_metrics("AB", demo_request(&demo), 20.0),
+        shaper.metrics(demo_request(&demo), 20.0)
+    );
+}

@@ -60,6 +60,7 @@ pre, code, kbd, samp, listing, plaintext, xmp { font-family: monospace }
 a { color: #0000ee; text-decoration: underline }
 [hidden] { display: none }
 input[type="hidden"] { display: none !important }
+hr { color: gray; border: 1px inset; margin: 0.5em auto; overflow: hidden }
 input:not([type]), input[type="text"], input[type="search"], input[type="email"],
 input[type="url"], input[type="tel"], input[type="password"], input[type="number"]
 { padding: 1px 2px; border: 2px inset #767676 }

@@ -41,6 +41,16 @@ pub trait Shaper {
         (line * 2.0 / 3.0, line / 3.0)
     }
 
+    /// The ascent and descent, in pixels, of the faces `text` is drawn
+    /// with at `font_size`: the face `request` selects and any fallback a
+    /// character needs, each reaching as far as its own metrics. A line of
+    /// `normal` height grows to hold a taller fallback face, as browsers'
+    /// do. The default is the selected face's [`metrics`](Self::metrics).
+    fn text_metrics(&self, text: &str, request: FontRequest, font_size: f32) -> (f32, f32) {
+        let _ = text;
+        self.metrics(request, font_size)
+    }
+
     /// The face's average and widest character advances at `font_size`,
     /// in pixels, as browsers size text fields by. The default takes a
     /// "0"'s advance for both.
@@ -167,6 +177,20 @@ mod char_width_tests {
         assert_eq!(
             MetricShaper.char_widths(FontRequest::any(), 16.0),
             (8.0, 8.0)
+        );
+    }
+}
+
+#[cfg(test)]
+mod text_metrics_tests {
+    use super::*;
+
+    #[test]
+    fn a_runs_metrics_default_to_the_selected_faces() {
+        let request = FontRequest::any();
+        assert_eq!(
+            MetricShaper.text_metrics("any text", request, 15.0),
+            MetricShaper.metrics(request, 15.0)
         );
     }
 }
