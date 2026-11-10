@@ -1111,6 +1111,24 @@ impl Ctx<'_> {
         if is_dropdown(element) {
             return Some(self.line_height_of(style) + 2.0 * DROPDOWN_INSET.1 * native(style));
         }
+        if element.name == "select" {
+            // A list box: `size` rows, or 4 for `multiple`, each an option's
+            // (or a group label's) `min-height: 1.2em` and 1px of padding;
+            // an empty one's rows are just the 1.2em.
+            let rows = positive_attribute(element, "size").unwrap_or(4);
+            let min = 1.2 * style.font_size;
+            let has_items = child_nodes(self.document, node).into_iter().any(|child| {
+                self.document
+                    .element(child)
+                    .is_some_and(|e| e.name == "option" || e.name == "optgroup")
+            });
+            let row = if !has_items {
+                min
+            } else {
+                self.line_height_of(style).max(min) + 1.0
+            };
+            return Some(rows as f32 * row);
+        }
         if element.name != "textarea" {
             return self
                 .attribute_ratio(node)

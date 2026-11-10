@@ -4514,3 +4514,93 @@ fn a_select_without_appearance_drops_its_arrow_and_inner_padding() {
         52.0
     ));
 }
+
+/// A select with `multiple` or a `size` over 1 is a list box, as Chromium
+/// draws one: `size` rows (4 for `multiple`), each option a block 1.2em
+/// tall plus 1px, as wide as the widest option and 2px of padding a side.
+/// Options past the last row scroll out of sight.
+#[test]
+fn a_list_box_select_stacks_its_options_in_rows() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div><select id="s" size="3"><option id="a">ab</option><option id="b">abcd</option><option>x</option><option>y</option><option>z</option></select></div><div><select id="m" multiple><option>ab</option></select></div><div><select id="e" size="3"></select></div>"#,
+        "select { font-size: 16px }",
+        400.0,
+    );
+    let select = tree.get(id(&doc, "s")).unwrap();
+    let content = select.content_box();
+    assert!(near(content.width, 36.0), "{content:?}");
+    assert!(near(content.height, 3.0 * 20.2), "{content:?}");
+    assert!(select.clips, "rows past the last scroll");
+    let a = tree.get(id(&doc, "a")).unwrap();
+    let b = tree.get(id(&doc, "b")).unwrap();
+    assert!(
+        near(a.rect.x, content.x) && near(a.rect.y, content.y),
+        "{:?}",
+        a.rect
+    );
+    assert!(
+        near(a.rect.width, 36.0) && near(a.rect.height, 20.2),
+        "{:?}",
+        a.rect
+    );
+    assert_eq!(a.padding.left, 2.0);
+    assert!(near(b.rect.y, content.y + 20.2), "{:?}", b.rect);
+    // `multiple` shows four rows.
+    let m = tree.get(id(&doc, "m")).unwrap().content_box();
+    assert!(near(m.height, 4.0 * 20.2), "{m:?}");
+    // An empty list box keeps its rows, 1.2em each.
+    let e = tree.get(id(&doc, "e")).unwrap().content_box();
+    assert!(near(e.height, 3.0 * 19.2) && near(e.width, 0.0), "{e:?}");
+}
+
+/// A list box sits on its line by `vertical-align: text-bottom`, as
+/// Chromium's sheet sets: its bottom at the bottom of the line's text, so
+/// it adds no descent below itself.
+#[test]
+fn a_list_box_sits_on_the_bottom_of_its_lines_text() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div id="d">x<select id="s" size="3"><option>ab</option></select></div>"#,
+        "",
+        400.0,
+    );
+    let select = tree.get(id(&doc, "s")).unwrap();
+    let line = tree.get(id(&doc, "d")).unwrap().rect;
+    assert!(
+        near(line.height, select.rect.height),
+        "{line:?} {:?}",
+        select.rect
+    );
+}
+
+/// In a list box an `optgroup` is a bold row of its `label` above its
+/// options, which indent 20px.
+#[test]
+fn a_list_box_optgroup_is_a_label_row_over_indented_options() {
+    let (doc, tree) = page(
+        r#"<!doctype html><select id="s" size="3"><optgroup id="g" label="Grp"><option id="o">ab</option></optgroup></select>"#,
+        "select { font-size: 16px }",
+        400.0,
+    );
+    let group = tree.get(id(&doc, "g")).unwrap().rect;
+    let option = tree.get(id(&doc, "o")).unwrap();
+    assert!(near(group.height, 2.0 * 20.2), "{group:?}");
+    assert!(near(option.rect.y, group.y + 20.2), "{:?}", option.rect);
+    assert_eq!(option.padding.left, 20.0);
+    let label = tree
+        .boxes()
+        .iter()
+        .find(|b| b.text.as_deref() == Some("Grp"))
+        .expect("the label is drawn");
+    assert!(near(label.rect.x, group.x + 2.0), "{:?}", label.rect);
+    // As wide as the indented option: 16 + 20 + 2.
+    let content = tree.get(id(&doc, "s")).unwrap().content_box();
+    assert!(near(content.width, 38.0), "{content:?}");
+    // A group's label is a row too: a list box of just a group isn't empty.
+    let (doc, tree) = page(
+        r#"<!doctype html><select id="s" size="3"><optgroup label="Grp"></optgroup></select>"#,
+        "select { font-size: 16px }",
+        400.0,
+    );
+    let content = tree.get(id(&doc, "s")).unwrap().content_box();
+    assert!(near(content.height, 3.0 * 20.2), "{content:?}");
+}
