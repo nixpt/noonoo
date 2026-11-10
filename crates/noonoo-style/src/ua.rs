@@ -25,7 +25,7 @@ head, title, meta, link, style, script, base, template, dialog { display: none }
 dialog[open] { display: block }
 span, a, em, strong, b, i, u, small, code, kbd, samp, var, sub, sup, label,
 abbr, cite, q, mark, dfn, s, del, ins, time, bdi, bdo, data, ruby { display: inline }
-img, input, button, select, textarea, video, canvas, progress { display: inline-block }
+img, input, button, select, textarea, video, canvas, svg, progress { display: inline-block }
 input, button, select, textarea {
     font-size: 13.333333px; font-weight: normal; font-style: normal; line-height: normal
 }

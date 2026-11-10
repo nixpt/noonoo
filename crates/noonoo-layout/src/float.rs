@@ -198,6 +198,13 @@ pub(crate) fn shrink_wrapped_width(
             )
         }
         None => {
+            // Replaced content isn't shrink-wrapped: it takes its own size,
+            // which may fill the container (an `<svg>` with only a ratio).
+            if let Some((width, _)) =
+                ctx.image_size(node, style, content_width, ctx.percent_basis())
+            {
+                return (content_width, width + horizontal);
+            }
             // `shrink_to_fit` is already a border-box width, and
             // `layout_element`'s auto branch derives the content width as
             // `available - horizontal`.

@@ -443,7 +443,7 @@ fn presentational_hints(
     // included, so it holds its place before (or without) its pixels.
     if matches!(
         element.name.as_str(),
-        "img" | "video" | "iframe" | "embed" | "object"
+        "img" | "video" | "iframe" | "embed" | "object" | "svg" | "canvas"
     ) {
         for name in ["width", "height"] {
             if let Some(value) = element.attr(name).and_then(dimension_value) {

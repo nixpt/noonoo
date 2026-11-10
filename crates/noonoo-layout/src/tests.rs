@@ -4651,3 +4651,45 @@ fn table_cells_have_no_margins() {
     assert!(near(a.y, t.y + 2.0) && near(a.x, t.x + 2.0), "{a:?}");
     assert!(near(b.x, a.x + a.width + 2.0), "{b:?}");
 }
+
+/// An outer `<svg>` is replaced content sized as Chromium sizes it
+/// (noonoo#7): its `width`/`height` attributes, the `viewBox` ratio for a
+/// missing axis, the available width for a ratio alone, and 300x150 with
+/// nothing to go on. A `<canvas>` is 300x150 unless its attributes say.
+#[test]
+fn an_inline_svg_is_sized_from_its_attributes_and_view_box() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div style="width: 500px">
+        <p>trend <svg id="a" width="80" height="20" viewBox="0 0 80 20"><polyline id="pl" points="0,20 40,0 80,10"/></svg> end</p>
+        <p><svg id="b"><text>hi</text></svg></p>
+        <p><svg id="c" viewBox="0 0 100 50"></svg></p>
+        <p><svg id="d" width="100" viewBox="0 0 100 50"></svg></p>
+        <p><svg id="e" width="50%" height="10"></svg></p>
+        <p><svg id="f" style="width: 40px" viewBox="0 0 20 10"></svg></p>
+        <p><canvas id="g"></canvas><canvas id="h" width="30" height="10"></canvas></p></div>"#,
+        "",
+        800.0,
+    );
+    let size = |name: &str| {
+        let rect = tree.get(id(&doc, name)).unwrap().rect;
+        (rect.width, rect.height)
+    };
+    for (name, expected) in [
+        ("a", (80.0, 20.0)),
+        ("b", (300.0, 150.0)),
+        ("c", (500.0, 250.0)),
+        ("d", (100.0, 50.0)),
+        ("e", (250.0, 10.0)),
+        ("f", (40.0, 20.0)),
+        ("g", (300.0, 150.0)),
+        ("h", (30.0, 10.0)),
+    ] {
+        let (w, h) = size(name);
+        assert!(
+            near(w, expected.0) && near(h, expected.1),
+            "{name}: {w}x{h}"
+        );
+    }
+    // Its children are SVG content, not CSS boxes.
+    assert!(tree.get(id(&doc, "pl")).is_none());
+}
