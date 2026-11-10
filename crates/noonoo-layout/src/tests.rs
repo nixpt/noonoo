@@ -4383,8 +4383,9 @@ fn a_normal_line_holds_its_fallback_faces() {
 }
 
 /// An empty inline element still gets a zero-width box where it sits on
-/// its line, as Chromium reports Hacker News's empty `unv_` spans, but it
-/// never makes a line of its own or changes one's height.
+/// its line, as Chromium reports Hacker News's empty `unv_` spans. It
+/// never makes a line of its own, but in standards mode its font counts
+/// toward the height of a line it shares, as in Chromium.
 #[test]
 fn an_empty_inline_element_has_a_box_but_no_line() {
     let (doc, tree) = page(
@@ -4398,12 +4399,9 @@ fn an_empty_inline_element_has_a_box_but_no_line() {
     assert!(near(rect("d").unwrap().height, 19.2));
     // After a break, it starts no new line.
     assert!(near(rect("q").unwrap().height, 19.2), "{:?}", rect("q"));
-    // Nor does a larger font of its own raise its line.
-    assert!(
-        near(rect("s").unwrap().height, 9.6 * 16.0 / 16.0),
-        "{:?}",
-        rect("s")
-    );
+    // A larger font of its own raises the line it shares: 30px's 24px
+    // ascent and 12px descent.
+    assert!(near(rect("s").unwrap().height, 36.0), "{:?}", rect("s"));
 }
 
 /// Clearance puts a box's border edge at the float's bottom when the

@@ -1133,10 +1133,9 @@ pub(crate) fn layout_inline_run(
                     };
                 rises.insert(fragment.element, rise);
                 fragment_rises.push(rise);
-                let substantial = line[fragment.first..=fragment.last]
-                    .iter()
-                    .any(|item| !item.phantom);
-                let counts = substantial && !quirks || holds_text(Some(fragment.element)) || {
+                // In standards mode every inline box counts, an empty one's
+                // included, unless the line is nothing but empty ones.
+                let counts = !phantoms_only && !quirks || holds_text(Some(fragment.element)) || {
                     let edges = InlineEdges::of(ctx, fragment.element, width);
                     edges.start() + edges.end() > 0.0
                         || edges.padding.top + edges.padding.bottom > 0.0
