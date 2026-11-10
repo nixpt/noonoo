@@ -422,3 +422,24 @@ fn dynamic_state_applies_to_the_originating_element() {
             .is_some()
     );
 }
+
+/// HTML compares some attributes' values without ASCII case in selectors
+/// (`type`, `align`, `rel`, ...): `<input type=RADIO>` is
+/// `input[type=radio]`. Other attributes keep their case.
+#[test]
+fn some_html_attributes_match_without_case() {
+    let mut doc = Document::new();
+    let root = doc.root();
+    let input = doc.create_element("input");
+    doc.mutate().set_attribute(input, "type", "RADIO").unwrap();
+    doc.mutate()
+        .set_attribute(input, "data-kind", "Big")
+        .unwrap();
+    doc.mutate().append_child(root, input).unwrap();
+    let v = view(&doc, input);
+    let matches = |selector: &str| SelectorList::parse(selector).unwrap().matches(&v, ctx());
+    assert!(matches("input[type=radio]"));
+    assert!(matches("[type^=rad]"));
+    assert!(!matches("[data-kind=big]"));
+    assert!(matches("[data-kind=Big]"));
+}

@@ -107,3 +107,37 @@ fn a_table_does_not_inherit_webkit_centre() {
     assert_eq!(of(&doc, &styles, "t").text_align, TextAlign::Start);
     assert_eq!(of(&doc, &styles, "d").text_align, TextAlign::Start);
 }
+
+/// Chromium drops a default margin wherever it still meets the top of the
+/// body or cell after collapsing: an empty box before it (info.cern.ch's
+/// `<HEADER>`, holding only a hidden `title`) doesn't stop it, but a box
+/// with a height, padding or border does.
+#[test]
+fn in_quirks_mode_empty_boxes_before_a_child_dont_keep_its_margin() {
+    let top = |html: &str| {
+        let (doc, styles) = styled(html);
+        of(&doc, &styles, "x").margin.top.clone()
+    };
+    let zero = Dimension::Px(0.0);
+    assert_eq!(
+        top("<header><title>t</title></header><h1 id=x>a</h1>"),
+        zero
+    );
+    assert_eq!(
+        top("<div><span></span><!-- c --></div>\n<p id=x>a</p>"),
+        zero
+    );
+    assert_eq!(
+        top(r#"<div style="position: absolute; height: 9px"></div><p id=x>a</p>"#),
+        zero
+    );
+    for kept in [
+        r#"<div style="height: 20px"></div><p id=x>a</p>"#,
+        r#"<div style="padding-top: 1px"></div><p id=x>a</p>"#,
+        r#"<div style="border-bottom: 1px solid"></div><p id=x>a</p>"#,
+        "<div><img></div><p id=x>a</p>",
+        "<div>text</div><p id=x>a</p>",
+    ] {
+        assert_eq!(top(kept), Dimension::Px(16.0), "{kept}");
+    }
+}

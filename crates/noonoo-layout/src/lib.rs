@@ -707,6 +707,7 @@ pub fn layout_with_images(
         margins: Default::default(),
         measured: HashMap::new(),
         baselines: HashMap::new(),
+        cell_contents: HashMap::new(),
         measuring: 0,
         preferred: Default::default(),
         min_content: Default::default(),
@@ -825,6 +826,9 @@ pub(crate) struct Ctx<'a> {
     /// Measured baselines of atomic inlines (from the border-box top), by
     /// the same inputs: a cached height lays nothing out to read one from.
     pub baselines: HashMap<MeasureKey, Option<f32>>,
+    /// Each table cell's last laid-out content height: what its contents
+    /// take, contained margins included, before the row stretches it.
+    pub(crate) cell_contents: HashMap<NodeId, f32>,
     /// How many [`Ctx::measure_height`] calls are under way: their boxes
     /// are thrown away.
     pub measuring: usize,
@@ -1050,12 +1054,21 @@ impl Ctx<'_> {
         Some(size as f32 * average + (widest - average).max(0.0))
     }
 
-    /// A textarea's content height: `rows` lines (2 unless a positive
-    /// integer), whatever text it holds.
-    fn textarea_height(&self, node: NodeId, style: &ComputedStyle) -> Option<f32> {
+    /// The content height of a control or of media that hasn't loaded,
+    /// when its own height is auto: a textarea's `rows` lines (2 unless a
+    /// positive integer), whatever text it holds, or the content width over
+    /// the [`attribute_ratio`](Self::attribute_ratio).
+    fn intrinsic_height(
+        &self,
+        node: NodeId,
+        style: &ComputedStyle,
+        content_width: f32,
+    ) -> Option<f32> {
         let element = self.document.element(node)?;
         if element.name != "textarea" {
-            return None;
+            return self
+                .attribute_ratio(node)
+                .map(|ratio| content_width / ratio);
         }
         let rows = positive_attribute(element, "rows").unwrap_or(2);
         Some(rows as f32 * self.line_height_of(style))
@@ -1311,11 +1324,13 @@ impl Ctx<'_> {
             return (height, baseline);
         }
         let height = self.layout_element_uncached(node, border_x, border_y, available_width, None);
-        let baseline = self
-            .tree_index(node)
+        let baseline = (!self.is_sized_fallback(node))
+            .then(|| self.tree_index(node))
+            .flatten()
             .and_then(|index| self.box_baseline(index))
             .map(|baseline| baseline - border_y)
-            .or_else(|| self.text_field_baseline(node));
+            .or_else(|| self.text_field_baseline(node))
+            .or_else(|| self.toggle_baseline(node, height));
         if let Some(key) = key
             && self.establishes_bfc(node, self.style(node))
         {
@@ -1323,6 +1338,25 @@ impl Ctx<'_> {
             self.baselines.insert(key, baseline);
         }
         (height, baseline)
+    }
+
+    /// Whether `node` is an `<img>` without its image but with a width or
+    /// height: Chromium clips its alt text to that size, so like any
+    /// clipping inline-block it sits on its bottom margin edge.
+    fn is_sized_fallback(&self, node: NodeId) -> bool {
+        let style = self.style(node);
+        self.document.element(node).is_some_and(|e| e.name == "img")
+            && self.image(node).is_none()
+            && (style.width != Dimension::Auto || style.height != Dimension::Auto)
+    }
+
+    /// A checkbox or radio's baseline, from its border-box top: its border
+    /// box's bottom, as Chromium aligns one (not its margin box's).
+    fn toggle_baseline(&self, node: NodeId, border_box_height: f32) -> Option<f32> {
+        let element = self.document.element(node)?;
+        let kind = element.attr("type")?.to_ascii_lowercase();
+        (element.name == "input" && matches!(kind.as_str(), "checkbox" | "radio"))
+            .then_some(border_box_height)
     }
 
     /// An empty text field's baseline, from its border-box top: where its
@@ -1385,8 +1419,9 @@ impl Ctx<'_> {
         // normalise them all to border boxes, clamp — `min` wins over `max` —
         // and derive the content width. An auto width fills the available
         // width (its border box is the whole reference).
+        // A border box is never narrower than its padding and border.
         let to_border_box = |width: f32| match style.box_sizing {
-            BoxSizing::BorderBox => width,
+            BoxSizing::BorderBox => width.max(horizontal),
             BoxSizing::ContentBox => (width + horizontal).max(0.0),
         };
         let specified = resolve::dimension(style.width.clone(), available_width).map(to_border_box);
@@ -1475,7 +1510,7 @@ impl Ctx<'_> {
         // In quirks mode a cell's `height` is its border box (padding inside).
         let border_box_cell = style.display == Display::TableCell && self.is_quirks();
         let to_border_box_height = |height: f32| match style.box_sizing {
-            BoxSizing::BorderBox => height,
+            BoxSizing::BorderBox => height.max(vertical),
             BoxSizing::ContentBox if border_box_cell => height.max(vertical),
             BoxSizing::ContentBox => height + vertical,
         };
@@ -1510,12 +1545,19 @@ impl Ctx<'_> {
             .flexed
             .take_if(|(flexed, _)| *flexed == node)
             .map(|(_, height)| height);
+        // A cell's row decides its height (never below what the cell asked
+        // for), so the row's height wins over the cell's own.
+        let (first, second) = if style.display == Display::TableCell {
+            (definite_height, specified_height)
+        } else {
+            (specified_height, definite_height)
+        };
         let definite_border_height = flexed
             .or(replaced.map(|(_, height)| height + vertical))
-            .or(specified_height)
-            .or(definite_height)
+            .or(first)
+            .or(second)
             .or_else(|| {
-                self.textarea_height(node, &style)
+                self.intrinsic_height(node, &style, content_width)
                     .map(|height| height + vertical)
             })
             .map(clamp_height);
@@ -1597,6 +1639,9 @@ impl Ctx<'_> {
 
         let border_box_height =
             definite_border_height.unwrap_or_else(|| clamp_height(content_height + vertical));
+        if style.display == Display::TableCell {
+            self.cell_contents.insert(node, content_height);
+        }
 
         let padding_box = Rect::new(
             border_x + border.left,

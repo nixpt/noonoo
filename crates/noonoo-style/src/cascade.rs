@@ -310,11 +310,20 @@ fn winners_for(
     winners
 }
 
-/// HTML's rendering section, quirks mode: a child of `body`, `td` or `th`
-/// with no substantial sibling before it loses its default (UA) top
-/// margin; a child of `td` or `th` with none after it loses its default
-/// bottom margin. Author margins stay.
-fn drop_edge_margins(doc: &Document, id: NodeId, winners: &mut HashMap<Property, Candidate>) {
+/// Quirks mode: a child of `body`, `td` or `th` whose top margin still
+/// meets its container's top loses its default (UA) top margin, as Chromium
+/// drops a "quirky" margin: nothing before it but boxes its margin
+/// collapses through (see [`collapses_through`], judged on their computed
+/// styles, which document order has ready). A child of `td` or `th` with
+/// nothing substantial after it loses its default bottom margin (HTML's
+/// rendering section; the siblings after aren't styled yet). Author margins
+/// stay.
+fn drop_edge_margins(
+    doc: &Document,
+    id: NodeId,
+    styled: &[Option<ComputedStyle>],
+    winners: &mut HashMap<Property, Candidate>,
+) {
     let Some(parent) = doc.tree().parent(id) else {
         return;
     };
@@ -345,12 +354,75 @@ fn drop_edge_margins(doc: &Document, id: NodeId, winners: &mut HashMap<Property,
             winners.remove(&property);
         }
     };
-    if !siblings[..at].iter().any(|&node| substantial(node)) {
+    if siblings[..at]
+        .iter()
+        .all(|&node| collapses_through(doc, styled, node))
+    {
         drop_default(Property::MarginTop);
     }
     if cell && !siblings[at + 1..].iter().any(|&node| substantial(node)) {
         drop_default(Property::MarginBottom);
     }
+}
+
+/// Whether a margin collapses through `node`, already styled, to whatever
+/// precedes it: white space, comments, boxes out of flow or not rendered,
+/// and empty boxes with no height, padding or border whose contents
+/// collapse through too. Replaced elements and line breaks never do.
+fn collapses_through(doc: &Document, styled: &[Option<ComputedStyle>], node: NodeId) -> bool {
+    match doc.node(node) {
+        Some(noonoo_dom::NodeData::Text(text)) => {
+            return text
+                .trim_matches(|c: char| c.is_ascii_whitespace())
+                .is_empty();
+        }
+        Some(noonoo_dom::NodeData::Element(element)) => {
+            if matches!(
+                element.name.as_str(),
+                "img"
+                    | "input"
+                    | "textarea"
+                    | "select"
+                    | "button"
+                    | "svg"
+                    | "canvas"
+                    | "video"
+                    | "audio"
+                    | "iframe"
+                    | "embed"
+                    | "object"
+                    | "hr"
+                    | "br"
+                    | "meter"
+                    | "progress"
+            ) {
+                return false;
+            }
+        }
+        _ => return true,
+    }
+    let Some(style) = styled.get(node.index()).and_then(Option::as_ref) else {
+        return false;
+    };
+    if style.display == Display::None
+        || matches!(style.position, Position::Absolute | Position::Fixed)
+        || style.float != Float::None
+    {
+        return true;
+    }
+    let zero = |length: &Length| matches!(length, Length::Px(px) if *px == 0.0);
+    let no_border = |width: f32, style: BorderStyle| width == 0.0 || !style.is_visible();
+    let flat = matches!(style.height, Dimension::Auto | Dimension::Px(0.0))
+        && matches!(style.min_height, Dimension::Auto | Dimension::Px(0.0))
+        && zero(&style.padding.top)
+        && zero(&style.padding.bottom)
+        && no_border(style.border_width.top, style.border_style.top)
+        && no_border(style.border_width.bottom, style.border_style.bottom);
+    flat && doc
+        .tree()
+        .children(node)
+        .iter()
+        .all(|&child| collapses_through(doc, styled, child))
 }
 
 /// The CSS an element's presentational attributes ask for, as
@@ -379,10 +451,25 @@ fn presentational_hints(
             }
         }
     }
+    if matches!(element.name.as_str(), "table" | "tr" | "td" | "th")
+        && let Some(height) = element.attr("height").and_then(dimension_attribute)
+    {
+        hints.push(("height", height));
+    }
     if element.name == "table"
         && let Some(spacing) = element.attr("cellspacing").and_then(non_negative_integer)
     {
         hints.push(("border-spacing", format!("{spacing}px")));
+    }
+    if matches!(
+        element.name.as_str(),
+        "thead" | "tbody" | "tfoot" | "tr" | "td" | "th" | "col" | "colgroup"
+    ) && let Some(valign) = element.attr("valign")
+    {
+        let valign = valign.to_ascii_lowercase();
+        if matches!(valign.as_str(), "top" | "middle" | "bottom" | "baseline") {
+            hints.push(("vertical-align", valign));
+        }
     }
     if let Some(align) = element.attr("align") {
         hints.extend(align_hints(&element.name, &align.to_ascii_lowercase()));
@@ -758,7 +845,7 @@ impl Cascade {
             pass.interaction,
         );
         if doc.quirks_mode() == noonoo_dom::QuirksMode::Quirks {
-            drop_edge_margins(doc, id, &mut winners);
+            drop_edge_margins(doc, id, &styles.entries, &mut winners);
         }
         let mut resolved = resolve(
             &winners,

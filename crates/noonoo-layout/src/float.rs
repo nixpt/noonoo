@@ -57,15 +57,26 @@ impl Floats {
     /// content area starts at `x` and is `width` wide, minus the floats that
     /// overlap the vertical range `[top, bottom)`.
     pub fn band(&self, x: f32, width: f32, top: f32, bottom: f32) -> (f32, f32) {
+        self.span(x, width, |rect| rect.y < bottom && rect.bottom() > top)
+    }
+
+    /// The free span at the single height `y`: what the floats covering
+    /// it (from their top, up to but not including their bottom) leave.
+    /// Not `band(y, y + f32::EPSILON)`: past y = 2 that sum rounds back to
+    /// `y`, an empty band no float overlaps.
+    pub fn band_at(&self, x: f32, width: f32, y: f32) -> (f32, f32) {
+        self.span(x, width, |rect| rect.y <= y && rect.bottom() > y)
+    }
+
+    /// What's left of `x..x + width` beside the floats `covers` picks.
+    fn span(&self, x: f32, width: f32, covers: impl Fn(&Rect) -> bool) -> (f32, f32) {
         let mut left = x;
         let mut right = x + width;
-        for slot in &self.slots {
-            if slot.rect.y < bottom && slot.rect.bottom() > top {
-                match slot.side {
-                    Float::Left => left = left.max(slot.rect.right()),
-                    Float::Right => right = right.min(slot.rect.x),
-                    Float::None => {}
-                }
+        for slot in self.slots.iter().filter(|slot| covers(&slot.rect)) {
+            match slot.side {
+                Float::Left => left = left.max(slot.rect.right()),
+                Float::Right => right = right.min(slot.rect.x),
+                Float::None => {}
             }
         }
         (left, right)
@@ -93,7 +104,7 @@ impl Floats {
         self.slots
             .iter()
             .map(|slot| slot.rect.bottom())
-            .filter(|bottom| *bottom > y + f32::EPSILON)
+            .filter(|bottom| *bottom > y)
             .reduce(f32::min)
     }
 
@@ -128,9 +139,7 @@ pub(crate) fn place(ctx: &mut Ctx<'_>, node: NodeId, content_x: f32, content_wid
     // Drop down past earlier floats until the float fits beside them.
     let mut y = ctx.floats().clearance(style.clear, top);
     loop {
-        let (band_left, band_right) =
-            ctx.floats()
-                .band(content_x, content_width, y, y + f32::EPSILON);
+        let (band_left, band_right) = ctx.floats().band_at(content_x, content_width, y);
         if band_right - band_left >= outer_width {
             break;
         }
@@ -139,9 +148,7 @@ pub(crate) fn place(ctx: &mut Ctx<'_>, node: NodeId, content_x: f32, content_wid
             None => break, // nothing left to dodge: overflow the band
         }
     }
-    let (band_left, band_right) = ctx
-        .floats()
-        .band(content_x, content_width, y, y + f32::EPSILON);
+    let (band_left, band_right) = ctx.floats().band_at(content_x, content_width, y);
     let border_x = match side {
         Float::Left => band_left + margin.left,
         Float::Right => (band_right - margin.right - border_box_width).max(band_left + margin.left),
@@ -318,6 +325,9 @@ fn preferred_content(ctx: &Ctx<'_>, node: NodeId) -> f32 {
     }
     if let Some(width) = ctx.text_field_width(node, style) {
         return width;
+    }
+    if ctx.is_unsized_fallback(node, style) {
+        return 0.0;
     }
     if let Some(text) = ctx.placeholder(node) {
         return text_width(ctx, &text, style);
@@ -599,6 +609,9 @@ fn min_content(ctx: &Ctx<'_>, node: NodeId, style: &ComputedStyle) -> f32 {
     }
     if let Some(width) = ctx.text_field_width(node, style) {
         return width;
+    }
+    if ctx.is_unsized_fallback(node, style) {
+        return 0.0;
     }
     if let Some(text) = ctx.placeholder(node) {
         return text_min_width(ctx, &text, style);

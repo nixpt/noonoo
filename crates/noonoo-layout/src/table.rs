@@ -32,7 +32,7 @@
 //!   modelled; stray content contributes nothing.
 
 use noonoo_dom::NodeId;
-use noonoo_style::{BorderCollapse, ComputedStyle, Dimension, Display};
+use noonoo_style::{BorderCollapse, ComputedStyle, Dimension, Display, VerticalAlign};
 
 use crate::{Ctx, float, resolve};
 
@@ -49,6 +49,8 @@ struct Cell {
 #[derive(Default)]
 struct Row {
     cells: Vec<Cell>,
+    /// The row's own `height` in pixels: the least it is, cells or not.
+    height: f32,
 }
 
 /// How many columns one `colspan` may claim, so a corrupt or insane
@@ -103,7 +105,7 @@ pub(crate) fn layout_table_children(
             measured.push(height + margin.top + margin.bottom);
         }
         ctx.prune_pending();
-        let row_height = measured.iter().copied().fold(0.0_f32, f32::max);
+        let row_height = measured.iter().copied().fold(row.height, f32::max);
 
         for (cell, height) in row.cells.iter().zip(&measured) {
             let cell_width = span_width(cell.column, cell.span);
@@ -124,6 +126,7 @@ pub(crate) fn layout_table_children(
             );
             ctx.flexed_width = None;
             if let Some(index) = ctx.tree_index(cell.node) {
+                align_cell_content(ctx, cell.node, index, ctx.style(cell.node).vertical_align);
                 indices.push(index);
                 if collapse {
                     mask_collapsed_borders(ctx, index, cell, &rows, row_index);
@@ -134,6 +137,31 @@ pub(crate) fn layout_table_children(
     }
 
     (indices, cursor_y - content_y)
+}
+
+/// Move a laid-out cell's content down within its content box as its
+/// `vertical-align` says: `middle` centres it, `bottom` sinks it, anything
+/// else (`top`, `baseline` approximated) leaves it at the top. What the
+/// content takes is the height its layout gave it (margins it contains
+/// included, as a quirks-mode form's). The cell's own box keeps filling
+/// the row.
+fn align_cell_content(ctx: &mut Ctx<'_>, node: NodeId, index: usize, align: VerticalAlign) {
+    let share = match align {
+        VerticalAlign::Middle => 0.5,
+        VerticalAlign::Bottom => 1.0,
+        _ => return,
+    };
+    let Some(&taken) = ctx.cell_contents.get(&node) else {
+        return;
+    };
+    let cell = &ctx.tree.boxes[index];
+    let children = cell.children.clone();
+    let free = cell.content_box().height - taken;
+    if free > 0.0 {
+        for child in children {
+            ctx.shift_subtree(child, 0.0, free * share);
+        }
+    }
 }
 
 /// A table's `border-spacing`, `(horizontal, vertical)`: none when its
@@ -512,7 +540,8 @@ fn row_of(ctx: &Ctx<'_>, node: NodeId) -> Row {
         column += cell.span;
         cells.push(cell);
     }
-    Row { cells }
+    let height = resolve::definite(&ctx.style(node).height).unwrap_or(0.0);
+    Row { cells, height }
 }
 
 fn cell_of(ctx: &Ctx<'_>, node: NodeId, column: usize) -> Cell {

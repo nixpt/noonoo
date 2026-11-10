@@ -13,8 +13,9 @@ html, body, div, p, section, article, header, footer, main, nav, aside,
 figure, figcaption, blockquote, pre, form, fieldset, ul, ol, dl, dt, dd,
 h1, h2, h3, h4, h5, h6, hr, address, center, details, summary,
 hgroup, legend, listing, menu, dir, plaintext, search, xmp, optgroup { display: block }
-table { display: table; border-spacing: 2px }
-thead, tbody, tfoot { display: table-row-group }
+table { display: table; border-spacing: 2px; box-sizing: border-box }
+thead, tbody, tfoot { display: table-row-group; vertical-align: middle }
+tr, td, th { vertical-align: inherit }
 tr { display: table-row }
 td, th { display: table-cell }
 colgroup { display: table-column-group }
@@ -58,12 +59,19 @@ em, i, cite, var, dfn, address { font-style: italic }
 pre, code, kbd, samp, listing, plaintext, xmp { font-family: monospace }
 a { color: #0000ee; text-decoration: underline }
 [hidden] { display: none }
+input[type="hidden"] { display: none !important }
 input:not([type]), input[type="text"], input[type="search"], input[type="email"],
 input[type="url"], input[type="tel"], input[type="password"], input[type="number"]
 { padding: 1px 2px; border: 2px inset #767676 }
 textarea {
     padding: 2px; border: 1px solid #767676; font-family: monospace; overflow: auto
 }
+button, input[type="button"], input[type="submit"], input[type="reset"] {
+    padding: 1px 6px; border: 2px outset #767676
+}
+input[type="checkbox"], input[type="radio"] { width: 13px; height: 13px; box-sizing: border-box }
+input[type="checkbox"] { margin: 3px 3px 3px 4px }
+input[type="radio"] { margin: 3px 3px 0 5px }
 "#;
 
 /// The user-agent rules for quirks-mode documents only, after HTML's

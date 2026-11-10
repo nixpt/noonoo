@@ -1390,7 +1390,9 @@ fn a_float_in_a_flex_item_stays_inside_it() {
 #[test]
 fn an_inline_block_contains_its_floats() {
     let (doc, tree) = page(
-        r#"<div><span id="ib"><div id="f"></div></span></div><p id="p">after</p>"#,
+        // Standards mode: quirks mode drops the strut from a line with no
+        // text.
+        r#"<!doctype html><div><span id="ib"><div id="f"></div></span></div><p id="p">after</p>"#,
         "body { margin: 0 } p { margin: 0 } div { line-height: 10px }
          #ib { display: inline-block; width: 100px; height: 10px }
          #f { float: left; width: 50px; height: 60px }",
@@ -2312,7 +2314,8 @@ fn a_text_field_is_as_wide_as_its_size() {
     assert_eq!(width("a"), 160.0);
     assert_eq!(width("b"), 40.0);
     assert_eq!(width("c"), 50.0);
-    assert_eq!(width("d"), 0.0, "only text fields take a size");
+    // A checkbox takes no `size`: it is its own 13px.
+    assert_eq!(width("d"), 13.0, "only text fields take a size");
 }
 
 /// The text boxes' (text, y) in reading order.
@@ -4004,4 +4007,290 @@ fn img_width_and_height_attributes_size_it_before_it_loads() {
     assert_eq!(size("a"), (50.0, 40.0));
     assert_eq!(size("b").0, 60.0);
     assert_eq!(size("c"), (20.0, 40.0));
+}
+
+/// A collapsed space at the start of an inline element belongs to it:
+/// Chromium's link starts at the space and is a space wider
+/// (info.cern.ch's `<A ...>\nhypermedia</A>`, lite.cnn's `<span> | </span>`).
+#[test]
+fn a_leading_space_inside_an_inline_is_part_of_it() {
+    let (doc, tree) = page(
+        "<p>a<span id=s> b</span> c<span id=t> | </span>d</p>",
+        "p { margin: 0 }",
+        400.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    // MetricShaper: 8px a character.
+    assert_eq!((rect("s").x, rect("s").width), (8.0, 16.0));
+    // "a b c" then " | " (its trailing space collapses into nothing after it,
+    // but it is the span's own), then "d".
+    assert_eq!((rect("t").x, rect("t").width), (40.0, 24.0)); // Outside the span, the space stays outside; a padded span spans its
+    // padding and its space.
+    let (doc, tree) = page(
+        r#"<p>a <span id=u>b</span><span id=v style="padding: 0 5px"> c </span>d</p>"#,
+        "p { margin: 0 }",
+        400.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert_eq!((rect("u").x, rect("u").width), (16.0, 8.0));
+    assert_eq!((rect("v").x, rect("v").width), (24.0, 34.0));
+}
+
+/// A table's `width` is its border box, as Chromium's UA sheet sets
+/// `box-sizing: border-box` on tables (HN's `<table width=100%
+/// style="padding:2px">` fills its cell, no wider).
+#[test]
+fn a_tables_width_includes_its_padding_and_border() {
+    let (doc, tree) = page(
+        r#"<div style="width: 200px"><table id=t width="100%" style="padding: 2px; border: 3px solid"><tr><td>x</td></tr></table><table id=u style="width: 100px; padding: 5px"><tr><td>x</td></tr></table></div>"#,
+        "",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "t")).unwrap().rect.width, 200.0);
+    assert_eq!(tree.get(id(&doc, "u")).unwrap().rect.width, 100.0);
+}
+
+/// A cell is as tall as its row, whatever its own `height` (HN's header
+/// cell asks for 10px beside a 20px logo cell).
+#[test]
+fn a_cell_stretches_to_its_row_past_its_own_height() {
+    let (doc, tree) = page(
+        r#"<table style="border-spacing: 0"><tr><td style="height: 20px; padding: 0">a</td><td id=c style="height: 10px; padding: 0">b</td></tr></table>"#,
+        "",
+        400.0,
+    );
+    assert_eq!(tree.get(id(&doc, "c")).unwrap().rect.height, 20.0);
+}
+
+/// A cell's content sits in the middle of its row by default, or at the
+/// top or bottom as `vertical-align` (or `valign`) says; the cell's own
+/// box still fills the row.
+#[test]
+fn cell_content_aligns_vertically_in_its_row() {
+    let (doc, tree) = page(
+        r#"<table style="border-spacing: 0"><tr><td style="height: 40px">a</td><td id=m>mid</td><td valign=top>top</td><td style="vertical-align: bottom">bot</td></tr></table>"#,
+        "td { padding: 0 }",
+        400.0,
+    );
+    // MetricShaper: a line is 19.2px; the row 40px.
+    assert!(near(text_y(&tree, "mid"), 10.4), "{}", text_y(&tree, "mid"));
+    assert!(near(text_y(&tree, "top"), 0.0));
+    assert!(near(text_y(&tree, "bot"), 20.8), "{}", text_y(&tree, "bot"));
+    assert_eq!(tree.get(id(&doc, "m")).unwrap().rect.height, 40.0);
+}
+
+/// A row is at least its own `height`, cells or not (HN's
+/// `<tr style='height:10px'/>` spacers).
+#[test]
+fn a_rows_height_holds_even_when_empty() {
+    let (doc, tree) = page(
+        r#"<table style="border-spacing: 0"><tr style="height: 10px"></tr><tr style="height: 30px"><td id=c style="padding: 0">x</td></tr><tr><td id=d>y</td></tr></table>"#,
+        "",
+        400.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert_eq!((rect("c").y, rect("c").height), (10.0, 30.0));
+    assert_eq!(rect("d").y, 40.0);
+}
+
+/// A collapsed space is as wide as a space in the font of the text it sits
+/// in, not the paragraph's (HN's small `(site)` after a title wrapped a
+/// line Chromium kept whole).
+#[test]
+fn a_space_takes_the_width_of_its_own_font() {
+    let (doc, tree) = page(
+        r#"<p>a<span id=s style="font-size: 8px"> b</span> <b id=w>c</b></p>"#,
+        "p { margin: 0; font-size: 16px } b { font-weight: normal }",
+        400.0,
+    );
+    // MetricShaper: half the font size a character.
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    assert_eq!((rect("s").x, rect("s").width), (8.0, 8.0));
+    // The space after the span is the paragraph's: 8px.
+    assert_eq!(rect("w").x, 24.0);
+}
+
+/// Quirks mode's line height quirk: a line with no text has no strut, so a
+/// lone image's line is the image (HN's `<img height=10>` spacer before its
+/// footer). In standards mode the strut holds the line open as before.
+#[test]
+fn in_quirks_mode_a_line_without_text_has_no_strut() {
+    let html =
+        r#"<div id=d><img width=10 height=10></div><div id=e><img width=10 height=10> x</div>"#;
+    let (doc, tree) = page(html, "", 400.0);
+    let height = |tree: &LayoutTree, doc: &Document, name: &str| {
+        tree.get(id(doc, name)).unwrap().rect.height
+    };
+    assert_eq!(height(&tree, &doc, "d"), 10.0);
+    // Text on the line brings the strut back.
+    assert!(
+        near(height(&tree, &doc, "e"), 19.2),
+        "{}",
+        height(&tree, &doc, "e")
+    );
+    let (doc, tree) = page(&format!("<!doctype html>{html}"), "", 400.0);
+    assert!(
+        near(height(&tree, &doc, "d"), 19.2),
+        "{}",
+        height(&tree, &doc, "d")
+    );
+}
+
+/// A cell centres its content by the height its layout gave it, margins it
+/// contains included: HN's footer cell ends in a form whose quirks-mode
+/// bottom margin stays in the cell, leaving no room to centre in.
+#[test]
+fn a_cell_centres_its_content_margins_included() {
+    let (_, tree) = page(
+        r#"<table style="border-spacing: 0"><tr><td style="height: 60px; padding: 0">a</td><td style="padding: 0"><div><p style="margin: 0 0 20px">x</p></div></td></tr></table>"#,
+        "",
+        400.0,
+    );
+    // 19.2px of line and 20px of margin in a 60px row: 20.8px to share.
+    assert!(near(text_y(&tree, "x"), 10.4), "{}", text_y(&tree, "x"));
+}
+
+/// The quirk counts only text an inline box holds itself: small text in a
+/// span doesn't bring back its block's larger strut (HN's footer links).
+#[test]
+fn in_quirks_mode_only_direct_text_brings_back_a_strut() {
+    let html = r#"<div id=a style="font-size: 20px"><span style="font-size: 10px">x</span></div><div id=b style="font-size: 20px">y<span style="font-size: 10px">x</span></div><div id=c style="font-size: 20px"><span style="font-size: 10px"><b style="font-size: 5px">z</b></span></div>"#;
+    let (doc, tree) = page(html, "b { font-weight: normal }", 400.0);
+    let height = |name: &str| tree.get(id(&doc, name)).unwrap().rect.height;
+    // MetricShaper: a line is 1.2em.
+    assert!(near(height("a"), 12.0), "{}", height("a"));
+    assert!(near(height("b"), 24.0), "{}", height("b"));
+    // The span holds no text itself: only the 5px text's box counts.
+    assert!(near(height("c"), 6.0), "{}", height("c"));
+}
+
+/// A `border-box` size never squeezes the padding and border: the content
+/// box is at least empty, so the box is at least its edges.
+#[test]
+fn a_border_box_size_is_at_least_its_padding_and_border() {
+    let (doc, tree) = page(
+        r#"<div id=d style="box-sizing: border-box; width: 10px; height: 10px; padding: 8px; border: 1px solid"></div>"#,
+        "",
+        400.0,
+    );
+    let rect = tree.get(id(&doc, "d")).unwrap().rect;
+    assert_eq!((rect.width, rect.height), (18.0, 18.0));
+}
+
+/// A checkbox or radio's baseline is the bottom of its border box, as in
+/// Chromium: its bottom margin hangs below the line's baseline instead of
+/// lifting it (Wikipedia's menu label sat 3px low).
+#[test]
+fn a_checkboxs_baseline_is_its_border_box_bottom() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div id=d><input type=checkbox>x</div>"#,
+        "body { margin: 0 } div { font-size: 16px }",
+        400.0,
+    );
+    // MetricShaper strut: 12.8 above, 6.4 below; the checkbox 3 + 13 above
+    // and its 3px margin below.
+    assert!(near(text_y(&tree, "x"), 3.2), "{}", text_y(&tree, "x"));
+    assert!(near(tree.get(id(&doc, "d")).unwrap().rect.height, 22.4));
+}
+
+/// An image that hasn't loaded but has a size shows its alt text clipped
+/// in that size, as Chromium does, so its baseline is its bottom edge, not
+/// the alt text's (Wikipedia's wordmark and tagline sat top-aligned).
+#[test]
+fn a_sized_unloaded_image_sits_on_its_bottom_edge() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div><img id=a alt="Wikipedia" style="width: 140px; height: 22px"><img id=b alt="The Free Encyclopedia" width=140 height=11></div>"#,
+        "body { margin: 0 }",
+        400.0,
+    );
+    let bottom = |name| {
+        let rect = tree.get(id(&doc, name)).unwrap().rect;
+        rect.y + rect.height
+    };
+    assert!(
+        near(bottom("a"), bottom("b")),
+        "{} vs {}",
+        bottom("a"),
+        bottom("b")
+    );
+}
+
+/// A box the margins collapse through sits where it would with a bottom
+/// border (CSS 2 §8.3.1): after the margin before it and its own leading
+/// margins, as Chromium places Wikipedia's empty menus. Content after it
+/// doesn't move.
+#[test]
+fn a_collapsed_through_box_sits_below_its_top_margin() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div>a</div><div id=e><ul id=u></ul></div><div id=n>b</div>"#,
+        "body { margin: 0 } div { font-size: 16px }",
+        400.0,
+    );
+    let y = |name| tree.get(id(&doc, name)).unwrap().rect.y;
+    assert!(near(y("e"), 35.2), "{}", y("e"));
+    assert!(near(y("u"), 35.2), "{}", y("u"));
+    assert!(near(y("n"), 35.2), "{}", y("n"));
+}
+
+/// Embedded content that hasn't loaded keeps the ratio of its `width` and
+/// `height` attributes on an auto axis (HTML maps them to `aspect-ratio:
+/// auto w / h`), as gnu.org's video does with `height: auto`.
+#[test]
+fn unloaded_media_keeps_its_attribute_ratio() {
+    let (doc, tree) = page(
+        r#"<!doctype html><video id=v width=512 height=288></video><img id=i width=40 height=30 alt="x">"#,
+        "body { margin: 0 } video, img { display: block; width: 256px; height: auto; padding: 2px }",
+        400.0,
+    );
+    let content = |name| tree.get(id(&doc, name)).unwrap().content_box().height;
+    assert!(near(content("v"), 144.0), "{}", content("v"));
+    assert!(near(content("i"), 192.0), "{}", content("i"));
+}
+
+/// A block-level replaced element is never collapsed through, even when
+/// its children (a video's `source`s and `track`s) show nothing: the
+/// content after it starts below it, as on gnu.org.
+#[test]
+fn a_block_video_holds_its_place() {
+    let (doc, tree) = page(
+        r#"<!doctype html><video id=v width=512 height=288><source src=a.webm><track src=a.vtt></video><p id=p>x</p>"#,
+        "body { margin: 0 } video { display: block; width: 256px; height: auto } source, track { display: none } p { margin: 0 }",
+        400.0,
+    );
+    let y = tree.get(id(&doc, "p")).unwrap().rect.y;
+    assert!(near(y, 144.0), "{y}");
+}
+
+/// An image that hasn't loaded and has a percentage width has no natural
+/// size, so its alt text adds nothing to a shrink-to-fit width: the box
+/// shrinks to its other content and the image takes its share of that, as
+/// in Chromium (gnu.org's distro thumbnails).
+#[test]
+fn a_percentage_width_unloaded_image_adds_no_intrinsic_width() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div id=d><img alt="a long description of the screenshot"><br>xx</div>"#,
+        "body { margin: 0 } div { display: inline-block; font-size: 16px } img { width: 50% }",
+        800.0,
+    );
+    let width = tree.get(id(&doc, "d")).unwrap().rect.width;
+    assert!(near(width, 16.0), "{width}");
+}
+
+/// A float that doesn't fit beside an earlier one drops below it, wherever
+/// the line is: the fit test once rounded away below y = 2 (`y +
+/// f32::EPSILON == y`), so gnu.org's two columns overlapped instead of
+/// stacking as in Chromium.
+#[test]
+fn a_float_too_wide_for_the_line_drops_below_the_last() {
+    let text = "word ".repeat(80);
+    let (doc, tree) = page(
+        &format!(
+            r#"<!doctype html><div><div id=a style="float: left">{text}</div><div id=b style="float: right">word word</div></div>"#
+        ),
+        "body { margin: 8px }",
+        400.0,
+    );
+    let a = tree.get(id(&doc, "a")).unwrap().rect;
+    let b = tree.get(id(&doc, "b")).unwrap().rect;
+    assert!(near(b.y, a.y + a.height), "{a:?} {b:?}");
 }
