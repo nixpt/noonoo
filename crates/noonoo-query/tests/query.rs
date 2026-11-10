@@ -119,3 +119,21 @@ fn a_malformed_selector_is_an_error_not_a_panic() {
         assert!(query_selector_all(&doc, bad).is_err(), "{bad:?}");
     }
 }
+
+/// Selectors § 6.4: an attribute selector's name matches an HTML element's
+/// attributes ignoring ASCII case, a foreign (SVG) element's exactly.
+#[test]
+fn attribute_names_match_by_namespace() {
+    let doc =
+        noonoo_html::parse(r#"<div id=h data-x="1"></div><svg id=s viewBox="0 0 1 1"></svg>"#);
+    let h = doc.get_element_by_id("h").unwrap();
+    let s = doc.get_element_by_id("s").unwrap();
+    assert!(noonoo_query::matches(&doc, h, "[DATA-X]").unwrap());
+    assert!(noonoo_query::matches(&doc, h, "[data-x]").unwrap());
+    assert!(noonoo_query::matches(&doc, s, "[viewBox]").unwrap());
+    assert!(!noonoo_query::matches(&doc, s, "[viewbox]").unwrap());
+    assert_eq!(
+        noonoo_query::query_selector(&doc, "[viewBox='0 0 1 1']").unwrap(),
+        Some(s)
+    );
+}

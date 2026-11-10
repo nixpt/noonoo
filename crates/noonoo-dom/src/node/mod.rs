@@ -1,14 +1,31 @@
 //! The node payload model.
 //!
-//! A node is one of a small closed set of kinds. Elements carry a tag name and
-//! an ordered attribute list; text, comments and doctypes carry a string. This
-//! is deliberately parser-agnostic and CSS-agnostic — no `stylo` `LocalName`,
-//! no namespace machinery — so the tree stands alone.
+//! A node is one of a small closed set of kinds. Elements carry a tag name,
+//! the namespace they belong to and an ordered attribute list; text, comments
+//! and doctypes carry a string. This is deliberately parser-agnostic and
+//! CSS-agnostic — no `stylo` `LocalName`, no namespace URIs or prefixes — so
+//! the tree stands alone.
+
+/// Which vocabulary an element belongs to: HTML, or foreign content (SVG,
+/// MathML) inside it. An HTML element's attribute names are ASCII
+/// lowercase; a foreign one keeps their case (`viewBox`), as the HTML
+/// parser adjusts them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub enum Namespace {
+    /// The HTML namespace (the default).
+    #[default]
+    Html,
+    /// SVG.
+    Svg,
+    /// MathML.
+    MathMl,
+}
 
 /// An element attribute, name/value, in document order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Attribute {
-    /// The attribute name (lowercased on ingest).
+    /// The attribute name: lowercase on an HTML element, as given (the HTML
+    /// parser adjusts SVG's camelCase names) on a foreign one.
     pub name: String,
     /// The attribute value.
     pub value: String,
@@ -19,16 +36,34 @@ pub struct Attribute {
 pub struct ElementData {
     /// The tag name, lowercased.
     pub name: String,
+    /// The namespace it belongs to.
+    pub namespace: Namespace,
     /// Attributes, in insertion order.
     pub attrs: Vec<Attribute>,
 }
 
 impl ElementData {
-    /// Create an element with the given (lowercased) tag name.
+    /// Create an HTML element with the given (lowercased) tag name.
     pub fn new(name: impl Into<String>) -> Self {
+        Self::new_ns(name, Namespace::Html)
+    }
+
+    /// Create an element in `namespace` with the given (lowercased) tag
+    /// name.
+    pub fn new_ns(name: impl Into<String>, namespace: Namespace) -> Self {
         Self {
             name: name.into().to_ascii_lowercase(),
+            namespace,
             attrs: Vec::new(),
+        }
+    }
+
+    /// The name an attribute set or removed by `name` has here: ASCII
+    /// lowercase on an HTML element, as given on a foreign one.
+    pub fn attribute_name(&self, name: &str) -> String {
+        match self.namespace {
+            Namespace::Html => name.to_ascii_lowercase(),
+            Namespace::Svg | Namespace::MathMl => name.to_owned(),
         }
     }
 

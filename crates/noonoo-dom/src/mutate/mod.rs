@@ -204,7 +204,8 @@ impl<'a> DocumentMutator<'a> {
             .data
             .as_element_mut()
             .ok_or(MutError::NotAnElement(element))?;
-        data.set_attr(&name.to_ascii_lowercase(), value);
+        let name = data.attribute_name(name);
+        data.set_attr(&name, value);
         self.record(Change::Attributes(element));
         Ok(())
     }
@@ -219,7 +220,8 @@ impl<'a> DocumentMutator<'a> {
             .data
             .as_element_mut()
             .ok_or(MutError::NotAnElement(element))?;
-        data.remove_attr(&name.to_ascii_lowercase());
+        let name = data.attribute_name(name);
+        data.remove_attr(&name);
         self.record(Change::Attributes(element));
         Ok(())
     }

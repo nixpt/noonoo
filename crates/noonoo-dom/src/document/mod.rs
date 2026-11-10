@@ -6,7 +6,7 @@
 
 use crate::changes::Changes;
 use crate::mutate::{DocumentMutator, MutError};
-use crate::node::{ElementData, NodeData};
+use crate::node::{ElementData, Namespace, NodeData};
 use crate::query::{Selector, SelectorError};
 use crate::tree::{NodeId, Tree};
 
@@ -112,10 +112,16 @@ impl Document {
         self.node(id).and_then(NodeData::as_element)
     }
 
-    /// Create a detached element with the given tag name.
+    /// Create a detached HTML element with the given tag name.
     pub fn create_element(&mut self, name: impl Into<String>) -> NodeId {
         self.tree
             .insert_raw(NodeData::Element(ElementData::new(name)))
+    }
+
+    /// Create a detached element in `namespace` with the given tag name.
+    pub fn create_element_ns(&mut self, name: impl Into<String>, namespace: Namespace) -> NodeId {
+        self.tree
+            .insert_raw(NodeData::Element(ElementData::new_ns(name, namespace)))
     }
 
     /// Create a detached element with the given tag name and attributes, in
