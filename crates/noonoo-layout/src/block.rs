@@ -1041,6 +1041,14 @@ pub(crate) fn layout_inline_run(
                 apply_auto_margins(ctx, block, index, width, parent_style.text_align);
                 indices.push(index);
             }
+            // Each inline element the block splits spans the line beside it.
+            let tree = ctx.document.tree();
+            let mut inline = tree.parent(block);
+            while let Some(element) = inline.filter(|&node| node != parent_node) {
+                let stretch = Rect::new(x, cursor_y, width, height);
+                indices.push(ctx.push_split(element, stretch));
+                inline = tree.parent(element);
+            }
             cursor_y += height;
             pending = Some((margin.bottom, block));
         }

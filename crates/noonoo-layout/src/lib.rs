@@ -105,6 +105,12 @@ pub enum BoxKind {
     Grid,
     /// A text run.
     Text,
+    /// Where an inline element is split around a block inside it: the
+    /// stretch of its container's content width beside that block, from
+    /// the block's border top to its border bottom. It adds to the
+    /// element's rect (`bounding_client_rect`), as in Chromium, but paints
+    /// nothing and is never hit.
+    Split,
 }
 
 /// A positioned box, in absolute page coordinates (border-box).
@@ -398,7 +404,8 @@ impl LayoutTree {
         let content = Point::new(point.x + scroll.x, point.y + scroll.y);
         // A positioned child may sit outside its parent's box, so we always
         // descend; we only *record* a box whose rect actually contains the point.
-        if box_.rect.contains(content)
+        if box_.kind != BoxKind::Split
+            && box_.rect.contains(content)
             && let Some(node) = box_.node
         {
             let better = match best {
@@ -1441,6 +1448,31 @@ impl Ctx<'_> {
     /// The box index for `node`, if it has been laid out.
     pub fn tree_index(&self, node: NodeId) -> Option<usize> {
         self.tree.index.get(&node).copied()
+    }
+
+    /// A `Split` box for inline `element` over `rect`: left out of the
+    /// node's index, so `get` keeps finding the element's own boxes.
+    fn push_split(&mut self, element: NodeId, rect: Rect) -> usize {
+        let index = self.tree.boxes.len();
+        self.tree.boxes.push(LayoutBox {
+            node: Some(element),
+            style_node: element,
+            kind: BoxKind::Split,
+            rect,
+            text: None,
+            margin: block::no_edges(),
+            padding: block::no_edges(),
+            border: block::no_edges(),
+            clips: false,
+            scroll_max_x: 0.0,
+            scroll_max_y: 0.0,
+            scroll_x: 0.0,
+            scroll_y: 0.0,
+            z_tier: 1,
+            z_index: 0,
+            children: Vec::new(),
+        });
+        index
     }
 
     pub fn push(&mut self, b: LayoutBox) -> usize {
