@@ -767,6 +767,7 @@ pub fn layout_with_images(
         grids: HashMap::new(),
     };
     resolve_collapsed_tables(&mut ctx);
+    ctx.resolve_broken_images();
     // The root's children share one block formatting context.
     ctx.push_bfc();
 
@@ -948,7 +949,9 @@ pub(crate) struct Ctx<'a> {
     pub flexed_width: Option<(NodeId, f32)>,
     /// The styles cells and tables with collapsed borders lay out with:
     /// their own, with each border half of its resolved grid line (see
-    /// `table.rs`). [`Ctx::style`] hands these out in place of the real ones.
+    /// `table.rs`); and those images that didn't load lay out with (see
+    /// `replaced.rs`). [`Ctx::style`] hands these out in place of the real
+    /// ones.
     collapsed: HashMap<NodeId, Box<ComputedStyle>>,
     /// Each collapsed table's resolved border grid, for painting.
     grids: HashMap<NodeId, table::Grid>,
