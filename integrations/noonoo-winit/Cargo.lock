@@ -1425,6 +1425,7 @@ dependencies = [
 name = "noonoo-layout"
 version = "0.20.0"
 dependencies = [
+ "noonoo-css",
  "noonoo-dom",
  "noonoo-geometry",
  "noonoo-style",

@@ -412,8 +412,11 @@ fn paint_box(
         }
 
         // A rounded border in one colour is one ring; otherwise each side
-        // is a band (and with mixed colours, the corners stay square).
-        if let Some(ring) = rounded_border(rect, b, style) {
+        // is a band (and with mixed colours, the corners stay square). A
+        // collapsed table and its cells paint none: the table paints the
+        // resolved edges after its cells.
+        if paints_collapsed(layout, b) {
+        } else if let Some(ring) = rounded_border(rect, b, style) {
             out.0.push(ring);
         } else {
             for (band, width, color) in border_sides(rect, b, style) {
@@ -512,6 +515,7 @@ fn paint_box(
     for child in children {
         paint_box(child, layout, styles, glyphs, child_tx, child_ty, out);
     }
+    paint_collapsed_borders(layout, b, rect, out);
     if b.clips {
         out.0.push(Command::PopLayer);
     }
@@ -526,6 +530,28 @@ fn paint_box(
 /// The four border side bands `(rect, width, colour)`, positioned at `rect`.
 /// The border as one [`Command::FillRing`], when the box has a rounded
 /// corner and every side with a width has the same colour.
+/// Whether `b` is a collapsed table or cell: its borders are the table's
+/// resolved edges, not its own.
+#[inline(never)]
+fn paints_collapsed(layout: &LayoutTree, b: &LayoutBox) -> bool {
+    b.node
+        .is_some_and(|node| layout.collapsed_borders(node).is_some())
+}
+
+/// A collapsed table's resolved border edges, over its cells: each a band
+/// placed from the table's border box at `rect`.
+#[inline(never)]
+fn paint_collapsed_borders(layout: &LayoutTree, b: &LayoutBox, rect: Rect, out: &mut CommandList) {
+    let segments = b.node.and_then(|node| layout.collapsed_borders(node));
+    for segment in segments.unwrap_or_default() {
+        out.0.push(Command::FillRect {
+            rect: segment.rect.translate(rect.x, rect.y),
+            color: segment.color,
+            radius: (0.0, 0.0, 0.0, 0.0),
+        });
+    }
+}
+
 fn rounded_border(
     rect: Rect,
     b: &LayoutBox,
@@ -2068,5 +2094,49 @@ mod tests {
             "no empty text runs: {:?}",
             list.commands()
         );
+    }
+
+    #[test]
+    fn a_collapsed_table_paints_each_edge_once_over_its_cells() {
+        let list = render(
+            r#"<table><tr><td>a</td><td>b</td></tr></table>"#,
+            "table { border-collapse: collapse; border: 6px solid #ff0000 } \
+             td { border: 2px solid #0000ff; background-color: #00ff00; padding: 0 }",
+        );
+        let fills: Vec<(Rect, Color)> = list
+            .commands()
+            .iter()
+            .filter_map(|c| match c {
+                Command::FillRect { rect, color, .. } => Some((*rect, *color)),
+                _ => None,
+            })
+            .collect();
+        let red = Color::rgb(255, 0, 0);
+        let blue = Color::rgb(0, 0, 255);
+        let green = Color::rgb(0, 255, 0);
+        // The outside is the table's 6px, centred on the grid's edge: half
+        // in the table's border, half over the cells.
+        let left = fills
+            .iter()
+            .find(|(rect, color)| *color == red && rect.x == 0.0 && rect.height > rect.width)
+            .expect("the table's left edge");
+        assert_eq!(left.0.width, 6.0);
+        // The edge between the cells is blue and painted once, 2px wide.
+        let inner: Vec<_> = fills
+            .iter()
+            .filter(|(rect, color)| *color == blue && rect.height > rect.width)
+            .collect();
+        assert_eq!(inner.len(), 1, "{fills:?}");
+        assert_eq!(inner[0].0.width, 2.0);
+        // Borders paint over the cells' backgrounds.
+        let last_green = fills
+            .iter()
+            .rposition(|(_, color)| *color == green)
+            .unwrap();
+        let first_border = fills
+            .iter()
+            .position(|(_, color)| *color == red || *color == blue)
+            .unwrap();
+        assert!(first_border > last_green, "{fills:?}");
     }
 }
