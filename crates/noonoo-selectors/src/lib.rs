@@ -87,7 +87,8 @@ pub enum AttrOp {
 /// An attribute selector.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct AttrSelector {
-    /// The attribute name (lowercased).
+    /// The attribute name, as written: an HTML element's attributes match
+    /// it ignoring ASCII case, a foreign (SVG, MathML) element's exactly.
     pub name: String,
     /// The match operator.
     pub op: AttrOp,
@@ -220,6 +221,12 @@ pub trait Element: Clone {
     fn sibling_index(&self) -> usize;
     /// The number of element siblings, including this element.
     fn sibling_count(&self) -> usize;
+    /// Whether this is an HTML element, whose attribute names match
+    /// selectors ignoring ASCII case; a foreign (SVG, MathML) element's
+    /// match exactly. HTML unless an implementation says otherwise.
+    fn is_html(&self) -> bool {
+        true
+    }
 }
 
 /// Interactive state a dynamic pseudo-class is evaluated against.

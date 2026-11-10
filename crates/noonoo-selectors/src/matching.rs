@@ -194,11 +194,20 @@ impl SimpleSelector {
 
 impl AttrSelector {
     fn matches<E: Element>(&self, element: &E) -> bool {
-        let Some(actual) = element.attr(&self.name) else {
+        // An HTML element's attribute names are lowercase: the selector's
+        // name matches them ignoring case.
+        let folded;
+        let name = if element.is_html() && self.name.bytes().any(|b| b.is_ascii_uppercase()) {
+            folded = self.name.to_ascii_lowercase();
+            folded.as_str()
+        } else {
+            self.name.as_str()
+        };
+        let Some(actual) = element.attr(name) else {
             return false;
         };
         let some_value = self.value.as_deref().unwrap_or("");
-        if is_case_insensitive_attribute(&self.name) {
+        if element.is_html() && is_case_insensitive_attribute(name) {
             let (actual, some_value) =
                 (actual.to_ascii_lowercase(), some_value.to_ascii_lowercase());
             return self.op_matches(&actual, &some_value);

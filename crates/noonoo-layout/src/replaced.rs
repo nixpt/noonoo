@@ -42,12 +42,7 @@ impl Ctx<'_> {
             "svg" if !self.inside_svg(node) => Some(Natural {
                 width: None,
                 height: None,
-                // HTML parsing lowercases it: noonoo doesn't yet case-adjust
-                // SVG attributes in foreign content.
-                ratio: element
-                    .attr("viewBox")
-                    .or_else(|| element.attr("viewbox"))
-                    .and_then(view_box_ratio),
+                ratio: element.attr("viewBox").and_then(view_box_ratio),
             }),
             "canvas" => {
                 let pixels = |name: &str, default: f32| {
