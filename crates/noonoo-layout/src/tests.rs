@@ -4773,3 +4773,30 @@ fn a_cells_height_is_a_minimum() {
     assert!(near(rect("b").height, 19.2), "{:?}", rect("b"));
     assert!(near(rect("c").height, 40.0), "{:?}", rect("c"));
 }
+
+/// An empty inline belongs to the white space around it, as in Chromium:
+/// white space after only empty inlines at a line's start is dropped (as
+/// Wikipedia's icon spans before link text), white space before only empty
+/// inlines at its end hangs, and a line breaks after an empty inline that
+/// took a space, not before it.
+#[test]
+fn white_space_around_empty_inlines_hangs_at_line_edges() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div><a id="a"><span id="i"></span>
+<span id="t">Donate</span></a></div><div><span id="u">x</span> <span id="k"></span> </div><div>a <span id="m"></span> b</div><div style="width: 30px">aaaa <span id="n"></span> bbbb</div>"#,
+        "body { margin: 0 }",
+        400.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    // A line's leading white space goes, empty span or not.
+    assert!(near(rect("t").x, 0.0), "{:?}", rect("t"));
+    assert!(near(rect("a").width, rect("t").width), "{:?}", rect("a"));
+    // Trailing white space hangs: `k` sits right after the `x`.
+    assert!(near(rect("k").x, rect("u").right()), "{:?}", rect("k"));
+    // Mid-line, the empty span sits after the space it took.
+    let m = rect("m");
+    assert!(near(m.x, 16.0), "{m:?}");
+    // At a wrap it ends the first line, right after `aaaa`.
+    let n = rect("n");
+    assert!(near(n.x, 32.0) && near(n.y, 3.0 * 19.2), "{n:?}");
+}
