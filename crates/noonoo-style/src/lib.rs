@@ -1023,4 +1023,28 @@ mod tests {
         assert_eq!(s.overflow_x, Overflow::Hidden);
         assert_eq!(s.overflow_y, Overflow::Hidden);
     }
+
+    /// CSS Values 4 snaps a border width to device pixels, as Chromium
+    /// does: a width under 1px but above 0 becomes 1px, any other is
+    /// floored. noonoo lays out at one device pixel per CSS pixel.
+    #[test]
+    fn border_widths_snap_to_whole_pixels() {
+        let (doc, styles) = styled(
+            r#"<div id="a"></div><div id="b"></div><div id="c"></div><div id="d"></div>"#,
+            "#a { border: 0.3px solid } #b { border: 2.56px solid; border-left-width: 0 }
+             #c { font-size: 25.6px; border: solid; border-width: .1em calc(1px + 0.5px) thin 10.7px }
+             #d { border: 1.99px solid }",
+        );
+        let get = |id: &str| {
+            styles
+                .get(doc.get_element_by_id(id).unwrap())
+                .unwrap()
+                .border_width
+        };
+        assert_eq!(get("a").top, 1.0);
+        assert_eq!((get("b").top, get("b").left), (2.0, 0.0));
+        let c = get("c");
+        assert_eq!((c.top, c.right, c.bottom, c.left), (2.0, 1.0, 1.0, 10.0));
+        assert_eq!(get("d").right, 1.0);
+    }
 }

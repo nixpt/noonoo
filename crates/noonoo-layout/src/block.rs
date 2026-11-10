@@ -650,9 +650,42 @@ impl InlineWalk {
         self.spaced = false;
         self.after_atomic = atomic;
         let group = groups.len() - 1;
+        if !atomic {
+            kern_into(ctx, &mut groups[group], &item);
+        }
         groups[group].push(item);
         self.last = Some((group, groups[group].len() - 1));
         self.count += 1;
+    }
+}
+
+/// Kern the pair `item` makes with the text item before it on its line,
+/// when nothing breaks or edges them apart and they share a font: Chromium
+/// shapes them as one run, so the earlier one ends where its last glyph,
+/// kerned, does.
+/// An empty element between them (a phantom) doesn't part them: it holds
+/// no text to shape.
+fn kern_into(ctx: &Ctx<'_>, line: &mut [Item], item: &Item) {
+    let Some(previous) = line.iter_mut().rev().find(|previous| !previous.phantom) else {
+        return;
+    };
+    let joined = item.glued
+        && !item.spaced
+        && !item.phantom
+        && item.preserved.is_none()
+        && item.lead == 0.0
+        && previous.atomic.is_none()
+        && previous.trail == 0.0;
+    if !joined {
+        return;
+    }
+    let (Some(before), Some(after)) = (previous.text.chars().last(), item.text.chars().next())
+    else {
+        return;
+    };
+    let style = ctx.style(item.style_node);
+    if crate::same_font(ctx.style(previous.style_node), style) {
+        previous.width += ctx.kern(before, after, style);
     }
 }
 
@@ -1133,10 +1166,9 @@ pub(crate) fn layout_inline_run(
                     };
                 rises.insert(fragment.element, rise);
                 fragment_rises.push(rise);
-                let substantial = line[fragment.first..=fragment.last]
-                    .iter()
-                    .any(|item| !item.phantom);
-                let counts = substantial && !quirks || holds_text(Some(fragment.element)) || {
+                // In standards mode every inline box counts, an empty one's
+                // included, unless the line is nothing but empty ones.
+                let counts = !phantoms_only && !quirks || holds_text(Some(fragment.element)) || {
                     let edges = InlineEdges::of(ctx, fragment.element, width);
                     edges.start() + edges.end() > 0.0
                         || edges.padding.top + edges.padding.bottom > 0.0

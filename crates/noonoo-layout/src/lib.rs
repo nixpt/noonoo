@@ -253,6 +253,18 @@ fn is_text_field(element: &noonoo_dom::ElementData) -> bool {
         )
 }
 
+/// Whether text in `a` and in `b` shapes as one run: the same face at the
+/// same size and spacing, transformed alike.
+pub(crate) fn same_font(a: &ComputedStyle, b: &ComputedStyle) -> bool {
+    let (x, y) = (a.font_request(), b.font_request());
+    x.families == y.families
+        && x.weight == y.weight
+        && x.italic == y.italic
+        && a.font_size == b.font_size
+        && a.letter_spacing == b.letter_spacing
+        && a.text_transform == b.text_transform
+}
+
 /// Whether `display` makes an *atomic* inline-level box: one that sits on a
 /// line like a word but is a box of its own, with its own width, height,
 /// padding, border, and interior layout (`inline-block`, `inline-flex`,
@@ -1014,6 +1026,20 @@ impl Ctx<'_> {
     /// How wide `text` is in `style`: after `text-transform`, plus
     /// `letter-spacing` after every character. Every text measurement in
     /// layout goes through here, so measuring and painting agree.
+    /// How much a font's pair kerning moves `after` when it follows
+    /// `before` in one run: what joining them saves (or costs) over
+    /// shaping the last character of one and the first of the other apart.
+    /// Chromium shapes across inline element boundaries in one font, so a
+    /// pair split by `</a>` still kerns.
+    pub(crate) fn kern(&self, before: char, after: char, style: &ComputedStyle) -> f32 {
+        let mut pair = String::with_capacity(8);
+        pair.push(before);
+        pair.push(after);
+        let apart = self.advance(before.encode_utf8(&mut [0; 4]), style)
+            + self.advance(after.encode_utf8(&mut [0; 4]), style);
+        self.advance(&pair, style) - apart
+    }
+
     pub(crate) fn advance(&self, text: &str, style: &ComputedStyle) -> f32 {
         let text = style.transformed_text(text);
         let width = self

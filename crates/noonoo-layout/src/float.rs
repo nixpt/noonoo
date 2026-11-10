@@ -373,7 +373,7 @@ fn preferred_content(ctx: &Ctx<'_>, node: NodeId) -> f32 {
         if ctx.is_text(child) {
             // Text has no style of its own; it inherits the container's.
             let text = ctx.document.text_content(child);
-            run.text(ctx, &text, style);
+            run.text(ctx, &text, node);
         } else if ctx.is_inline_level(child) {
             run.inline(ctx, child);
         } else {
@@ -403,6 +403,10 @@ struct InlineRun {
     /// The unbreakable piece being built, and the longest so far.
     word: f32,
     longest: f32,
+    /// The last character of text that the next text joins with nothing
+    /// between, and the element whose style it has: a pair across an
+    /// element boundary kerns, as line breaking kerns it.
+    joins: Option<(char, NodeId)>,
 }
 
 impl InlineRun {
@@ -412,6 +416,7 @@ impl InlineRun {
     }
 
     fn space(&mut self, width: f32, breaks: bool) {
+        self.joins = None;
         if self.started && self.pending.is_none() {
             self.pending = Some((width, breaks));
         }
@@ -436,12 +441,14 @@ impl InlineRun {
     /// An atomic box: a break opportunity on each side.
     fn atomic(&mut self, max: f32, min: f32) {
         self.content(0.0);
+        self.joins = None;
         self.end_word();
         self.width += max;
         self.longest = self.longest.max(min);
     }
 
     fn line_break(&mut self) {
+        self.joins = None;
         self.end_word();
         self.widest = self.widest.max(self.width);
         self.width = 0.0;
@@ -464,12 +471,15 @@ impl InlineRun {
         started.then_some(min)
     }
 
-    fn text(&mut self, ctx: &Ctx<'_>, text: &str, style: &ComputedStyle) {
+    /// Text whose style is `node`'s.
+    fn text(&mut self, ctx: &Ctx<'_>, text: &str, node: NodeId) {
+        let style = ctx.style(node);
         let breaks = !matches!(style.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre);
         if crate::preserves_spaces(style.white_space)
             || crate::forced_lines(text, style.white_space).len() > 1
         {
             // Preserved spaces and newlines: measured as they stand.
+            self.joins = None;
             if !text.is_empty() {
                 let min = text_min_width(ctx, text, style);
                 self.content(0.0);
@@ -492,8 +502,18 @@ impl InlineRun {
             for (part, piece) in noonoo_text::break_pieces(word).enumerate() {
                 if part > 0 && breaks {
                     self.end_word();
+                    self.joins = None;
                 }
-                self.content(ctx.advance(piece, style));
+                let kern = match (self.joins, piece.chars().next()) {
+                    (Some((before, owner)), Some(after))
+                        if self.pending.is_none() && crate::same_font(ctx.style(owner), style) =>
+                    {
+                        ctx.kern(before, after, style)
+                    }
+                    _ => 0.0,
+                };
+                self.content(ctx.advance(piece, style) + kern);
+                self.joins = piece.chars().last().map(|last| (last, node));
             }
         }
         if !text.is_empty() && text.ends_with(noonoo_text::is_collapsible_space) {
@@ -527,19 +547,21 @@ impl InlineRun {
         let start = margin.left + padding.left + border.left;
         if start > 0.0 {
             self.content(start);
+            self.joins = None;
         }
         for child in child_nodes(ctx.document, node) {
             if ctx.is_hidden(child) || ctx.is_out_of_flow(child) {
                 continue;
             }
             if ctx.is_text(child) {
-                self.text(ctx, &ctx.document.text_content(child), style);
+                self.text(ctx, &ctx.document.text_content(child), node);
             } else {
                 self.inline(ctx, child);
             }
         }
         let end = margin.right + padding.right + border.right;
         if end > 0.0 {
+            self.joins = None;
             self.width += end;
             self.word += end;
             self.started = true;
@@ -646,7 +668,7 @@ fn min_content(ctx: &Ctx<'_>, node: NodeId, style: &ComputedStyle) -> f32 {
         if inline_runs && ctx.is_inline_level(child) {
             if ctx.is_text(child) {
                 // Text has no style of its own; it inherits the container's.
-                run.text(ctx, &ctx.document.text_content(child), style);
+                run.text(ctx, &ctx.document.text_content(child), node);
             } else {
                 run.inline(ctx, child);
             }
