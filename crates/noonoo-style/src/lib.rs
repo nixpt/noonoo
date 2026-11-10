@@ -56,6 +56,7 @@ mod gradient;
 mod grid;
 mod media;
 mod rule_index;
+mod supports;
 pub mod ua;
 mod vars;
 
@@ -445,6 +446,26 @@ mod tests {
         // knows; `0` is a real (zero) height.
         assert_eq!(lh("i"), None);
         assert_eq!(lh("j"), Some(0.0));
+    }
+
+    #[test]
+    fn supports_rules_apply_when_their_condition_holds() {
+        // gnu.org hides its language list this way.
+        let (doc, styles) = styled(
+            r#"<div id="a"></div><div id="b"></div><div id="c"></div>"#,
+            "@media (min-width:0){@supports selector(:target){#a{display:none}}}
+             @supports (display: frobnicate){#b{display:none}}
+             @supports not (display: frobnicate){#c{display:none}}",
+        );
+        let display = |id: &str| {
+            styles
+                .get(doc.get_element_by_id(id).unwrap())
+                .unwrap()
+                .display
+        };
+        assert_eq!(display("a"), Display::None);
+        assert_eq!(display("b"), Display::Block);
+        assert_eq!(display("c"), Display::None);
     }
 
     #[test]
