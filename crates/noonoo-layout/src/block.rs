@@ -811,6 +811,9 @@ pub(crate) fn layout_inline_run(
     // that resumes the inline content after it.
     let mut blocks: Vec<(usize, NodeId)> = Vec::new();
     let mut walk = InlineWalk::default();
+    // The floats the run places: its container's children, ahead of its
+    // lines (a float paints beneath inline content).
+    let mut floated: Vec<usize> = Vec::new();
     // The inline content in document order. A worklist, not recursion:
     // deep inline nesting mustn't cost stack per level. An element's `Exit`
     // follows its content, closing it on the last item it holds.
@@ -828,6 +831,7 @@ pub(crate) fn layout_inline_run(
         }
         if ctx.is_float(node) {
             float::place(ctx, node, x, width, y);
+            floated.extend(ctx.tree_index(node));
             continue;
         }
         if !walk.chain.is_empty() && ctx.is_out_of_flow(node) {
@@ -1003,11 +1007,11 @@ pub(crate) fn layout_inline_run(
 
     if !had_break && blocks.is_empty() && groups.iter().all(|group| group.is_empty()) {
         let height = margins.incoming.unwrap_or(0.0);
-        return (Vec::new(), height, None);
+        return (floated, height, None);
     }
 
     let alignment = map_align(parent_style.text_align);
-    let mut indices = Vec::new();
+    let mut indices = floated;
     let mut cursor_y = y;
 
     // An empty group a break ended is a blank line: every group is a line

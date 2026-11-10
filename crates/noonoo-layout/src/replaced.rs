@@ -226,7 +226,14 @@ impl Ctx<'_> {
         Some(if self.is_quirks() && (width || height) {
             Broken::Square
         } else if alt.is_some_and(|alt| !alt.is_empty()) {
-            if crate::is_atomic_inline(style.display) || style.display == Display::Inline {
+            // A float or an absolutely positioned box is block-level.
+            let inline = crate::is_atomic_inline(style.display) || style.display == Display::Inline;
+            let out_of_flow = style.float != noonoo_style::Float::None
+                || matches!(
+                    style.position,
+                    noonoo_style::Position::Absolute | noonoo_style::Position::Fixed
+                );
+            if inline && !out_of_flow {
                 Broken::AltInline
             } else {
                 Broken::AltBlock
@@ -289,7 +296,9 @@ impl Ctx<'_> {
                     style.max_height = Dimension::Auto;
                     icon_room(&mut style);
                 }
-                Broken::AltBlock => icon_room(&mut style),
+                // The icon sits inside a width it is given.
+                Broken::AltBlock if style.width == Dimension::Auto => icon_room(&mut style),
+                Broken::AltBlock => {}
                 Broken::Sized => {}
                 Broken::Icon => fixed(&mut style, BROKEN_ICON),
                 Broken::Nothing => fixed(&mut style, 0.0),
@@ -322,7 +331,8 @@ pub(crate) enum Broken {
     /// Its alt text, inline: a shrink-to-fit box holding the text after a
     /// 16px icon, its sizes (and their attributes' ratio) ignored.
     AltInline,
-    /// Its alt text in a block-level box, which keeps its sizes.
+    /// Its alt text in a block-level box (floated and absolutely positioned
+    /// ones too), which keeps its sizes.
     AltBlock,
     /// No alt text, and a width and a height: a box of that size.
     Sized,

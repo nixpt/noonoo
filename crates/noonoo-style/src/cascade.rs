@@ -147,6 +147,22 @@ fn push_sheet(
             }
             continue;
         }
+        // `@supports`: likewise, when its condition holds.
+        if let noonoo_css::Rule::At {
+            name,
+            prelude,
+            block,
+        } = rule
+            && name.eq_ignore_ascii_case("supports")
+        {
+            if crate::supports::holds(prelude)
+                && let Some(block) = block
+                && let Ok(inner) = Stylesheet::parse(block)
+            {
+                push_sheet(&inner, origin, viewport, rules, order);
+            }
+            continue;
+        }
         let noonoo_css::Rule::Qualified {
             selector,
             declarations,

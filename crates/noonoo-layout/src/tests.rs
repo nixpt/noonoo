@@ -4959,6 +4959,49 @@ fn a_pair_split_by_an_element_boundary_kerns() {
     assert_eq!(dot.rect.x, 18.0);
 }
 
+/// A floated image that didn't load is block-level, so like a block it
+/// keeps its sizes around its alt text, as in Chromium (gnu.org's package
+/// logos float left with a height of 1.3em).
+#[test]
+fn a_floated_broken_image_keeps_its_sizes() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div><img id=a src="x" alt="ab" style="height:30px">text</div>
+        <div style="clear:both"><img id=b src="x" alt="ab" width=40 height=30>text</div>"#,
+        "body { margin: 0 } img { float: left }",
+        400.0,
+    );
+    let a = rect_of(&doc, &tree, "a");
+    let b = rect_of(&doc, &tree, "b");
+    assert_eq!((a.width, a.height), (32.0, 30.0));
+    assert_eq!((b.width, b.height), (40.0, 30.0));
+}
+
+/// A float in an inline run (after white space, say) is its container's
+/// child: placed but never attached, it once neither painted nor had a
+/// client rect (gnu.org's package logos, floated in an indented `<h4>`).
+#[test]
+fn a_float_after_white_space_has_a_box() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div> <span id=f style="float:left">ff</span> G</div>"#,
+        "body { margin: 0 }",
+        400.0,
+    );
+    // Reached from the tree's roots, so it paints and has a client rect.
+    let float = tree
+        .bounding_client_rect(id(&doc, "f"))
+        .expect("the float's box");
+    assert_eq!((float.x, float.width), (0.0, 16.0));
+    let (doc, tree) = page(
+        r#"<!doctype html><div> <span id=f style="float:left">ff</span> </div>"#,
+        "body { margin: 0 }",
+        400.0,
+    );
+    assert!(
+        tree.bounding_client_rect(id(&doc, "f")).is_some(),
+        "alone on its run"
+    );
+}
+
 /// Chromium lays out in 1/64px units: a length truncates to a whole number
 /// of them, so a `.9em` margin at 16px is 921/64 = 14.390625px, not 14.4,
 /// and danluu.com's 200-item list drifts 1.9px from Chromium without it.
