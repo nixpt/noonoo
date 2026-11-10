@@ -1107,11 +1107,14 @@ impl Ctx<'_> {
 
     /// How far an inline box of `style` with line height `line_height`
     /// reaches above and below its baseline: the content area plus half
-    /// the leading on each side (CSS 2 §10.8.1).
+    /// the leading on each side (CSS 2 §10.8.1). Chromium floors the half
+    /// above to a whole pixel (from its 1/64px layout units) and leaves the
+    /// rest below; `noonoo-paint` places a run's baseline the same way.
     pub(crate) fn inline_box(&self, style: &ComputedStyle, line_height: f32) -> (f32, f32) {
         let (ascent, descent) = self.font_metrics(style);
-        let half_leading = (line_height - (ascent + descent)) / 2.0;
-        (ascent + half_leading, descent + half_leading)
+        let leading = line_height - (ascent + descent);
+        let above = ((leading / 2.0 * 64.0).round() / 64.0).floor();
+        (ascent + above, descent + leading - above)
     }
 
     /// The baseline (as a y) of laid-out box `index`: its last line's, as
