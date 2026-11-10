@@ -78,6 +78,11 @@ impl Element for ElementRef<'_> {
             .element(self.id)
             .and_then(|element| element.attr(name).map(str::to_owned))
     }
+    fn is_html(&self) -> bool {
+        self.doc
+            .element(self.id)
+            .is_none_or(|element| element.namespace == noonoo_dom::Namespace::Html)
+    }
     fn parent(&self) -> Option<Self> {
         ElementRef::new(self.doc, self.doc.tree().parent(self.id)?)
     }

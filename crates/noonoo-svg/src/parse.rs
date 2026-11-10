@@ -21,7 +21,7 @@ pub(crate) fn parse(source: &str) -> Svg {
     let height = attr(&document, root, "height")
         .and_then(|value| number(&value))
         .unwrap_or(150.0);
-    let view_box = attr(&document, root, "viewbox").and_then(|value| parse_view_box(&value));
+    let view_box = attr(&document, root, "viewBox").and_then(|value| parse_view_box(&value));
 
     let mut shapes = Vec::new();
     walk(&document, root, Transform::IDENTITY, &mut shapes);

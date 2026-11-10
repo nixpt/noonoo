@@ -27,6 +27,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+mod foreign;
 mod implied;
 mod mode;
 
@@ -683,11 +684,12 @@ fn build(doc: &mut Document, base: NodeId, tokens: Vec<Token>, depth: usize) {
                 }
 
                 let parent = insertion_parent(doc, &stack, depth);
-                let node = doc.create_element(name.clone());
+                let namespace = foreign::namespace_of(doc, parent, &name);
+                let node = doc.create_element_ns(name.clone(), namespace);
                 for (attr, value) in attrs {
                     let _ = doc.mutate().set_attribute(
                         node,
-                        &attr,
+                        foreign::adjust_attribute(namespace, &attr),
                         value
                             .map(|value| entities::decode(&value))
                             .unwrap_or_default(),

@@ -194,7 +194,13 @@ impl<'a> SelectorParser<'a> {
     fn parse_attribute(&mut self) -> ParseResult<AttrSelector> {
         self.pos += 1; // '['
         self.skip_trivia();
-        let name = self.parse_ident_name()?;
+        // As written: an HTML element matches it ignoring case, a foreign
+        // one exactly.
+        let name = match self.peek() {
+            Some(TokenKind::Ident(name)) => name.clone(),
+            _ => return Err(self.error("expected an identifier")),
+        };
+        self.pos += 1;
         self.skip_trivia();
 
         let (op, value) = if matches!(self.peek(), Some(TokenKind::CloseBracket)) {

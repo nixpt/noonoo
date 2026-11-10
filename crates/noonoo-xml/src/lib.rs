@@ -10,14 +10,16 @@
 //! XML nesting is **strict** — a mismatched or unclosed tag is an error.
 //!
 //! Namespace *resolution* is not implemented, and the shared DOM normalizes
-//! element and attribute names to ASCII lowercase (an HTML-shaped choice), so
-//! XML names are case-folded on ingest. Also not yet: DTD entities and
+//! element names, and attribute names outside `<svg>` and `<math>`, to ASCII
+//! lowercase (an HTML-shaped choice), so those XML names are case-folded on
+//! ingest. An `<svg>` or `<math>` and what it holds are SVG or MathML
+//! elements, whose attribute names keep their case. Also not yet: DTD entities and
 //! processing-instruction dispatch.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-use noonoo_dom::{Document, NodeId};
+use noonoo_dom::{Document, Namespace, NodeId};
 use noonoo_parse::{ParseError, ParseResult};
 
 /// Parse an XML document into a [`Document`].
@@ -75,8 +77,9 @@ pub fn parse(source: &str) -> ParseResult<Document> {
             }
             pos += 3 + end; // "</" + name + ">"
         } else if rest.starts_with('<') {
-            let (element, length, self_closing) = parse_start_tag(&mut document, rest, pos)?;
             let parent = *stack.last().unwrap();
+            let (element, length, self_closing) =
+                parse_start_tag(&mut document, parent, rest, pos)?;
             append(&mut document, parent, element);
             if !self_closing {
                 stack.push(element);
@@ -109,6 +112,7 @@ fn append(document: &mut Document, parent: NodeId, node: NodeId) {
 /// Parse `<name attr="v" …>` or `<name …/>`; returns `(node, bytes consumed, self_closing)`.
 fn parse_start_tag(
     document: &mut Document,
+    parent: NodeId,
     rest: &str,
     offset: usize,
 ) -> ParseResult<(NodeId, usize, bool)> {
@@ -123,7 +127,18 @@ fn parse_start_tag(
     if name.is_empty() {
         return Err(ParseError::new(offset, "expected a tag name"));
     }
-    let element = document.create_element(name);
+    // `<svg>` and `<math>` start their namespace and what they hold
+    // inherits it, so their attribute names keep their case.
+    let namespace = if name.eq_ignore_ascii_case("svg") {
+        Namespace::Svg
+    } else if name.eq_ignore_ascii_case("math") {
+        Namespace::MathMl
+    } else {
+        document
+            .element(parent)
+            .map_or(Namespace::Html, |parent| parent.namespace)
+    };
+    let element = document.create_element_ns(name, namespace);
     let mut self_closing = false;
 
     loop {
@@ -243,6 +258,23 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Without namespace resolution, an `<svg>` and what it holds are SVG:
+    /// their attribute names keep their case, as XML's always would.
+    #[test]
+    fn svg_keeps_attribute_case() {
+        let doc =
+            parse(r#"<doc Lang="x"><svg viewBox="0 0 1 1"><g gradientTransform="t"/></svg></doc>"#)
+                .unwrap();
+        let element = |name: &str| {
+            doc.element(doc.query_selector(name).unwrap().unwrap())
+                .unwrap()
+        };
+        assert_eq!(element("doc").attr("lang"), Some("x"));
+        assert_eq!(element("svg").namespace, noonoo_dom::Namespace::Svg);
+        assert_eq!(element("svg").attr("viewBox"), Some("0 0 1 1"));
+        assert_eq!(element("g").attr("gradientTransform"), Some("t"));
+    }
 
     #[test]
     fn parses_elements_and_attributes() {
