@@ -1974,6 +1974,13 @@ fn reusing_measured_heights_changes_no_box() {
             ".o { display: flex } .c { display: flex; flex-direction: column; height: 200px } \
              .i { flex: 1 } p { margin: 0 }",
         ),
+        // An inline-block measured twice: its control's box is reused.
+        (
+            "<!doctype html><div class=o><div><span><select><option>x</option></select></span></div></div>"
+                .to_owned(),
+            ".o { display: flex; line-height: 30px } span { display: inline-block } \
+             select { line-height: 15px }",
+        ),
     ]);
     for (html, css) in &pages {
         let (html, css) = (html.as_str(), *css);
@@ -4799,4 +4806,31 @@ fn white_space_around_empty_inlines_hangs_at_line_edges() {
     // At a wrap it ends the first line, right after `aaaa`.
     let n = rect("n");
     assert!(near(n.x, 32.0) && near(n.y, 3.0 * 19.2), "{n:?}");
+}
+
+/// A row flex item is measured before it's placed; an inline-block in it
+/// holding a form control keeps the control's baseline while measuring, so
+/// the item is the one line tall that layout makes it.
+#[test]
+fn a_measured_flex_item_keeps_an_inline_block_controls_baseline() {
+    for control in [
+        "<select><option>English</option></select>",
+        "<input value=x>",
+    ] {
+        let (doc, tree) = page(
+            &format!(
+                "<!doctype html><div style=\"display:flex\"><div id=i><span id=s>{control}</span></div></div>"
+            ),
+            "div { line-height: 30px } #s { display: inline-block } \
+             select, input { font-size: 15px; line-height: 15px; padding: 2px }",
+            400.0,
+        );
+        let item = rect_of(&doc, &tree, "i");
+        let inline_block = rect_of(&doc, &tree, "s");
+        assert!(
+            near(inline_block.height, 30.0),
+            "{control}: {inline_block:?}"
+        );
+        assert!(near(item.height, 30.0), "{control}: {item:?}");
+    }
 }

@@ -753,6 +753,7 @@ pub fn layout_with_images(
         margins: Default::default(),
         measured: HashMap::new(),
         baselines: HashMap::new(),
+        stand_ins: HashMap::new(),
         cell_contents: HashMap::new(),
         measuring: 0,
         preferred: Default::default(),
@@ -919,7 +920,12 @@ pub(crate) struct Ctx<'a> {
     pub measured: HashMap<MeasureKey, f32>,
     /// Measured baselines of atomic inlines (from the border-box top), by
     /// the same inputs: a cached height lays nothing out to read one from.
-    pub baselines: HashMap<MeasureKey, Option<f32>>,
+    /// Each is the baseline the line aligns the box by, then the one its
+    /// boxes give a container looking for its own ([`Ctx::box_baseline`]).
+    pub baselines: HashMap<MeasureKey, (Option<f32>, Option<f32>)>,
+    /// The boxes standing in for atomic inlines whose measured height was
+    /// reused, each with the baseline its boxes would give (from its top).
+    pub(crate) stand_ins: HashMap<usize, Option<f32>>,
     /// Each table cell's last laid-out content height: what its contents
     /// take, contained margins included, before the row stretches it.
     pub(crate) cell_contents: HashMap<NodeId, f32>,
@@ -1113,6 +1119,9 @@ impl Ctx<'_> {
     /// clips (its bottom margin edge is the baseline then).
     pub(crate) fn box_baseline(&self, index: usize) -> Option<f32> {
         let b = &self.tree.boxes[index];
+        if let Some(&baseline) = self.stand_ins.get(&index) {
+            return baseline.map(|baseline| b.rect.y + baseline);
+        }
         if b.clips {
             return None;
         }
@@ -1527,26 +1536,54 @@ impl Ctx<'_> {
         let key =
             (reuse && self.measuring > 0).then(|| self.measure_key(node, available_width, None));
         if let Some(key) = key
-            && let (Some(&height), Some(&baseline)) =
+            && let (Some(&height), Some(&(baseline, boxes))) =
                 (self.measured.get(&key), self.baselines.get(&key))
         {
+            self.stand_in(node, border_x, border_y, height, boxes);
             return (height, baseline);
         }
         let height = self.layout_element_uncached(node, border_x, border_y, available_width, None);
-        let baseline = (!self.is_sized_fallback(node))
-            .then(|| self.tree_index(node))
-            .flatten()
+        let boxes = self
+            .tree_index(node)
             .and_then(|index| self.box_baseline(index))
-            .map(|baseline| baseline - border_y)
+            .map(|baseline| baseline - border_y);
+        let baseline = boxes
+            .filter(|_| !self.is_sized_fallback(node))
             .or_else(|| self.text_field_baseline(node))
             .or_else(|| self.toggle_baseline(node, height));
         if let Some(key) = key
             && self.establishes_bfc(node, self.style(node))
         {
             self.measured.insert(key, height);
-            self.baselines.insert(key, baseline);
+            self.baselines.insert(key, (baseline, boxes));
         }
         (height, baseline)
+    }
+
+    /// An empty box for atomic inline `node` whose measured height was
+    /// reused: the line places it like the box it stands for, so the
+    /// container still finds the baseline `boxes` (from its top) gives.
+    #[inline(never)]
+    fn stand_in(&mut self, node: NodeId, x: f32, y: f32, height: f32, boxes: Option<f32>) {
+        let index = self.push(LayoutBox {
+            node: Some(node),
+            style_node: node,
+            kind: BoxKind::Block,
+            rect: Rect::new(x, y, 0.0, height),
+            text: None,
+            margin: block::no_edges(),
+            padding: block::no_edges(),
+            border: block::no_edges(),
+            clips: false,
+            scroll_max_x: 0.0,
+            scroll_max_y: 0.0,
+            scroll_x: 0.0,
+            scroll_y: 0.0,
+            z_tier: 0,
+            z_index: 0,
+            children: Vec::new(),
+        });
+        self.stand_ins.insert(index, boxes);
     }
 
     /// Whether `node` is an `<img>` without its image but with a width or
@@ -1918,6 +1955,7 @@ impl Ctx<'_> {
         self.measuring -= 1;
         self.tree.boxes.truncate(base);
         self.tree.index.retain(|_, &mut index| index < base);
+        self.stand_ins.retain(|&index, _| index < base);
         self.tree.sticky.retain(|item| item.index < base);
         height
     }
