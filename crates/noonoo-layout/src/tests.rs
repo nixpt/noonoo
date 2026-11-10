@@ -5040,3 +5040,39 @@ fn an_element_opening_at_a_line_break_counts_on_the_line_before() {
     let after = height("aaaa <span>bbbb</span>");
     assert!(near(after, 24.0 + one), "{after} vs {}", 24.0 + one);
 }
+
+/// MetricShaper with a taller x-height: 0.75em instead of the default 0.5em.
+struct TallX;
+
+impl Shaper for TallX {
+    fn advance(&self, text: &str, request: noonoo_text::FontRequest, font_size: f32) -> f32 {
+        MetricShaper.advance(text, request, font_size)
+    }
+
+    fn line_height(&self, request: noonoo_text::FontRequest, font_size: f32) -> f32 {
+        MetricShaper.line_height(request, font_size)
+    }
+
+    fn x_height(&self, _request: noonoo_text::FontRequest, font_size: f32) -> f32 {
+        font_size * 0.75
+    }
+}
+
+/// `vertical-align: middle` lines a box's midpoint up half the parent
+/// font's x-height above the baseline: the shaper's, as Chromium takes the
+/// font's (rust-lang.org's logo sat 1px low with 0.5em assumed).
+#[test]
+fn vertical_align_middle_uses_the_fonts_x_height() {
+    let html = "<!doctype html><div>x<span id=s></span></div>";
+    let css = "body { margin: 0 } div { font-size: 16px; line-height: 40px } \
+               #s { display: inline-block; width: 10px; height: 10px; vertical-align: middle }";
+    let doc = noonoo_html::parse(html);
+    let sheet = noonoo_css::Stylesheet::parse(css).unwrap();
+    let styles = noonoo_style::compute(&doc, &[sheet]);
+    let y = |shaper: &dyn Shaper| {
+        let tree = layout(&doc, &styles, Size::new(400.0, 300.0), shaper);
+        tree.get(id(&doc, "s")).unwrap().rect.y
+    };
+    // Half the x-height higher: 6px with 0.75em, 4px with 0.5em.
+    assert_eq!(y(&MetricShaper) - y(&TallX), 2.0);
+}

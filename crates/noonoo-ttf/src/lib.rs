@@ -88,6 +88,8 @@ pub struct Font {
     color_bitmaps: Option<(usize, usize)>,
     /// `OS/2.xAvgCharWidth`, if present and positive.
     average_char_width: Option<i16>,
+    /// `OS/2.sxHeight` (version 2 on), if present and positive.
+    os2_x_height: Option<i16>,
     /// `head.xMax - head.xMin`: every glyph fits in this width.
     bounding_width: i32,
 }
@@ -193,6 +195,20 @@ impl Font {
             }
             None => None,
         };
+        // `OS/2.sxHeight`, which the table carries from version 2 on.
+        let os2_x_height = match table(b"OS/2") {
+            Some(offset) => {
+                reader.seek(offset);
+                match reader.u16() {
+                    Ok(version) if version >= 2 => {
+                        reader.seek(offset + 86);
+                        reader.i16().ok().filter(|&height| height > 0)
+                    }
+                    _ => None,
+                }
+            }
+            None => None,
+        };
 
         Ok(Font {
             data: data.to_vec(),
@@ -209,6 +225,7 @@ impl Font {
             cmap,
             color_bitmaps,
             average_char_width,
+            os2_x_height,
             bounding_width: i32::from(x_max) - i32::from(x_min),
         })
     }
@@ -262,6 +279,18 @@ impl Font {
     /// The line gap, in font units.
     pub fn line_gap(&self) -> i16 {
         self.line_gap
+    }
+
+    /// The x-height, in font units: `OS/2.sxHeight` when the table records
+    /// a positive one (version 2 on), else the top of the "x" glyph's
+    /// outline, as FreeType measures it; `None` if the font has neither.
+    pub fn x_height(&self) -> Option<f32> {
+        if let Some(height) = self.os2_x_height {
+            return Some(f32::from(height));
+        }
+        let glyph = self.glyph_for_char('x')?;
+        let (_, _, _, top) = self.outline(glyph)?.bounds()?;
+        (top > 0.0).then_some(top)
     }
 
     /// The glyph a character maps to, if the font has a `cmap` entry for it.
