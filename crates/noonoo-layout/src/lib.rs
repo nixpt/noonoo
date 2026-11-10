@@ -1134,6 +1134,11 @@ impl Ctx<'_> {
         self.shaper.metrics(style.font_request(), style.font_size)
     }
 
+    /// The x-height of `style`'s font, from the shaper.
+    pub(crate) fn x_height(&self, style: &ComputedStyle) -> f32 {
+        self.shaper.x_height(style.font_request(), style.font_size)
+    }
+
     /// How far an inline box of `style` with line height `line_height`
     /// reaches above and below its baseline: the content area plus half
     /// the leading on each side (CSS 2 §10.8.1). Chromium floors the half
