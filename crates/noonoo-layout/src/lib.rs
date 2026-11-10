@@ -206,6 +206,31 @@ pub(crate) fn expand_tabs(text: &str, column: usize) -> String {
 /// The room browsers keep beside a textarea's text for its scrollbar.
 const SCROLLBAR_WIDTH: f32 = 15.0;
 
+/// What a closed select adds to its widest label, as Chromium draws one:
+/// the inner padding and the arrow.
+const DROPDOWN_CHROME: f32 = 20.0;
+
+/// Where a closed select's label sits in its content box: in from the
+/// left, and down by the inner padding above and below it.
+const DROPDOWN_INSET: (f32, f32) = (4.0, 1.0);
+
+/// Whether `element` is a closed select (a drop-down): no `multiple` and a
+/// `size` of at most 1. Otherwise it's a list box.
+/// 1 when a control draws as the native widget, with its built-in
+/// padding and arrow; 0 under `appearance: none`, a plain box.
+fn native(style: &ComputedStyle) -> f32 {
+    match style.appearance {
+        noonoo_style::Appearance::Auto => 1.0,
+        noonoo_style::Appearance::None => 0.0,
+    }
+}
+
+fn is_dropdown(element: &noonoo_dom::ElementData) -> bool {
+    element.name == "select"
+        && element.attr("multiple").is_none()
+        && positive_attribute(element, "size").unwrap_or(1) <= 1
+}
+
 /// An attribute read as a positive integer (`size`, `cols`, `rows`).
 fn positive_attribute(element: &noonoo_dom::ElementData, name: &str) -> Option<u32> {
     element
@@ -976,6 +1001,9 @@ impl Ctx<'_> {
     /// (`<img alt>`, `<input value>`), if any.
     pub(crate) fn placeholder(&self, node: NodeId) -> Option<String> {
         let element = self.document.element(node)?;
+        if is_dropdown(element) {
+            return Some(self.selected_label(node).unwrap_or_default());
+        }
         if !self.document.tree().children(node).is_empty() {
             return None;
         }
@@ -1042,6 +1070,16 @@ impl Ctx<'_> {
             let cols = positive_attribute(element, "cols").unwrap_or(20);
             return Some(cols as f32 * average + SCROLLBAR_WIDTH);
         }
+        if is_dropdown(element) {
+            // The widest label, in whole pixels, and Chromium's 20px for
+            // the inner padding and the arrow.
+            let widest = self
+                .option_labels(node)
+                .iter()
+                .map(|label| self.advance(label, style))
+                .fold(0.0f32, f32::max);
+            return Some(widest.ceil() + DROPDOWN_CHROME * native(style));
+        }
         if !is_text_field(element) {
             return None;
         }
@@ -1070,6 +1108,9 @@ impl Ctx<'_> {
         content_width: f32,
     ) -> Option<f32> {
         let element = self.document.element(node)?;
+        if is_dropdown(element) {
+            return Some(self.line_height_of(style) + 2.0 * DROPDOWN_INSET.1 * native(style));
+        }
         if element.name != "textarea" {
             return self
                 .attribute_ratio(node)
@@ -1077,6 +1118,60 @@ impl Ctx<'_> {
         }
         let rows = positive_attribute(element, "rows").unwrap_or(2);
         Some(rows as f32 * self.line_height_of(style))
+    }
+
+    /// The options of select `node` in document order, those in an
+    /// `optgroup` included.
+    fn options(&self, node: NodeId) -> Vec<NodeId> {
+        let mut options = Vec::new();
+        let mut stack: Vec<NodeId> = child_nodes(self.document, node).into_iter().rev().collect();
+        while let Some(at) = stack.pop() {
+            match self.document.element(at) {
+                Some(element) if element.name == "option" => options.push(at),
+                Some(element) if element.name == "optgroup" => {
+                    stack.extend(child_nodes(self.document, at).into_iter().rev());
+                }
+                _ => {}
+            }
+        }
+        options
+    }
+
+    /// The labels of the options in select `node`, in order.
+    fn option_labels(&self, node: NodeId) -> Vec<String> {
+        self.options(node)
+            .into_iter()
+            .map(|option| self.option_label(option))
+            .collect()
+    }
+
+    /// An option's label: its `label` attribute, else its text with white
+    /// space collapsed.
+    fn option_label(&self, option: NodeId) -> String {
+        if let Some(label) = self.document.element(option).and_then(|e| e.attr("label")) {
+            return label.to_owned();
+        }
+        self.document
+            .text_content(option)
+            .split_ascii_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    /// The label a closed select shows: its `selected` option's (the last
+    /// one so marked), else its first option's.
+    fn selected_label(&self, node: NodeId) -> Option<String> {
+        let options = self.options(node);
+        let selected = options
+            .iter()
+            .rev()
+            .find(|&&option| {
+                self.document
+                    .element(option)
+                    .is_some_and(|e| e.attr("selected").is_some())
+            })
+            .or(options.first())?;
+        Some(self.option_label(*selected))
     }
 
     /// Lay out a replaced element's placeholder as its content: one line of
@@ -1095,11 +1190,22 @@ impl Ctx<'_> {
             return (Vec::new(), height);
         }
         let width = self.advance(text, style);
+        // A drop-down's label sits inside its padding and clear of the arrow.
+        let (dx, dy) = self
+            .document
+            .element(node)
+            .filter(|element| is_dropdown(element))
+            .map_or((0.0, 0.0), |_| {
+                (
+                    DROPDOWN_INSET.0 * native(style),
+                    DROPDOWN_INSET.1 * native(style),
+                )
+            });
         let index = self.push(LayoutBox {
             node: None,
             style_node: node,
             kind: BoxKind::Text,
-            rect: Rect::new(content_x, content_y, width, height),
+            rect: Rect::new(content_x + dx, content_y + dy, width, height),
             text: Some(text.to_owned()),
             margin: block::no_edges(),
             padding: block::no_edges(),

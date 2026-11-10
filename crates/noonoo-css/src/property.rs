@@ -101,6 +101,8 @@ pub enum Property {
     BorderBottomLeftRadius,
     /// `box-sizing`.
     BoxSizing,
+    /// `appearance`, or its `-webkit-` or `-moz-` alias.
+    Appearance,
     /// `flex-direction`.
     FlexDirection,
     /// `flex-wrap`.
@@ -232,6 +234,7 @@ impl Property {
             "border-bottom-right-radius" => Self::BorderBottomRightRadius,
             "border-bottom-left-radius" => Self::BorderBottomLeftRadius,
             "box-sizing" => Self::BoxSizing,
+            "appearance" | "-webkit-appearance" | "-moz-appearance" => Self::Appearance,
             "flex-direction" => Self::FlexDirection,
             "flex-wrap" => Self::FlexWrap,
             "flex-grow" => Self::FlexGrow,
@@ -328,6 +331,7 @@ impl Property {
             Self::BorderBottomRightRadius => "border-bottom-right-radius",
             Self::BorderBottomLeftRadius => "border-bottom-left-radius",
             Self::BoxSizing => "box-sizing",
+            Self::Appearance => "appearance",
             Self::FlexDirection => "flex-direction",
             Self::FlexWrap => "flex-wrap",
             Self::FlexGrow => "flex-grow",
