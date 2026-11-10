@@ -894,11 +894,30 @@ impl Cascade {
         {
             resolved.style.text_align = crate::TextAlign::Start;
         }
+        if doc.element(id).is_some_and(|e| e.name == "br") {
+            line_break(&mut resolved.style);
+        }
 
         inherited.custom[id.index()] = resolved.custom;
         inherited.line_heights[id.index()] = resolved.line_height;
         styles.entries[id.index()] = Some(resolved.style);
     }
+}
+
+/// Blink: a `<br>` is a line break whatever its `display`, `float`,
+/// `position` or box edges; only `display: none` leaves it out.
+fn line_break(style: &mut ComputedStyle) {
+    if style.display == Display::None {
+        return;
+    }
+    let initial = ComputedStyle::default();
+    style.display = Display::Inline;
+    style.float = Float::None;
+    style.position = Position::Static;
+    style.inset = initial.inset;
+    style.margin = initial.margin;
+    style.padding = initial.padding;
+    style.border_width = initial.border_width;
 }
 
 /// Scratch state for one compute or restyle.

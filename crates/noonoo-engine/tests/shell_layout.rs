@@ -120,9 +120,10 @@ fn text_in_a_tall_line_gets_half_the_leading_above_it() {
             })
             .unwrap()
     };
-    // (32 - 13 * 1.2) / 2 = 8.2 above the 13 * 0.8 ascent.
+    // (32 - 13 * 1.2) / 2 = 8.2, floored to 8 as Chromium does, above the
+    // 13 * 0.8 ascent.
     assert!(
-        (baseline("EXOSPHERE") - 18.6).abs() < 0.01,
+        (baseline("EXOSPHERE") - 18.4).abs() < 0.01,
         "{}",
         baseline("EXOSPHERE")
     );

@@ -1419,10 +1419,11 @@ fn an_inline_block_contains_its_floats() {
     assert_eq!(tree.get(id(&doc, "ib")).unwrap().rect.x, 0.0);
     assert_eq!(tree.get(id(&doc, "f")).unwrap().rect.x, 0.0);
     // The line: the inline-block's 10px above the baseline, plus the 10px
-    // strut's 1.8px of descent below it (MetricShaper, 16px).
+    // strut's 2.2px below it (MetricShaper, 16px: 6.4 of descent less the
+    // 4.2 of the -9.2px leading that the -5 floored above it leaves).
     let after = text_boxes(&doc, &tree, "after");
     assert!(
-        (after[0].y - 11.8).abs() < 0.01,
+        (after[0].y - 12.2).abs() < 0.01,
         "the float escaped the inline-block: {}",
         after[0].y
     );
@@ -1974,6 +1975,13 @@ fn reusing_measured_heights_changes_no_box() {
             ".o { display: flex } .c { display: flex; flex-direction: column; height: 200px } \
              .i { flex: 1 } p { margin: 0 }",
         ),
+        // An inline-block measured twice: its control's box is reused.
+        (
+            "<!doctype html><div class=o><div><span><select><option>x</option></select></span></div></div>"
+                .to_owned(),
+            ".o { display: flex; line-height: 30px } span { display: inline-block } \
+             select { line-height: 15px }",
+        ),
     ]);
     for (html, css) in &pages {
         let (html, css) = (html.as_str(), *css);
@@ -2494,10 +2502,10 @@ fn an_inline_elements_text_wraps_at_the_line_end() {
         .map(|b| b.rect)
         .collect();
     // Each wraps its font's content area (19.2px) in a 20px line, half the
-    // leading (0.4px) below the line's top.
+    // leading (0.4px, floored to 0) below the line's top.
     let expected = [
-        Rect::new(0.0, 0.4, 56.0, 19.2),
-        Rect::new(0.0, 20.4, 24.0, 19.2),
+        Rect::new(0.0, 0.0, 56.0, 19.2),
+        Rect::new(0.0, 20.0, 24.0, 19.2),
     ];
     assert_eq!(fragments.len(), 2);
     for (got, want) in fragments.iter().zip(expected) {
@@ -2687,7 +2695,8 @@ fn a_wrapped_inline_element_puts_its_start_edge_first_and_end_edge_last() {
     );
     let span = fragments(&doc, &tree, "s");
     assert_eq!(span.len(), 2);
-    // The content area (19.2px) half the leading (0.4px) into each line.
+    // The content area (19.2px) half the leading (0.4px, floored to 0)
+    // into each line.
     let near = |a: Rect, b: Rect| {
         (a.x - b.x).abs() < 0.01
             && (a.y - b.y).abs() < 0.01
@@ -2695,13 +2704,13 @@ fn a_wrapped_inline_element_puts_its_start_edge_first_and_end_edge_last() {
             && (a.height - b.height).abs() < 0.01
     };
     assert!(
-        near(span[0].rect, Rect::new(0.0, 0.4, 29.0, 19.2)),
+        near(span[0].rect, Rect::new(0.0, 0.0, 29.0, 19.2)),
         "{:?}",
         span[0].rect
     );
     assert_eq!((span[0].padding.left, span[0].padding.right), (5.0, 0.0));
     assert!(
-        near(span[1].rect, Rect::new(0.0, 20.4, 29.0, 19.2)),
+        near(span[1].rect, Rect::new(0.0, 20.0, 29.0, 19.2)),
         "{:?}",
         span[1].rect
     );
@@ -3652,10 +3661,11 @@ fn an_inline_box_wraps_the_content_area_not_the_line_height() {
         "",
         400.0,
     );
-    // Half the 40px line's leading (10.4) sits above the content area.
+    // Half the 40px line's leading (10.4, floored to 10) sits above the
+    // content area.
     let s = tree.get(id(&doc, "s")).unwrap().rect;
     assert!(
-        (s.y - 8.4).abs() < 0.01 && (s.height - 23.2).abs() < 0.01,
+        (s.y - 8.0).abs() < 0.01 && (s.height - 23.2).abs() < 0.01,
         "{s:?}"
     );
 }
@@ -4772,4 +4782,104 @@ fn a_cells_height_is_a_minimum() {
     assert!(near(rect("a").height, 19.2), "{:?}", rect("a"));
     assert!(near(rect("b").height, 19.2), "{:?}", rect("b"));
     assert!(near(rect("c").height, 40.0), "{:?}", rect("c"));
+}
+
+/// An empty inline belongs to the white space around it, as in Chromium:
+/// white space after only empty inlines at a line's start is dropped (as
+/// Wikipedia's icon spans before link text), white space before only empty
+/// inlines at its end hangs, and a line breaks after an empty inline that
+/// took a space, not before it.
+#[test]
+fn white_space_around_empty_inlines_hangs_at_line_edges() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div><a id="a"><span id="i"></span>
+<span id="t">Donate</span></a></div><div><span id="u">x</span> <span id="k"></span> </div><div>a <span id="m"></span> b</div><div style="width: 30px">aaaa <span id="n"></span> bbbb</div>"#,
+        "body { margin: 0 }",
+        400.0,
+    );
+    let rect = |name: &str| tree.get(id(&doc, name)).unwrap().rect;
+    // A line's leading white space goes, empty span or not.
+    assert!(near(rect("t").x, 0.0), "{:?}", rect("t"));
+    assert!(near(rect("a").width, rect("t").width), "{:?}", rect("a"));
+    // Trailing white space hangs: `k` sits right after the `x`.
+    assert!(near(rect("k").x, rect("u").right()), "{:?}", rect("k"));
+    // Mid-line, the empty span sits after the space it took.
+    let m = rect("m");
+    assert!(near(m.x, 16.0), "{m:?}");
+    // At a wrap it ends the first line, right after `aaaa`.
+    let n = rect("n");
+    assert!(near(n.x, 32.0) && near(n.y, 3.0 * 19.2), "{n:?}");
+}
+
+/// A row flex item is measured before it's placed; an inline-block in it
+/// holding a form control keeps the control's baseline while measuring, so
+/// the item is the one line tall that layout makes it.
+#[test]
+fn a_measured_flex_item_keeps_an_inline_block_controls_baseline() {
+    for control in [
+        "<select><option>English</option></select>",
+        "<input value=x>",
+    ] {
+        let (doc, tree) = page(
+            &format!(
+                "<!doctype html><div style=\"display:flex\"><div id=i><span id=s>{control}</span></div></div>"
+            ),
+            "div { line-height: 30px } #s { display: inline-block } \
+             select, input { font-size: 15px; line-height: 15px; padding: 2px }",
+            400.0,
+        );
+        let item = rect_of(&doc, &tree, "i");
+        let inline_block = rect_of(&doc, &tree, "s");
+        assert!(
+            near(inline_block.height, 30.0),
+            "{control}: {inline_block:?}"
+        );
+        assert!(near(item.height, 30.0), "{control}: {item:?}");
+    }
+}
+
+/// Chromium floors the half of the leading above a line's content area to
+/// a whole pixel, positive or negative, and leaves the rest below.
+#[test]
+fn the_leading_above_the_content_area_is_floored() {
+    for (line_height, top) in [(24.0, 2.0), (12.0, -4.0), (23.2, 2.0)] {
+        let (doc, tree) = page(
+            &format!("<div id=d style='line-height:{line_height}px'><span id=s>x</span></div>"),
+            "",
+            400.0,
+        );
+        // The 16px test font's content area is 19.2px.
+        let s = rect_of(&doc, &tree, "s");
+        assert!((s.y - top).abs() < 0.01, "{line_height}: {s:?}");
+        assert!(
+            (rect_of(&doc, &tree, "d").height - line_height).abs() < 0.01,
+            "{line_height}"
+        );
+    }
+}
+
+/// A `<br>` is a line break whatever its `display` (bar `none`, which
+/// leaves none), `float`, `position` or box edges, as Chromium has it.
+#[test]
+fn a_br_breaks_the_line_whatever_its_display() {
+    for (css, lines) in [
+        ("", 2),
+        ("display: block", 2),
+        (
+            "display: flex; margin: 10px; padding: 5px; border: 2px solid",
+            2,
+        ),
+        ("display: inline-block; width: 50px; height: 30px", 2),
+        ("float: left; width: 50px; height: 30px", 2),
+        ("position: absolute", 2),
+        ("display: none", 1),
+    ] {
+        let (doc, tree) = page(
+            &format!("<!doctype html><div id=d>one<br style='{css}'>two</div>"),
+            "div { line-height: 20px; width: 300px }",
+            400.0,
+        );
+        let height = rect_of(&doc, &tree, "d").height;
+        assert_eq!(height, 20.0 * lines as f32, "{css}");
+    }
 }

@@ -455,10 +455,12 @@ fn paint_box(
             .unwrap_or_else(FontRequest::any);
         // Half the leading (the line height beyond the font's ascent and
         // descent) goes above the text, so a tall line centres it and a
-        // short one raises it; the baseline is the ascent below that.
+        // short one raises it; the baseline is the ascent below that. As
+        // layout's inline boxes do, Chromium floors that half to a whole
+        // pixel (from its 1/64px layout units).
         let (ascent, descent) = glyphs.metrics(request, font_size);
         let half_leading = (line_height - (ascent + descent)) / 2.0;
-        let baseline = rect.y + half_leading + ascent;
+        let baseline = rect.y + ((half_leading * 64.0).round() / 64.0).floor() + ascent;
         let shown = match style {
             Some(style) => style.transformed_text(text),
             None => std::borrow::Cow::Borrowed(text.as_str()),
@@ -1290,7 +1292,8 @@ mod tests {
 
     /// The baseline sits the font's ascent below the top of its content
     /// area, which the leading (line height less ascent and descent)
-    /// centres in the line, as CSS 2 §10.8.1 has it.
+    /// centres in the line, as CSS 2 §10.8.1 has it; Chromium floors the
+    /// half above it to a whole pixel.
     #[test]
     fn the_baseline_follows_the_fonts_ascent() {
         let doc = noonoo_html::parse(r#"<div id="a">hi</div><div id="b">hi</div>"#);
@@ -1299,8 +1302,8 @@ mod tests {
         let layout = noonoo_layout::layout(&doc, &styles, Size::new(400.0, 300.0), &MetricShaper);
         let glyphs = Metrics(Default::default());
         paint_with(&styles, &layout, &glyphs);
-        // #a: (30 - 15) / 2 + 10; #b starts at 30 with no leading.
-        assert_eq!(*glyphs.0.borrow(), [17.5, 40.0]);
+        // #a: floor((30 - 15) / 2) + 10; #b starts at 30 with no leading.
+        assert_eq!(*glyphs.0.borrow(), [17.0, 40.0]);
     }
 
     /// Without a font, [`TextRuns`] keeps the 0.8em / 0.4em split of a

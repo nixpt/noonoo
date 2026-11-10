@@ -581,7 +581,9 @@ impl InlineWalk {
                     height: ctx.line_height_of(ctx.style(element)),
                     atomic: None,
                     spaced: self.spaced,
-                    glued: !self.spaced && !self.after_atomic,
+                    // A phantom belongs to the white space around it: no
+                    // break before it, one after it (see `push`).
+                    glued: (!self.spaced || phantom) && !self.after_atomic,
                     preserved: None,
                     chain: Vec::new(),
                     opens: 0,
@@ -639,6 +641,11 @@ impl InlineWalk {
             };
         }
         self.opening = 0;
+        // The white space a phantom took ends after it: a line may break
+        // there, whether or not more white space followed.
+        if self.phantom_spaced && !item.phantom {
+            item.glued = false;
+        }
         self.phantom_spaced = item.phantom && (self.spaced || self.phantom_spaced);
         self.spaced = false;
         self.after_atomic = atomic;
@@ -653,16 +660,19 @@ impl InlineWalk {
 /// the break opportunities, where an item isn't glued to the one before.
 /// A run of glued items is placed whole; the first always fits.
 fn first_line_len(items: &[Item], space: f32, width: f32) -> usize {
-    // Clusters: (item count, width), split where a break may go.
-    let mut clusters: Vec<(usize, f32)> = Vec::new();
+    // Clusters: (item count, width, the white space its trailing phantoms
+    // hang, whether it's phantoms alone), split where a break may go.
+    let mut clusters: Vec<(usize, f32, f32, bool)> = Vec::new();
     for (index, item) in items.iter().enumerate() {
         let gap = item.gap(space);
         match clusters.last_mut() {
-            Some((count, used)) if index > 0 && item.glued => {
+            Some((count, used, hang, phantoms)) if index > 0 && item.glued => {
                 *count += 1;
                 *used += gap + item.advance();
+                *hang = if item.phantom { *hang + gap } else { 0.0 };
+                *phantoms &= item.phantom;
             }
-            _ => clusters.push((1, item.advance())),
+            _ => clusters.push((1, item.advance(), 0.0, item.phantom)),
         }
     }
     // Clusters after the first are separated by the space a break replaces
@@ -671,7 +681,7 @@ fn first_line_len(items: &[Item], space: f32, width: f32) -> usize {
         let mut start = 0;
         clusters
             .iter()
-            .map(|&(count, _)| {
+            .map(|&(count, ..)| {
                 let gap = items[start].gap(space);
                 start += count;
                 gap
@@ -680,15 +690,29 @@ fn first_line_len(items: &[Item], space: f32, width: f32) -> usize {
     };
     let mut used = 0.0;
     let mut taken = 0;
-    for (index, &(count, cluster)) in clusters.iter().enumerate() {
-        let gap = if index == 0 { 0.0 } else { gaps[index] };
-        if index > 0 && used + gap + cluster > width + 0.01 {
+    // While only phantoms are on the line, white space before the next
+    // cluster is leading and goes, and that cluster is still the first.
+    let mut leading = true;
+    for (index, &(count, cluster, hang, phantoms)) in clusters.iter().enumerate() {
+        let gap = if leading { 0.0 } else { gaps[index] };
+        if !leading && used + gap + cluster - hang > width + 0.01 {
             break;
         }
         used += gap + cluster;
         taken += count;
+        leading &= phantoms;
     }
     taken
+}
+
+/// Whether the white space before `line[position]` hangs: with only
+/// phantoms before it on the line it's leading white space, and before
+/// phantoms that end the line it's trailing; either way it takes no room
+/// (CSS Text §4.1.2). Preserved white space stays.
+fn hangs(line: &[Item], position: usize) -> bool {
+    line[position].preserved.is_none()
+        && (line[..position].iter().all(|item| item.phantom)
+            || line[position..].iter().all(|item| item.phantom))
 }
 
 /// How to lay out an atomic inline once the line places it.
@@ -1026,13 +1050,15 @@ pub(crate) fn layout_inline_run(
             };
             let line = &rest[..line_len];
 
-            let spaces = line[1..]
-                .iter()
-                .filter(|item| item.spaced && item.preserved.is_none())
+            let spaces = (1..line.len())
+                .filter(|&k| line[k].spaced && line[k].preserved.is_none() && !hangs(line, k))
                 .count();
             let used: f32 = leading
                 + line.iter().map(Item::advance).sum::<f32>()
-                + line[1..].iter().map(|item| item.gap(space)).sum::<f32>();
+                + (1..line.len())
+                    .filter(|&k| !hangs(line, k))
+                    .map(|k| line[k].gap(space))
+                    .sum::<f32>();
             let free = (band_width - used).max(0.0);
             let offset = noonoo_text::align(alignment, free, spaces + 1);
 
@@ -1043,7 +1069,7 @@ pub(crate) fn layout_inline_run(
             let mut gaps = Vec::with_capacity(line.len());
             for (position, item) in line.iter().enumerate() {
                 let mut gap = 0.0;
-                if position > 0 {
+                if position > 0 && !hangs(line, position) {
                     gap = item.gap(space);
                     if item.spaced && item.preserved.is_none() {
                         gap += offset.gap;
