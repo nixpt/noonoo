@@ -4958,3 +4958,17 @@ fn a_pair_split_by_an_element_boundary_kerns() {
         .expect("the full stop's run");
     assert_eq!(dot.rect.x, 18.0);
 }
+
+/// Chromium lays out in 1/64px units: a length truncates to a whole number
+/// of them, so a `.9em` margin at 16px is 921/64 = 14.390625px, not 14.4,
+/// and danluu.com's 200-item list drifts 1.9px from Chromium without it.
+#[test]
+fn lengths_truncate_to_sixty_fourths_of_a_pixel() {
+    let (doc, tree) = page(
+        r#"<!doctype html><div></div><div></div><div></div><div></div><div id=last></div>"#,
+        "div { height: 10px; margin: 0 0 .9em; font-size: 16px }",
+        400.0,
+    );
+    let y = tree.get(id(&doc, "last")).unwrap().rect.y;
+    assert_eq!(y, 4.0 * (10.0 + 921.0 / 64.0));
+}
