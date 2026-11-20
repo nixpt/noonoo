@@ -323,6 +323,16 @@ fn preferred_flex_content(ctx: &Ctx<'_>, node: NodeId, style: &ComputedStyle) ->
     }
 }
 
+/// The broken-image icon's width in `node`'s content: 16px when it's an
+/// inline image showing its alt text, else nothing.
+fn alt_icon(ctx: &Ctx<'_>, node: NodeId) -> f32 {
+    if ctx.broken_image(node) == Some(crate::replaced::Broken::AltInline) {
+        crate::replaced::BROKEN_ICON
+    } else {
+        0.0
+    }
+}
+
 /// The max-content width of a box's contents: block children stack (take the
 /// widest), inline content flows on one unwrapped line (take the sum).
 fn preferred_content(ctx: &Ctx<'_>, node: NodeId) -> f32 {
@@ -337,7 +347,8 @@ fn preferred_content(ctx: &Ctx<'_>, node: NodeId) -> f32 {
         return 0.0;
     }
     if let Some(text) = ctx.placeholder(node) {
-        return text_width(ctx, &text, style);
+        // An image's alt text follows its floated 16px icon.
+        return alt_icon(ctx, node) + text_width(ctx, &text, style);
     }
     if matches!(style.display, Display::Flex | Display::InlineFlex) {
         return preferred_flex_content(ctx, node, style);
@@ -643,7 +654,7 @@ fn min_content(ctx: &Ctx<'_>, node: NodeId, style: &ComputedStyle) -> f32 {
         return 0.0;
     }
     if let Some(text) = ctx.placeholder(node) {
-        return text_min_width(ctx, &text, style);
+        return text_min_width(ctx, &text, style).max(alt_icon(ctx, node));
     }
     if style.display == Display::Table {
         return crate::table::min_content_width(ctx, node);
