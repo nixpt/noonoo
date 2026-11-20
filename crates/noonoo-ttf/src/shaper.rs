@@ -93,6 +93,15 @@ pub(crate) fn ascent_descent_px(font: &Font, font_size: f32) -> (f32, f32) {
     )
 }
 
+/// `font`'s x-height at `font_size`, in whole pixels as Chromium rounds
+/// it, or half an em when the font records none.
+pub(crate) fn x_height_px(font: &Font, font_size: f32) -> f32 {
+    match font.x_height() {
+        Some(units) => (units * scale(font, font_size)).round(),
+        None => font_size * 0.5,
+    }
+}
+
 /// `font`'s average and widest character advances at `font_size`, in
 /// pixels, as browsers measure text fields: `OS/2`'s average and the
 /// bounding box's width rounded to whole pixels, or a "0"'s advance for
@@ -143,6 +152,10 @@ impl Shaper for FontShaper<'_> {
 
     fn char_widths(&self, _request: FontRequest, font_size: f32) -> (f32, f32) {
         char_widths_px(self.font, font_size)
+    }
+
+    fn x_height(&self, _request: FontRequest, font_size: f32) -> f32 {
+        x_height_px(self.font, font_size)
     }
 }
 
@@ -211,6 +224,16 @@ impl Shaper for FontSetShaper<'_> {
         {
             Some(font) => char_widths_px(font, font_size),
             None => (font_size * 0.5, font_size * 0.5),
+        }
+    }
+
+    fn x_height(&self, request: FontRequest, font_size: f32) -> f32 {
+        match self
+            .set
+            .select_best(request.families, request.weight, request.italic)
+        {
+            Some(font) => x_height_px(font, font_size),
+            None => font_size * 0.5,
         }
     }
 }

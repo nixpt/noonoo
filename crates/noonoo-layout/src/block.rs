@@ -472,7 +472,7 @@ fn vertical_align(
         VerticalAlign::Super => Align::Rise(parent.font_size / 3.0 + 1.0),
         VerticalAlign::TextTop => Align::Rise(ctx.font_metrics(parent).0 - above),
         VerticalAlign::TextBottom => Align::Rise(below - ctx.font_metrics(parent).1),
-        VerticalAlign::Middle => Align::Rise((below - above) / 2.0 + parent.font_size * 0.25),
+        VerticalAlign::Middle => Align::Rise((below - above) / 2.0 + ctx.x_height(parent) / 2.0),
         VerticalAlign::Top => Align::Top,
         VerticalAlign::Bottom => Align::Bottom,
         VerticalAlign::Length(px) => Align::Rise(px),
