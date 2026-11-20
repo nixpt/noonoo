@@ -1,0 +1,93 @@
+@caison { version: "1.0" }
+
+schema: "milestones/1"
+
+project: {
+  name: "noonoo"
+  kind: "repo"
+  lifecycle: "active" @verified { at: "2026-11-18", by: "altair" }
+  lifecycle_since: "2026-11-06"
+  home: "zorro"
+  summary: "an owned, dependency-free HTML/CSS engine in small Rust crates (parse, cascade, layout, text, paint, a11y, shell); slices 0-4 and 7 shipped, phase 5i Chromium-parity layout work merged through #20 with chromium-diff as the cross-check; not on crates.io yet; slice 10 (bliss compat shims) is the switch"
+  north_star: "replace bliss under arniko and surfer with an engine we own end to end, switched in by a manifest-only change"
+  stewards: ["altair"]
+  evidence: {
+    default_branch: "main"
+  }
+}
+
+milestones: [
+  {
+    id: "S0"
+    title: "scaffold"
+    status: "done" @verified { at: "2026-11-18", by: "altair" }
+    done_when: [{ claim: "ROADMAP marks slice 0 done", check: { kind: "file", path: "docs/ROADMAP.md", contains: "Slice 0 — Scaffold *(done)*" } }]
+  },
+  {
+    id: "S1"
+    title: "compatibility baseline (api-drift snapshots of bliss)"
+    status: "done" ~0.7 @verified { at: "2026-11-18", by: "altair" }
+    done_when: [
+      { claim: "bliss snapshots committed", check: { kind: "file", path: "api-drift/bliss/bliss-dom.snapshot.json" } },
+      "api-drift check passes against a noonoo shim (not re-run)",
+    ]
+  },
+  {
+    id: "S2-4"
+    title: "ingest + tree dump, style, text + layout (owned engines)"
+    status: "done" @verified { at: "2026-11-18", by: "altair" }
+    done_when: [
+      { claim: "slice 2 shipped", check: { kind: "file", path: "docs/ROADMAP.md", contains: "Slice 2 — Ingest + tree dump  ✅ shipped" } },
+      "slices 3 and 4 done with owned selectors, cascade, layout and text (DEPENDENCY-EXIT track A1-A3 done; stylo never added)",
+    ]
+  },
+  {
+    id: "S5-6"
+    title: "document + events, paint"
+    status: "done" ~0.6 @verified { at: "2026-11-18", by: "altair" }
+    done_when: [
+      { claim: "noonoo-events crate exists", check: { kind: "file", path: "crates/noonoo-events/Cargo.toml" } },
+      "a click on a nested node reaches an ancestor handler; a paint command stream matches a golden file (ROADMAP does not mark these slices; not re-run)",
+    ]
+  },
+  {
+    id: "S7"
+    title: "shell (window + gpu)"
+    status: "done" @verified { at: "2026-11-18", by: "altair" }
+    done_when: [{ claim: "slice 7 shipped", check: { kind: "file", path: "docs/ROADMAP.md", contains: "Slice 7 — Shell  ✅ shipped" } }]
+  },
+  {
+    id: "5i"
+    title: "Chromium-parity layout (phase 5h/5i)"
+    status: "active" @verified { at: "2026-11-18", by: "altair" }
+    started_at: "2026-11-10"
+    done_when: [
+      { claim: "chromium-diff cross-check tool (PR #18)", check: { kind: "merged", pr: "18" } },
+      "the chromium-diff corpus shows no layout difference the project has not recorded",
+    ]
+    notes: "merged #2-#20 on 2026-11-10; open #21 (broken-image alt text) and #22 (vertical-align middle via x-height). Local 5i-* branches may hold unpushed merges (memory noonoo_checkout_path)."
+  },
+  {
+    id: "S8"
+    title: "sub-documents"
+    status: "active" ~0.6 @verified { at: "2026-11-18", by: "altair" }
+    done_when: ["anchored layers and wheel-scroll chaining (shipped)", "remaining sub-document cases per ROADMAP slice 8"]
+  },
+  {
+    id: "S9"
+    title: "motion"
+    status: "planned" ~0.5 @verified { at: "2026-11-18", by: "altair" }
+    done_when: ["an interrupted animation does not jump"]
+    notes: "crates/noonoo-motion exists; the ROADMAP does not mark the slice, done-when not checked"
+  },
+  {
+    id: "S10"
+    title: "compat shims + the switch"
+    status: "planned" @verified { at: "2026-11-18", by: "altair" }
+    depends_on: ["S1", "5i"]
+    done_when: [
+      "compat/ shim crates published with bliss-* lib names",
+      "a consumer compiles against noonoo shims with a manifest-only change; api-drift shows no unrecorded Breaking item",
+    ]
+  },
+]
