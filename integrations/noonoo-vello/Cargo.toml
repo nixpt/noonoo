@@ -3,15 +3,17 @@ name = "noonoo-vello"
 version = "0.20.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-publish = false
+repository = "https://github.com/nixpt/noonoo"
+categories = ["gui", "rendering", "web-programming"]
+rust-version = "1.89"
 description = "Opt-in: render a Noonoo command stream with Vello (GPU)."
 
 # Deliberately OUTSIDE the noonoo workspace (see the root `exclude`): it pulls
 # Vello, which the engine's default build and lockfile must not pay for.
 [dependencies]
-noonoo-paint = { path = "../../crates/noonoo-paint" }
-noonoo-geometry = { path = "../../crates/noonoo-geometry" }
-noonoo-ttf = { path = "../../crates/noonoo-ttf" }
+noonoo-paint = { path = "../../crates/noonoo-paint", version = "0.20.0" }
+noonoo-geometry = { path = "../../crates/noonoo-geometry", version = "0.20.0" }
+noonoo-ttf = { path = "../../crates/noonoo-ttf", version = "0.20.0" }
 vello = { version = "0.7", default-features = false }
 # Decode `DrawImage` images (PNG also carries colour emoji glyphs): codecs are
 # bought, not built (docs/DEPENDENCY-EXIT.md). All four are pure Rust.
