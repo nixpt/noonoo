@@ -16,4 +16,7 @@ std = []
 [dependencies]
 
 [dev-dependencies]
-noonoo-html.workspace = true
+# Path only, no version: noonoo-html depends on noonoo-dom, so `cargo publish`
+# must strip this dev-dependency (it does for versionless ones) or the two
+# could never be uploaded in an order crates.io accepts.
+noonoo-html = { path = "../noonoo-html" }
