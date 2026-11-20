@@ -59,6 +59,15 @@ pub trait Shaper {
         let zero = self.advance("0", request, font_size);
         (zero, zero)
     }
+
+    /// The x-height, in pixels, of the face `request` selects at
+    /// `font_size`: how tall its lowercase letters stand.
+    /// `vertical-align: middle` lines a box's midpoint up half of it above
+    /// the baseline. The default is half an em.
+    fn x_height(&self, request: FontRequest, font_size: f32) -> f32 {
+        let _ = request;
+        font_size * 0.5
+    }
 }
 
 /// A font request: the families to try, in preference order, plus weight and

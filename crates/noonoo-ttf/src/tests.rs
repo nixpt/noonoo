@@ -1014,3 +1014,55 @@ fn a_runs_metrics_reach_as_far_as_its_fallback_faces() {
         shaper.metrics(demo_request(&demo), 20.0)
     );
 }
+
+/// An `OS/2` table of version 2, carrying `sxHeight` (at offset 86).
+fn os2_with_x_height(x_height: i16) -> Vec<u8> {
+    let mut t = Vec::new();
+    push_u16(&mut t, 2); // version
+    t.resize(86, 0);
+    push_i16(&mut t, x_height); // sxHeight
+    push_i16(&mut t, 700); // sCapHeight
+    t
+}
+
+#[test]
+fn the_x_height_comes_from_os2_or_the_x_glyph() {
+    // No `sxHeight` and no "x": none, and the shaper assumes half an em.
+    let font = Font::parse(&minimal_font()).unwrap();
+    assert_eq!(font.x_height(), None);
+    assert_eq!(
+        FontShaper::new(&font).x_height(FontRequest::any(), 16.0),
+        8.0
+    );
+    // An "x" (here the 700-unit triangle): its top, as FreeType measures a
+    // font without `sxHeight`, in whole pixels as Chromium rounds it.
+    let font = Font::parse(&font_mapping(1000, 'x')).unwrap();
+    assert_eq!(font.x_height(), Some(700.0));
+    assert_eq!(
+        FontShaper::new(&font).x_height(FontRequest::any(), 16.0),
+        11.0
+    );
+    // `OS/2.sxHeight` wins over the glyph.
+    let data = build(&[
+        (*b"head", head(1000)),
+        (*b"maxp", maxp()),
+        (*b"hhea", hhea()),
+        (*b"hmtx", hmtx()),
+        (*b"cmap", cmap_from('x')),
+        (*b"glyf", glyf()),
+        (*b"loca", loca()),
+        (*b"OS/2", os2_with_x_height(500)),
+    ]);
+    let font = Font::parse(&data).unwrap();
+    assert_eq!(font.x_height(), Some(500.0));
+    let mut set = FontSet::new();
+    set.add("", 400, false, &font);
+    assert_eq!(
+        FontSetShaper::new(&set).x_height(FontRequest::any(), 16.0),
+        8.0
+    );
+    assert_eq!(
+        FontSetShaper::new(&set).x_height(FontRequest::any(), 20.0),
+        10.0
+    );
+}
