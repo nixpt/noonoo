@@ -8,7 +8,7 @@
 //! an axis that wasn't given.
 
 use noonoo_dom::NodeId;
-use noonoo_style::{BoxSizing, ComputedStyle, Dimension, Display, Length};
+use noonoo_style::{BoxSizing, ComputedStyle, Dimension, Display, Length, WhiteSpace};
 
 use crate::image::Image;
 use crate::{Ctx, resolve};
@@ -307,8 +307,10 @@ impl Ctx<'_> {
     /// Lay out the alt text of an inline image that didn't load as Chromium
     /// does: wrapped to `content_width` around the 16px icon floated at its
     /// start. A line beside the icon starts after it; a first word too wide
-    /// to sit there drops below it. Each line is one text box; the content
-    /// is at least as tall as the icon, which it contains.
+    /// to sit there drops below it. `nowrap` and `pre` text stays on one
+    /// line beside the icon, as its intrinsic width measured it. Each line
+    /// is one text box; the content is at least as tall as the icon, which
+    /// it contains.
     pub(crate) fn layout_alt_text(
         &mut self,
         node: NodeId,
@@ -319,71 +321,94 @@ impl Ctx<'_> {
         content_width: f32,
     ) -> (Vec<usize>, f32) {
         let line_height = self.line_height_of(style);
-        let space = self.advance(" ", style);
-        // Each piece a line may end after, with the space before it.
-        let pieces: Vec<(&str, f32, f32)> = noonoo_text::collapsible_words(text)
-            .flat_map(|word| {
-                noonoo_text::break_pieces(word)
-                    .enumerate()
-                    .map(move |(k, piece)| (piece, if k == 0 { space } else { 0.0 }))
-            })
-            .map(|(piece, gap)| (piece, gap, self.advance(piece, style)))
-            .collect();
-        let mut indices = Vec::new();
-        let mut y = 0.0;
-        let mut next = 0;
-        while next < pieces.len() {
-            let mut left = if y < BROKEN_ICON { BROKEN_ICON } else { 0.0 };
-            if pieces[next].2 > content_width - left && left > 0.0 {
-                y = BROKEN_ICON;
-                left = 0.0;
-            }
-            let room = content_width - left;
-            let mut line = pieces[next].0.to_owned();
-            let mut used = pieces[next].2;
-            next += 1;
-            // Measured as one run, as the box's intrinsic width was: piece
-            // by piece, the sum can come out a hair wider than the box.
-            while let Some(&(piece, gap, _)) = pieces.get(next) {
-                let mut longer = line.clone();
-                if gap > 0.0 {
-                    longer.push(' ');
+        // Each line: its text, left offset, top and width.
+        let mut lines: Vec<(String, f32, f32, f32)> = Vec::new();
+        if matches!(style.white_space, WhiteSpace::NoWrap | WhiteSpace::Pre) {
+            let line = if crate::preserves_spaces(style.white_space) {
+                crate::expand_tabs(text, 0)
+                    .trim_end_matches(noonoo_text::is_collapsible_space)
+                    .to_owned()
+            } else {
+                noonoo_text::collapsible_words(text)
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            };
+            let width = self.advance(&line, style);
+            lines.push((line, BROKEN_ICON, 0.0, width));
+        } else {
+            let space = self.advance(" ", style);
+            // Each piece a line may end after, with the space before it.
+            let pieces: Vec<(&str, f32, f32)> = noonoo_text::collapsible_words(text)
+                .flat_map(|word| {
+                    noonoo_text::break_pieces(word)
+                        .enumerate()
+                        .map(move |(k, piece)| (piece, if k == 0 { space } else { 0.0 }))
+                })
+                .map(|(piece, gap)| (piece, gap, self.advance(piece, style)))
+                .collect();
+            let mut y = 0.0;
+            let mut next = 0;
+            while next < pieces.len() {
+                let mut left = if y < BROKEN_ICON { BROKEN_ICON } else { 0.0 };
+                if pieces[next].2 > content_width - left + 0.01 && left > 0.0 {
+                    y = BROKEN_ICON;
+                    left = 0.0;
                 }
-                longer.push_str(piece);
-                let width = self.advance(&longer, style);
-                if width > room + 0.01 {
-                    break;
-                }
-                line = longer;
-                used = width;
+                let room = content_width - left;
+                let mut line = pieces[next].0.to_owned();
+                let mut used = pieces[next].2;
                 next += 1;
+                // Measured as one run, as the box's intrinsic width was:
+                // piece by piece, the sum can come out a hair wider than
+                // the box.
+                while let Some(&(piece, gap, _)) = pieces.get(next) {
+                    let mut longer = line.clone();
+                    if gap > 0.0 {
+                        longer.push(' ');
+                    }
+                    longer.push_str(piece);
+                    let width = self.advance(&longer, style);
+                    if width > room + 0.01 {
+                        break;
+                    }
+                    line = longer;
+                    used = width;
+                    next += 1;
+                }
+                lines.push((line, left, y, used));
+                y += line_height;
             }
-            indices.push(self.push(crate::LayoutBox {
-                node: None,
-                style_node: node,
-                kind: crate::BoxKind::Text,
-                rect: noonoo_geometry::Rect::new(
-                    content_x + left,
-                    content_y + y,
-                    used,
-                    line_height,
-                ),
-                text: Some(line),
-                margin: crate::block::no_edges(),
-                padding: crate::block::no_edges(),
-                border: crate::block::no_edges(),
-                clips: false,
-                scroll_max_x: 0.0,
-                scroll_max_y: 0.0,
-                scroll_x: 0.0,
-                scroll_y: 0.0,
-                z_tier: 1,
-                z_index: 0,
-                children: Vec::new(),
-            }));
-            y += line_height;
         }
-        (indices, y.max(BROKEN_ICON))
+        let bottom = lines.last().map_or(0.0, |&(_, _, y, _)| y + line_height);
+        let indices = lines
+            .into_iter()
+            .map(|(line, left, y, width)| {
+                self.push(crate::LayoutBox {
+                    node: None,
+                    style_node: node,
+                    kind: crate::BoxKind::Text,
+                    rect: noonoo_geometry::Rect::new(
+                        content_x + left,
+                        content_y + y,
+                        width,
+                        line_height,
+                    ),
+                    text: Some(line),
+                    margin: crate::block::no_edges(),
+                    padding: crate::block::no_edges(),
+                    border: crate::block::no_edges(),
+                    clips: false,
+                    scroll_max_x: 0.0,
+                    scroll_max_y: 0.0,
+                    scroll_x: 0.0,
+                    scroll_y: 0.0,
+                    z_tier: 1,
+                    z_index: 0,
+                    children: Vec::new(),
+                })
+            })
+            .collect();
+        (indices, bottom.max(BROKEN_ICON))
     }
 
     /// Note the image `node` draws; its box has no content to lay out.

@@ -5136,3 +5136,34 @@ fn an_inline_split_around_a_block_spans_the_line_beside_it() {
         Some(Rect::new(5.0, 5.0, 200.0, 30.0))
     );
 }
+
+/// `nowrap` and `pre` alt text stays on one line beside the icon, past a
+/// `max-width` (Chromium: 64x20 for both); `pre` keeps its spaces.
+#[test]
+fn a_broken_images_nowrap_alt_text_stays_on_one_line() {
+    let css = "body { margin: 0 } div { width: 400px; font-size: 16px; line-height: 20px }";
+    let runs = |tree: &LayoutTree| -> Vec<(String, f32, f32)> {
+        tree.boxes()
+            .iter()
+            .filter(|b| b.kind == BoxKind::Text)
+            .map(|b| (b.text.clone().unwrap_or_default(), b.rect.x, b.rect.y))
+            .collect()
+    };
+    for html in [
+        r#"<!doctype html><div><img id=i src=x alt="aaaa bbbb cccc" style="max-width: 64px; white-space: nowrap"></div>"#,
+        r#"<!doctype html><div style="white-space: nowrap"><img id=i src=x alt="aaaa bbbb cccc" style="max-width: 64px"></div>"#,
+    ] {
+        let (doc, tree) = page(html, css, 800.0);
+        let image = tree.get(id(&doc, "i")).unwrap().rect;
+        assert_eq!((image.width, image.height), (64.0, 20.0), "{html}");
+        assert_eq!(runs(&tree), [("aaaa bbbb cccc".to_owned(), 16.0, 0.0)]);
+    }
+    let (doc, tree) = page(
+        r#"<!doctype html><div><img id=i src=x alt="aaaa   bbbb" style="white-space: pre"></div>"#,
+        css,
+        800.0,
+    );
+    let image = tree.get(id(&doc, "i")).unwrap().rect;
+    assert_eq!((image.width, image.height), (16.0 + 11.0 * 8.0, 20.0));
+    assert_eq!(runs(&tree), [("aaaa   bbbb".to_owned(), 16.0, 0.0)]);
+}
