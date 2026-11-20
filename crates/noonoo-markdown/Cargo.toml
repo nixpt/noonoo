@@ -1,6 +1,7 @@
 [package]
 name = "noonoo-markdown"
 description = "Noonoo's Markdown parser: a CommonMark subset to HTML."
+readme = "README.md"
 version.workspace = true
 license.workspace = true
 homepage.workspace = true

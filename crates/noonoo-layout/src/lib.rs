@@ -2355,3 +2355,7 @@ thread_local! {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

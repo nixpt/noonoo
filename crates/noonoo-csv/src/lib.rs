@@ -182,3 +182,7 @@ mod tests {
         assert!(to_html("a\n<b>").contains("<td>&lt;b&gt;</td>"));
     }
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

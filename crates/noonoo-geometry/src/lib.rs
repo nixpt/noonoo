@@ -159,3 +159,7 @@ mod tests {
         assert!(!rect.contains(Point::new(11.0, 5.0)));
     }
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

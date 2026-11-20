@@ -362,3 +362,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

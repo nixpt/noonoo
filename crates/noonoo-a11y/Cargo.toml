@@ -1,6 +1,7 @@
 [package]
 name = "noonoo-a11y"
 description = "Noonoo's accessibility tree: DOM + computed style + layout into an assistive model."
+readme = "README.md"
 version.workspace = true
 license.workspace = true
 homepage.workspace = true

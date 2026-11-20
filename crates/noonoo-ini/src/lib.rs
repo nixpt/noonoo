@@ -151,3 +151,7 @@ port = 8080
         assert_eq!(ini.get("", "a"), Some("1"));
     }
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

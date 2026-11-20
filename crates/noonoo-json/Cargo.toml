@@ -1,6 +1,7 @@
 [package]
 name = "noonoo-json"
 description = "Noonoo's JSON: a dependency-free parser, value model, and writer."
+readme = "README.md"
 version.workspace = true
 license.workspace = true
 homepage.workspace = true

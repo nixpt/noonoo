@@ -871,3 +871,7 @@ mod tests {
         assert_eq!(doc.element(td).unwrap().attr("colspan"), Some("2"));
     }
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

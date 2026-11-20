@@ -1,6 +1,7 @@
 [package]
 name = "noonoo-xml"
 description = "Noonoo's XML parser: documents into the noonoo-dom tree."
+readme = "README.md"
 version.workspace = true
 license.workspace = true
 homepage.workspace = true

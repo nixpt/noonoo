@@ -953,3 +953,7 @@ mod tests {
         assert!(draws >= 3);
     }
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

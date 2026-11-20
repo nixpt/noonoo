@@ -204,3 +204,7 @@ mod text_metrics_tests {
         );
     }
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

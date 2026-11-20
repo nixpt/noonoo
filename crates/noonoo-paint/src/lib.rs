@@ -2159,3 +2159,7 @@ mod tests {
         assert!(first_border > last_green, "{fills:?}");
     }
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

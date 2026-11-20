@@ -572,3 +572,7 @@ mod tests {
         assert_eq!(body, "# Title\n");
     }
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

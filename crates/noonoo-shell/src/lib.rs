@@ -1059,3 +1059,7 @@ mod tests {
         assert!(navigation_allowed(&Origin::Custom("app".into()), "exo"));
     }
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

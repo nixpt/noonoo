@@ -644,3 +644,7 @@ mod tests {
         assert_eq!(hx.tick(&mut doc, 2000.0).unwrap().len(), 1);
     }
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

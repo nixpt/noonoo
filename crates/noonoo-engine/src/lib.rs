@@ -357,3 +357,7 @@ mod tests {
         assert!(!list.is_empty());
     }
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

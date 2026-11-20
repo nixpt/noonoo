@@ -1,6 +1,7 @@
 [package]
 name = "noonoo-geometry"
 description = "Noonoo's geometry primitives: points, sizes, and rectangles."
+readme = "README.md"
 version.workspace = true
 license.workspace = true
 homepage.workspace = true

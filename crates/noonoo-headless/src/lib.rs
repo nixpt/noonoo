@@ -370,3 +370,7 @@ mod tests {
         assert_eq!(clock.now_ms(), 30.0);
     }
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

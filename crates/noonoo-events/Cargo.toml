@@ -1,6 +1,7 @@
 [package]
 name = "noonoo-events"
 description = "Noonoo's input event model and DOM event dispatch."
+readme = "README.md"
 version.workspace = true
 license.workspace = true
 homepage.workspace = true

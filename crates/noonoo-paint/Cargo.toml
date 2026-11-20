@@ -1,6 +1,7 @@
 [package]
 name = "noonoo-paint"
 description = "Noonoo's paint: a layout tree into a backend-neutral render command stream."
+readme = "README.md"
 version.workspace = true
 license.workspace = true
 homepage.workspace = true
