@@ -1,6 +1,7 @@
 [package]
 name = "noonoo-text"
 description = "Noonoo's text layer: shaping, font fallback, and line breaking."
+readme = "README.md"
 version.workspace = true
 license.workspace = true
 homepage.workspace = true

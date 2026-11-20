@@ -1,6 +1,7 @@
 [package]
 name = "noonoo-motion"
 description = "Noonoo's motion: spring timing with velocity-preserving retarget."
+readme = "README.md"
 version.workspace = true
 license.workspace = true
 homepage.workspace = true

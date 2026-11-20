@@ -50,3 +50,7 @@ pub mod prelude {
         layout, markdown, motion, net, paint, parse, selectors, style, svg, text, toml, ttf, xml,
     };
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

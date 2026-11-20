@@ -1,6 +1,7 @@
 [package]
 name = "noonoo-layout"
 description = "Noonoo's box layout: computed style into a positioned box tree."
+readme = "README.md"
 version.workspace = true
 license.workspace = true
 homepage.workspace = true

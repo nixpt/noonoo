@@ -1,6 +1,7 @@
 [package]
 name = "noonoo-caison"
 description = "Noonoo's CAISON parser: Crush AI-native Semantic Object Notation."
+readme = "README.md"
 version.workspace = true
 license.workspace = true
 homepage.workspace = true

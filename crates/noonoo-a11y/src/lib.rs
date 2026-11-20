@@ -96,3 +96,7 @@ pub fn compose(name: &str, layers: &[(&A11yTree, Point)]) -> A11yTree {
 
 /// The version of this crate, taken from the workspace.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

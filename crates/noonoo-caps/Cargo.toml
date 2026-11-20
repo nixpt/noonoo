@@ -1,6 +1,7 @@
 [package]
 name = "noonoo-caps"
 description = "Noonoo's capability gating: the policy seam, scopes, and a gated DOM."
+readme = "README.md"
 version.workspace = true
 license.workspace = true
 homepage.workspace = true

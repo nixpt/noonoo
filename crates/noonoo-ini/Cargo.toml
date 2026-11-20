@@ -1,6 +1,7 @@
 [package]
 name = "noonoo-ini"
 description = "Noonoo's INI parser: sections and key/value pairs to a value model."
+readme = "README.md"
 version.workspace = true
 license.workspace = true
 homepage.workspace = true

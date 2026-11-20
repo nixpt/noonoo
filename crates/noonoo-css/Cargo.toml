@@ -1,6 +1,7 @@
 [package]
 name = "noonoo-css"
 description = "Noonoo's CSS: tokenizer, selectors, and the value/property model."
+readme = "README.md"
 version.workspace = true
 license.workspace = true
 homepage.workspace = true

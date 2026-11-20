@@ -482,3 +482,7 @@ mod tests {
         assert!(Stylesheet::parse("a { color: red").is_err());
     }
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

@@ -1,6 +1,7 @@
 [package]
 name = "noonoo-engine"
 description = "Noonoo's orchestration: a parsed, styled, laid-out engine over a DOM document."
+readme = "README.md"
 version.workspace = true
 license.workspace = true
 homepage.workspace = true

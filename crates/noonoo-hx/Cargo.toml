@@ -1,6 +1,7 @@
 [package]
 name = "noonoo-hx"
 description = "Noonoo's htmx-like layer: declarative attributes driving fetch + DOM swaps."
+readme = "README.md"
 version.workspace = true
 license.workspace = true
 homepage.workspace = true

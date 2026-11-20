@@ -451,3 +451,7 @@ mod tests {
         assert!(Json::parse("{} extra").is_err());
     }
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

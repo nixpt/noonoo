@@ -1069,3 +1069,7 @@ mod tests {
         assert_eq!(get("d").right, 1.0);
     }
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

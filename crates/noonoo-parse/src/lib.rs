@@ -196,3 +196,7 @@ mod tests {
         assert!(!c.eat_str("nope"));
     }
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

@@ -1,6 +1,7 @@
 [package]
 name = "noonoo-svg"
 description = "Noonoo's SVG parser: an SVG subset rendered to paint commands."
+readme = "README.md"
 version.workspace = true
 license.workspace = true
 homepage.workspace = true

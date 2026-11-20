@@ -313,3 +313,7 @@ mod tests {
         assert!(parse("<a>").is_err());
     }
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;

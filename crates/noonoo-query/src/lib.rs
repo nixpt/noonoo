@@ -173,3 +173,7 @@ pub fn query_selector_all_in(
     let selectors = parse(selector)?;
     Ok(matching_under(doc, root, &selectors).collect())
 }
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;
