@@ -103,6 +103,11 @@ pub(crate) fn decode(source: &str) -> String {
     out
 }
 
+/// Decode every character reference in an attribute's value.
+pub(crate) fn decode_attribute(source: &str) -> String {
+    decode(source)
+}
+
 /// Decode one reference — the consumed count **excludes** the `&`.
 type Decoded = (String, usize);
 

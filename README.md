@@ -19,9 +19,10 @@ one opt-in integration crate and kept out of the default build.
 
 ## Features
 
-- **HTML.** An owned tokenizer and tree builder: implied `html`/`head`/`body`,
-  implied end tags and table sections, character references, quirks-mode
-  detection from the doctype, and `set_inner_html`.
+- **HTML.** An owned tokenizer and tree builder that follow the HTML
+  standard's insertion modes, misnested formatting and foster parenting
+  included; character references, quirks-mode detection from the doctype,
+  and `set_inner_html`.
 - **DOM.** Stable `NodeId`s, checked mutation, `querySelector`-style queries
   with full selectors, and event dispatch with bubbling.
 - **CSS cascade.** Selectors with specificity, `@media` (sizes, ranges,
@@ -111,8 +112,10 @@ correctly yet:
 - `@media`: `or`, nested conditions and host-supplied preferences (dark mode,
   HiDPI) are not supported; preference queries answer for a light desktop
   window.
-- The HTML parser does not implement foster parenting or active formatting
-  elements.
+- The HTML parser runs no scripts (`<noscript>` holds markup), keeps a
+  `<template>`'s contents as its children and SVG element names lowercase,
+  and has no processing instruction nodes, declarative shadow roots or
+  `<selectedcontent>` mirroring.
 - `@keyframes` animations, `srcset`, `<picture>`, `object-fit`, image
   animation and CSS `url()` backgrounds are not implemented.
 - 3D transforms are not supported.

@@ -22,8 +22,8 @@
 //! node itself. Neither sanitizes: a fragment that parses also serializes
 //! back with the same parse.
 
-use crate::{is_raw_text, is_void};
-use noonoo_dom::{Document, NodeData, NodeId};
+use crate::VOID_ELEMENTS;
+use noonoo_dom::{Document, Namespace, NodeData, NodeId};
 
 /// The HTML of `node`'s children.
 pub fn inner_html(document: &Document, node: NodeId) -> String {
@@ -54,11 +54,12 @@ fn write_outer(document: &Document, node: NodeId, out: &mut String) {
                 out.push('"');
             }
             out.push('>');
-            if is_void(&element.name) {
+            let html = element.namespace == Namespace::Html;
+            if html && is_void(&element.name) {
                 // Void elements carry no content and take no end tag.
                 return;
             }
-            if is_raw_text(&element.name) {
+            if html && is_raw_text(&element.name) {
                 // Its content is data, verbatim.
                 out.push_str(&document.text_content(node));
             } else {
@@ -85,6 +86,27 @@ fn write_outer(document: &Document, node: NodeId, out: &mut String) {
         Some(NodeData::Doctype { .. }) => {}
         None => {} // The id is not in this document.
     }
+}
+
+/// The void elements, and the obsolete ones that serialize like them.
+fn is_void(name: &str) -> bool {
+    VOID_ELEMENTS.contains(&name) || matches!(name, "basefont" | "bgsound" | "frame" | "keygen")
+}
+
+/// The elements whose text is written as it is.
+fn is_raw_text(name: &str) -> bool {
+    matches!(
+        name,
+        "iframe"
+            | "noembed"
+            | "noframes"
+            | "plaintext"
+            | "script"
+            | "style"
+            | "textarea"
+            | "title"
+            | "xmp"
+    )
 }
 
 /// Contexts to escape, as bit flags.

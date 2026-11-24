@@ -151,6 +151,10 @@ impl<T> Tree<T> {
 
     /// Whether `ancestor` is `node` or above it.
     pub fn is_ancestor_of(&self, ancestor: NodeId, node: NodeId) -> bool {
+        // A new node, as it is put in the tree, is above nothing.
+        if ancestor != node && self.children(ancestor).is_empty() {
+            return false;
+        }
         let mut cursor = Some(node);
         while let Some(id) = cursor {
             if id == ancestor {
@@ -197,7 +201,10 @@ impl<T> Tree<T> {
         if let Some(parent) = self.parent(id)
             && let Some(p) = self.slot_mut(parent)
         {
-            p.children.retain(|&child| child != id);
+            // From the end, where a parser works.
+            if let Some(index) = p.children.iter().rposition(|&child| child == id) {
+                p.children.remove(index);
+            }
         }
         if let Some(c) = self.slot_mut(id) {
             c.parent = None;

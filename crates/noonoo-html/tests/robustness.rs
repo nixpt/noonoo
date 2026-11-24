@@ -172,3 +172,152 @@ fn nesting_under_the_depth_limit_is_kept() {
         "<div><div><p>x</p></div></div>"
     );
 }
+
+/// The deepest node, the document being 0.
+fn depth(doc: &noonoo_dom::Document) -> usize {
+    let mut deepest = 0;
+    let mut stack = vec![(doc.root(), 0)];
+    while let Some((node, depth)) = stack.pop() {
+        deepest = deepest.max(depth);
+        stack.extend(doc.tree().children(node).iter().map(|&c| (c, depth + 1)));
+    }
+    deepest
+}
+
+/// Misnested markup the tree builder moves and copies: however much of it
+/// there is, the tree stays within the depth limit and in proportion to the
+/// source.
+#[test]
+fn misnesting_stays_bounded() {
+    const N: usize = 4000;
+    let numbered = |tag: &str| -> String { (0..N).map(|i| format!("<{tag} a={i}>")).collect() };
+    for source in [
+        "<a><div>".repeat(N),
+        "<b><p></b>".repeat(N),
+        "<b>".repeat(N) + "<p>" + &"</b>".repeat(N),
+        format!("<b>{}<p>{}", "<i>".repeat(N), "</b>".repeat(N)),
+        numbered("b") + &"<p>x".repeat(N),
+        numbered("font") + &"<div></font>".repeat(N),
+        format!("<table>{}", "a<b>".repeat(N)),
+        "<table><b><tr><td>".repeat(N),
+        "<table><a>".repeat(N),
+        "<svg><desc><table><b>".repeat(N),
+        "<template><table><tr><a>".repeat(N),
+        "<button><b><p>".repeat(N),
+        "<nobr><div>".repeat(N),
+        "<div>".repeat(N) + &"</x>".repeat(N),
+    ] {
+        let doc = parse(&source);
+        assert!(depth(&doc) <= noonoo_html::MAX_TREE_DEPTH, "{source:.40}");
+        // The copies' allowance, in elements (see `builder`).
+        assert!(
+            doc.elements().len() < 270_000 + source.len(),
+            "{source:.40}"
+        );
+    }
+}
+
+/// Tags that nest, close, move and copy, in no order: every parse gives a
+/// tree whose links agree, the same one each time.
+#[test]
+fn random_tags_give_a_consistent_tree() {
+    const TAGS: &[&str] = &[
+        "a",
+        "b",
+        "i",
+        "nobr",
+        "font",
+        "p",
+        "div",
+        "li",
+        "ul",
+        "dd",
+        "h1",
+        "table",
+        "tbody",
+        "tr",
+        "td",
+        "caption",
+        "colgroup",
+        "col",
+        "select",
+        "option",
+        "optgroup",
+        "input",
+        "button",
+        "form",
+        "template",
+        "svg",
+        "title",
+        "desc",
+        "foreignObject",
+        "math",
+        "mi",
+        "annotation-xml",
+        "frameset",
+        "html",
+        "head",
+        "body",
+        "applet",
+        "ruby",
+        "rt",
+        "textarea",
+        "script",
+        "style",
+        "noscript",
+        "br",
+        "hr",
+        "image",
+        "pre",
+        "x-y",
+    ];
+    let mut rng = Rng::new(7);
+    for round in 0..1500 {
+        let mut source = String::new();
+        for _ in 0..(rng.next() as usize % 120) {
+            let tag = TAGS[rng.next() as usize % TAGS.len()];
+            match rng.next() % 8 {
+                0..=3 => source += &format!("<{tag} a={}>", rng.next() % 4),
+                4 | 5 => source += &format!("</{tag}>"),
+                6 => source += "x",
+                _ => {
+                    source += [" ", "<!--c-->", "<![CDATA[d]]>", "&amp", "\0", "<b>"]
+                        [rng.next() as usize % 6]
+                }
+            }
+        }
+        let doc = match round % 3 {
+            0 => {
+                let mut doc = noonoo_dom::Document::new();
+                let tag = TAGS[rng.next() as usize % TAGS.len()];
+                let root = doc.root();
+                let node = doc.create_element(tag);
+                doc.mutate().append_child(root, node).unwrap();
+                noonoo_html::set_inner_html(&mut doc, node, &source).unwrap();
+                doc
+            }
+            _ => parse(&source),
+        };
+        let tree = doc.tree();
+        let nodes = tree.descendants(doc.root());
+        let mut seen = std::collections::HashSet::new();
+        for &node in &nodes {
+            assert!(seen.insert(node), "{source}");
+            for &child in tree.children(node) {
+                assert_eq!(tree.parent(child), Some(node), "{source}");
+            }
+            // Text is joined up.
+            let texts = tree.children(node).windows(2).filter(|pair| {
+                pair.iter()
+                    .all(|&id| doc.node(id).is_some_and(|n| n.as_text().is_some()))
+            });
+            let moved = source.contains("</") || source.contains("<a") || source.contains("<nobr");
+            assert!(moved || texts.count() == 0, "{source}");
+        }
+        if round % 3 != 0 {
+            let html = tree.children(doc.root()).iter();
+            let elements = html.filter(|&&id| doc.element(id).is_some()).count();
+            assert_eq!(elements, 1, "{source}");
+        }
+    }
+}

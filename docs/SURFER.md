@@ -114,5 +114,4 @@ helpers surfer hand-rolled. Each is a small, headless-testable add.
   "What belongs to the consumer"), no cookie store, no privacy/proxy policy —
   those live behind the loader seam the host satisfies.
 - **Backend gaps on the engine side** stand: media queries/transforms/
-  animations, form-control painting, and the full HTML5 insertion modes are
-  future slices (`docs/ROADMAP.md`); Linux is the only a11y adapter.
+  animations and form-control painting are future slices (`docs/ROADMAP.md`); Linux is the only a11y adapter.

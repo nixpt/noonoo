@@ -1,46 +1,11 @@
-//! Foreign content: which namespace a new element joins, and the case SVG
-//! and MathML attribute names take (HTML §13.2.6.5, "adjust SVG
-//! attributes" and "adjust MathML attributes").
+//! Foreign content: the case SVG and MathML attribute names take (HTML
+//! §13.2.6.1, "adjust SVG attributes" and "adjust MathML attributes").
 //!
-//! Not modelled: the start tags that break out of foreign content (a
-//! `<div>` straight inside `<svg>` stays there), SVG tag-name case
-//! (`clipPath` stays `clippath`) and the namespaced `xlink:`/`xml:`
-//! attributes.
+//! Not modelled: SVG tag-name case (`clipPath` stays `clippath`, as element
+//! names are lowercase in the DOM) and the namespaced `xlink:`/`xml:`
+//! attributes, which keep their prefixed names.
 
-use noonoo_dom::{Document, Namespace, NodeId};
-
-/// The namespace an element named `name` joins under `parent`: `<svg>`
-/// starts SVG and `<math>` MathML; anything else takes its parent's,
-/// except that an HTML integration point's children are HTML.
-pub(crate) fn namespace_of(doc: &Document, parent: NodeId, name: &str) -> Namespace {
-    match name {
-        "svg" => return Namespace::Svg,
-        "math" => return Namespace::MathMl,
-        _ => {}
-    }
-    let Some(parent) = doc.element(parent) else {
-        return Namespace::Html;
-    };
-    match parent.namespace {
-        Namespace::Svg if matches!(parent.name.as_str(), "foreignobject" | "desc" | "title") => {
-            Namespace::Html
-        }
-        Namespace::MathMl if is_mathml_text_point(parent) => Namespace::Html,
-        namespace => namespace,
-    }
-}
-
-/// MathML's text integration points, and an `annotation-xml` holding HTML.
-fn is_mathml_text_point(element: &noonoo_dom::ElementData) -> bool {
-    match element.name.as_str() {
-        "mi" | "mo" | "mn" | "ms" | "mtext" => true,
-        "annotation-xml" => element.attr("encoding").is_some_and(|encoding| {
-            encoding.eq_ignore_ascii_case("text/html")
-                || encoding.eq_ignore_ascii_case("application/xhtml+xml")
-        }),
-        _ => false,
-    }
-}
+use noonoo_dom::Namespace;
 
 /// The name a (lowercased) attribute takes on an element in `namespace`.
 pub(crate) fn adjust_attribute(namespace: Namespace, name: &str) -> &str {

@@ -511,6 +511,22 @@ mod tests {
     }
 
     #[test]
+    fn a_response_of_table_rows_keeps_them() {
+        let mut doc = noonoo_html::parse(
+            r##"<table><tbody id="rows"></tbody></table><button hx-get="/x" hx-target="#rows">go</button>"##,
+        );
+        let fetcher = StaticFetcher::new().with("/x", "<tr><td>a</td></tr><tr><td>b</td></tr>");
+        let button = doc.query_selector("button").unwrap().unwrap();
+        Hx::new(&fetcher)
+            .handle(&mut doc, &click(), button)
+            .unwrap()
+            .unwrap();
+        let rows = doc.get_element_by_id("rows").unwrap();
+        assert_eq!(doc.tree().children(rows).len(), 2);
+        assert_eq!(doc.get_elements_by_tag_name("td").len(), 2);
+    }
+
+    #[test]
     fn outer_html_swap_replaces_the_element() {
         let mut doc = noonoo_html::parse(
             r##"<div id="a">old</div><button hx-get="/x" hx-target="#a" hx-swap="outerHTML">go</button>"##,
