@@ -1,0 +1,16 @@
+[package]
+name = "noonoo-wpt-tree"
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+description = "Noonoo tooling: run the web-platform tests' HTML tree-construction cases."
+
+# Deliberately OUTSIDE the noonoo workspace (root `exclude`) and off CI: it
+# reads a checkout of the web-platform tests, which isn't vendored here.
+# Nothing in the engine depends on it.
+[workspace]
+
+[dependencies]
+noonoo-dom = { path = "../../crates/noonoo-dom" }
+noonoo-html = { path = "../../crates/noonoo-html" }
