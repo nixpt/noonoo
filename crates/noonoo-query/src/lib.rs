@@ -13,6 +13,10 @@
 //! though `body` is above it. Results are always in document order, whatever
 //! order a selector list names its parts in.
 //!
+//! A selector that doesn't parse, or names a pseudo-class this engine does
+//! not evaluate (`:checked`, `:empty`, `:first-of-type`), is an error rather
+//! than an empty answer.
+//!
 //! [`ElementRef`] is the read-only element view the matcher walks. The style
 //! cascade uses the same view.
 
@@ -21,7 +25,9 @@
 
 use noonoo_dom::{Document, NodeId};
 pub use noonoo_parse::ParseError;
-use noonoo_selectors::{Element, MatchContext, SelectorList};
+use noonoo_selectors::{
+    ComplexSelector, Element, MatchContext, PseudoClass, SelectorList, SimpleSelector,
+};
 
 /// One element of a [`Document`], viewed for selector matching.
 ///
@@ -169,8 +175,34 @@ impl Element for ElementRef<'_> {
     }
 }
 
+/// `selector` parsed, if every part of it can be evaluated: a pseudo-class
+/// that isn't would match nothing, which reads as an answer.
 fn parse(selector: &str) -> Result<SelectorList, ParseError> {
-    SelectorList::parse(selector)
+    let list = SelectorList::parse(selector)?;
+    match list.selectors.iter().find_map(unevaluated) {
+        Some(name) => Err(ParseError::new(
+            0,
+            format!("unsupported pseudo-class `:{name}`"),
+        )),
+        None => Ok(list),
+    }
+}
+
+fn unevaluated(selector: &ComplexSelector) -> Option<&str> {
+    let simples = selector.compounds.iter().flat_map(|c| &c.simples);
+    simples.into_iter().find_map(|simple| {
+        let SimpleSelector::PseudoClass(pseudo) = simple else {
+            return None;
+        };
+        match pseudo {
+            PseudoClass::Unknown(name) => Some(name.as_str()),
+            PseudoClass::Not(inner) | PseudoClass::Is(inner) => {
+                inner.selectors.iter().find_map(unevaluated)
+            }
+            PseudoClass::Has(list) => list.iter().find_map(|r| unevaluated(&r.selector)),
+            _ => None,
+        }
+    })
 }
 
 fn is_match(doc: &Document, node: NodeId, selectors: &SelectorList) -> bool {
