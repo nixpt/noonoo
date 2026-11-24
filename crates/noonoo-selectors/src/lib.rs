@@ -3,7 +3,7 @@
 //! This is the foundation the cascade stands on. It covers the selector subset
 //! a UI-grade engine needs (see `docs/DEPENDENCY-EXIT.md` §2): type, `*`,
 //! `.class`, `#id`, attributes with all the match operators, structural and
-//! logical pseudo-classes, pseudo-elements, and the four combinators.
+//! logical pseudo-classes, `:has()`, pseudo-elements, and the four combinators.
 //!
 //! Matching is generic over [`Element`] — a read-only view of one element — so
 //! this crate stays dependency-free and the style/engine layers supply the view
@@ -134,6 +134,8 @@ pub enum PseudoClass {
     Not(Box<SelectorList>),
     /// `:is(...)`.
     Is(Box<SelectorList>),
+    /// `:has(...)`.
+    Has(Vec<RelativeSelector>),
     /// `:hover`.
     Hover,
     /// `:focus`.
@@ -193,6 +195,16 @@ pub struct ComplexSelector {
     pub combinators: Vec<Combinator>,
 }
 
+/// A selector relative to an element, as `:has()` takes: `> a` is its
+/// children, `+ a` its next sibling, and a plain `a` its descendants.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct RelativeSelector {
+    /// How the first compound relates to the element.
+    pub combinator: Combinator,
+    /// The selector.
+    pub selector: ComplexSelector,
+}
+
 /// A comma-separated list of complex selectors.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct SelectorList {
@@ -227,6 +239,22 @@ pub trait Element: Clone {
     fn is_html(&self) -> bool {
         true
     }
+    /// The element children, in document order. `:has()` looks inside an
+    /// element with it: without it, nothing is inside.
+    fn children(&self) -> Vec<Self> {
+        Vec::new()
+    }
+    /// Following element siblings, in document order. `:has()` looks after
+    /// an element with it: without it, nothing follows.
+    fn next_siblings(&self) -> Vec<Self> {
+        Vec::new()
+    }
+    /// This element's own interactive state, for dynamic pseudo-classes
+    /// inside `:has()`: the [`MatchContext`] a selector is matched with is
+    /// its subject's.
+    fn state(&self) -> MatchContext {
+        MatchContext::default()
+    }
 }
 
 /// Interactive state a dynamic pseudo-class is evaluated against.
@@ -242,5 +270,6 @@ pub struct MatchContext {
 
 mod matching;
 mod parse;
+mod relative;
 #[cfg(test)]
 mod tests;

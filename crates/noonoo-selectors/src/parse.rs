@@ -1,6 +1,7 @@
 //! Selector parsing from the CSS token stream.
 
 use super::*;
+use crate::relative::MAX_COMPOUNDS;
 use noonoo_css::{Token, TokenKind, tokenize};
 use noonoo_parse::{ParseError, ParseResult};
 // --- parsing ---------------------------------------------------------------
@@ -8,17 +9,9 @@ use noonoo_parse::{ParseError, ParseResult};
 impl SelectorList {
     /// Parse a comma-separated selector list.
     pub fn parse(source: &str) -> ParseResult<SelectorList> {
-        let tokens = tokenize(source);
-        let mut parser = SelectorParser {
-            tokens,
-            source,
-            pos: 0,
-        };
+        let mut parser = SelectorParser::new(source, false, 0);
         let list = parser.parse_list()?;
-        parser.skip_trivia();
-        if !parser.at_end() {
-            return Err(parser.error("unexpected trailing tokens in selector"));
-        }
+        parser.expect_end()?;
         Ok(list)
     }
 }
@@ -27,9 +20,42 @@ struct SelectorParser<'a> {
     tokens: Vec<Token>,
     source: &'a str,
     pos: usize,
+    /// Inside `:has()`, where another one and pseudo-elements are invalid.
+    in_has: bool,
+    /// How many functions deep.
+    depth: usize,
 }
 
+/// The most functions deep a selector may be.
+const MAX_DEPTH: usize = 32;
+
 impl<'a> SelectorParser<'a> {
+    fn new(source: &'a str, in_has: bool, depth: usize) -> Self {
+        Self {
+            tokens: tokenize(source),
+            source,
+            pos: 0,
+            in_has,
+            depth,
+        }
+    }
+
+    fn expect_end(&mut self) -> ParseResult<()> {
+        self.skip_trivia();
+        if !self.at_end() {
+            return Err(self.error("unexpected trailing tokens in selector"));
+        }
+        Ok(())
+    }
+
+    /// The selector list that is a function's argument.
+    fn parse_argument(&self, source: &str) -> ParseResult<Box<SelectorList>> {
+        let mut parser = SelectorParser::new(source, self.in_has, self.depth + 1);
+        let list = parser.parse_list()?;
+        parser.expect_end()?;
+        Ok(Box::new(list))
+    }
+
     fn at_end(&self) -> bool {
         self.pos >= self.tokens.len()
     }
@@ -77,6 +103,40 @@ impl<'a> SelectorParser<'a> {
             break;
         }
         Ok(SelectorList { selectors })
+    }
+
+    /// `:has()`'s argument: a list of relative selectors.
+    fn parse_relative_list(&self, source: &str) -> ParseResult<Vec<RelativeSelector>> {
+        let mut parser = SelectorParser::new(source, true, self.depth + 1);
+        let mut list = Vec::new();
+        loop {
+            parser.skip_trivia();
+            let combinator = match parser.peek() {
+                Some(TokenKind::Delim('>')) => Combinator::Child,
+                Some(TokenKind::Delim('+')) => Combinator::AdjacentSibling,
+                Some(TokenKind::Delim('~')) => Combinator::GeneralSibling,
+                _ => Combinator::Descendant,
+            };
+            if combinator != Combinator::Descendant {
+                parser.pos += 1;
+                parser.skip_trivia();
+            }
+            let selector = parser.parse_complex()?;
+            if selector.compounds.len() > MAX_COMPOUNDS {
+                return Err(parser.error("selector in `:has()` is too long"));
+            }
+            list.push(RelativeSelector {
+                combinator,
+                selector,
+            });
+            parser.skip_trivia();
+            if !matches!(parser.peek(), Some(TokenKind::Comma)) {
+                break;
+            }
+            parser.pos += 1;
+        }
+        parser.expect_end()?;
+        Ok(list)
     }
 
     fn parse_complex(&mut self) -> ParseResult<ComplexSelector> {
@@ -174,6 +234,9 @@ impl<'a> SelectorParser<'a> {
             consumed = true;
         }
 
+        if self.in_has && compound.pseudo_element.is_some() {
+            return Err(self.error("a pseudo-element can't be inside `:has()`"));
+        }
         if !consumed {
             return Err(self.error("expected a selector"));
         }
@@ -272,10 +335,14 @@ impl<'a> SelectorParser<'a> {
             }
             Some(TokenKind::Function(name)) => {
                 self.pos += 1;
+                if self.depth >= MAX_DEPTH {
+                    return Err(self.error("selector is nested too deeply"));
+                }
                 let args = self.read_function_args()?;
                 match name.to_ascii_lowercase().as_str() {
-                    "not" => Ok(PseudoClass::Not(Box::new(SelectorList::parse(&args)?))),
-                    "is" | "where" => Ok(PseudoClass::Is(Box::new(SelectorList::parse(&args)?))),
+                    "not" => Ok(PseudoClass::Not(self.parse_argument(&args)?)),
+                    "is" | "where" => Ok(PseudoClass::Is(self.parse_argument(&args)?)),
+                    "has" if !self.in_has => self.parse_relative_list(&args).map(PseudoClass::Has),
                     "nth-child" => parse_nth(&args)
                         .map(PseudoClass::NthChild)
                         .ok_or_else(|| self.error(format!("invalid nth expression `{args}`"))),
@@ -296,7 +363,7 @@ impl<'a> SelectorParser<'a> {
         let mut depth = 1usize;
         while let Some(token) = self.tokens.get(self.pos) {
             match token.kind {
-                TokenKind::OpenParen => depth += 1,
+                TokenKind::OpenParen | TokenKind::Function(_) => depth += 1,
                 TokenKind::CloseParen => {
                     depth -= 1;
                     if depth == 0 {

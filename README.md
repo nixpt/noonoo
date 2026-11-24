@@ -25,7 +25,8 @@ one opt-in integration crate and kept out of the default build.
   and `set_inner_html`.
 - **DOM.** Stable `NodeId`s, checked mutation, `querySelector`-style queries
   with full selectors, and event dispatch with bubbling.
-- **CSS cascade.** Selectors with specificity, `@media` (sizes, ranges,
+- **CSS cascade.** Selectors (`:is()`, `:not()` and `:has()` among them)
+  with specificity, `@media` (sizes, ranges,
   orientation, resolution, interaction and preference features),
   `@font-face`, custom properties and `var()`, `calc()`/`min()`/`max()`/
   `clamp()`, viewport units, gradients, `:hover`/`:focus`/`:active`, and

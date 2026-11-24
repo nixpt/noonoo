@@ -96,7 +96,8 @@ impl Engine {
     /// subtrees they can reach, and a hover, focus or press moving restyles
     /// the nodes it moved between. An edit to a `<style>` element, a new
     /// viewport, or raw writes through [`Document::tree_mut`] restyle
-    /// everything.
+    /// everything, and so does any edit but to text while a rule uses
+    /// `:has()`.
     pub fn restyle(
         &mut self,
         styles: &mut Styles,

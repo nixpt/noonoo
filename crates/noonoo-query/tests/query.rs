@@ -137,3 +137,15 @@ fn attribute_names_match_by_namespace() {
         Some(s)
     );
 }
+
+#[test]
+fn functions_nest_to_a_limit() {
+    let doc = page();
+    assert_eq!(all(&doc, "li:not(:nth-child(1))"), ["l2"]);
+    assert_eq!(all(&doc, "li:not(:is(#l1, :where(p)))"), ["l2"]);
+    let nested = |depth: usize| format!("li{}#l1{}", ":not(".repeat(depth), ")".repeat(depth));
+    assert_eq!(all(&doc, &nested(32)), ["l1"]);
+    for depth in [33, 100_000] {
+        assert!(query_selector_all(&doc, &nested(depth)).is_err());
+    }
+}

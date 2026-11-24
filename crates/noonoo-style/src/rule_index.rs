@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 
 use noonoo_dom::ElementData;
-use noonoo_selectors::{ComplexSelector, SelectorList, SimpleSelector, TypeSelector};
+use noonoo_selectors::{ComplexSelector, PseudoClass, SelectorList, SimpleSelector, TypeSelector};
 
 /// Rules filed by the key their selectors need, as indices into the rule list.
 ///
@@ -25,6 +25,7 @@ pub(crate) struct RuleIndex {
     by_tag: HashMap<String, Vec<usize>>,
     universal: Vec<usize>,
     pseudo: Vec<usize>,
+    relational: bool,
 }
 
 /// Where one selector is filed.
@@ -59,12 +60,24 @@ fn bucket(selector: &ComplexSelector) -> Bucket<'_> {
     }
 }
 
+fn is_relational(selector: &ComplexSelector) -> bool {
+    let simples = selector.compounds.iter().flat_map(|c| &c.simples);
+    simples.into_iter().any(|simple| match simple {
+        SimpleSelector::PseudoClass(PseudoClass::Has(_)) => true,
+        SimpleSelector::PseudoClass(PseudoClass::Not(inner) | PseudoClass::Is(inner)) => {
+            inner.selectors.iter().any(is_relational)
+        }
+        _ => false,
+    })
+}
+
 impl RuleIndex {
     /// File every rule's selectors; `selectors[i]` is rule `i`'s list.
     pub(crate) fn new<'a>(selectors: impl IntoIterator<Item = &'a SelectorList>) -> Self {
         let mut index = RuleIndex::default();
         for (rule, list) in selectors.into_iter().enumerate() {
             for selector in &list.selectors {
+                index.relational |= is_relational(selector);
                 let slot = match bucket(selector) {
                     Bucket::Id(id) => index.by_id.entry(id.to_owned()).or_default(),
                     Bucket::Class(class) => index.by_class.entry(class.to_owned()).or_default(),
@@ -100,6 +113,12 @@ impl RuleIndex {
     /// The rules with a selector ending in a pseudo-element, in rule order.
     pub(crate) fn pseudo(&self) -> &[usize] {
         &self.pseudo
+    }
+
+    /// Whether some selector uses `:has()`, so an element's style can depend
+    /// on its descendants and later siblings.
+    pub(crate) fn relational(&self) -> bool {
+        self.relational
     }
 }
 

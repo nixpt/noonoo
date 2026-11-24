@@ -32,12 +32,47 @@ use noonoo_selectors::{Element, MatchContext, SelectorList};
 pub struct ElementRef<'a> {
     doc: &'a Document,
     id: NodeId,
+    interaction: Interaction,
+}
+
+/// The document's hovered, focused and pressed elements.
+#[derive(Clone, Copy, Default)]
+struct Interaction {
+    hovered: Option<NodeId>,
+    focused: Option<NodeId>,
+    active: Option<NodeId>,
 }
 
 impl<'a> ElementRef<'a> {
     /// A view of `id`, if it is an element of `doc`.
     pub fn new(doc: &'a Document, id: NodeId) -> Option<Self> {
-        doc.element(id).is_some().then_some(Self { doc, id })
+        doc.element(id).is_some().then_some(Self {
+            doc,
+            id,
+            interaction: Interaction::default(),
+        })
+    }
+
+    /// The same view in a document with these elements hovered, focused and
+    /// pressed, for `:has()` to find them.
+    pub fn with_interaction(
+        self,
+        hovered: Option<NodeId>,
+        focused: Option<NodeId>,
+        active: Option<NodeId>,
+    ) -> Self {
+        Self {
+            interaction: Interaction {
+                hovered,
+                focused,
+                active,
+            },
+            ..self
+        }
+    }
+
+    fn at(&self, id: NodeId) -> Self {
+        Self { id, ..*self }
     }
 
     /// The node this view is of.
@@ -84,7 +119,8 @@ impl Element for ElementRef<'_> {
             .is_none_or(|element| element.namespace == noonoo_dom::Namespace::Html)
     }
     fn parent(&self) -> Option<Self> {
-        ElementRef::new(self.doc, self.doc.tree().parent(self.id)?)
+        let parent = self.doc.tree().parent(self.id)?;
+        self.doc.element(parent).map(|_| self.at(parent))
     }
     fn previous_siblings(&self) -> Vec<Self> {
         let Some(parent) = self.doc.tree().parent(self.id) else {
@@ -92,8 +128,30 @@ impl Element for ElementRef<'_> {
         };
         self.element_children(parent)
             .take_while(|&child| child != self.id)
-            .map(|id| ElementRef { doc: self.doc, id })
+            .map(|id| self.at(id))
             .collect()
+    }
+    fn next_siblings(&self) -> Vec<Self> {
+        let Some(parent) = self.doc.tree().parent(self.id) else {
+            return Vec::new();
+        };
+        self.element_children(parent)
+            .skip_while(|&child| child != self.id)
+            .skip(1)
+            .map(|id| self.at(id))
+            .collect()
+    }
+    fn children(&self) -> Vec<Self> {
+        self.element_children(self.id)
+            .map(|id| self.at(id))
+            .collect()
+    }
+    fn state(&self) -> MatchContext {
+        MatchContext {
+            hovered: self.interaction.hovered == Some(self.id),
+            focused: self.interaction.focused == Some(self.id),
+            active: self.interaction.active == Some(self.id),
+        }
     }
     fn sibling_index(&self) -> usize {
         let Some(parent) = self.doc.tree().parent(self.id) else {

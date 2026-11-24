@@ -217,7 +217,7 @@ fn pseudo_winners_for(
     interaction: Interaction,
     pseudo: PseudoElement,
 ) -> HashMap<Property, Candidate> {
-    let Some(view) = ElementRef::new(doc, id) else {
+    let Some(view) = element_view(doc, id, interaction) else {
         return HashMap::new();
     };
     let ctx = match_context(id, interaction);
@@ -235,6 +235,14 @@ fn pseudo_winners_for(
         add_rule(&mut winners, rule, specificity.to_u32());
     }
     winners
+}
+
+fn element_view(doc: &Document, id: NodeId, interaction: Interaction) -> Option<ElementRef<'_>> {
+    Some(ElementRef::new(doc, id)?.with_interaction(
+        interaction.hovered,
+        interaction.focused,
+        interaction.active,
+    ))
 }
 
 fn match_context(id: NodeId, interaction: Interaction) -> MatchContext {
@@ -264,7 +272,7 @@ fn winners_for(
     candidates: &mut Vec<usize>,
     interaction: Interaction,
 ) -> HashMap<Property, Candidate> {
-    let (Some(view), Some(element)) = (ElementRef::new(doc, id), doc.element(id)) else {
+    let (Some(view), Some(element)) = (element_view(doc, id, interaction), doc.element(id)) else {
         return HashMap::new(); // Not an element: no rule applies.
     };
     // Dynamic pseudo-classes describe *this* element: `:hover` matches only
@@ -712,10 +720,12 @@ impl Cascade {
     /// counts as an attribute edit to each node that gained or lost
     /// hover, focus or press.
     ///
-    /// No selector looks at a later sibling, a descendant or text, so an
-    /// element's style can depend on an edit only if the element is under
-    /// the edited node's parent (attributes) or under the edited node
-    /// itself (children). Those subtrees are restyled; the rest is kept.
+    /// No selector looks at text, and only `:has()` at a later sibling or a
+    /// descendant. Without it, an element's style can depend on an edit only
+    /// if the element is under the edited node's parent (attributes) or
+    /// under the edited node itself (children). Those subtrees are restyled;
+    /// the rest is kept. If any rule uses `:has()`, such an edit restyles
+    /// everything.
     pub fn restyle_for(
         &self,
         styles: &mut Styles,
@@ -753,6 +763,9 @@ impl Cascade {
         }
         if roots.is_empty() {
             return 0;
+        }
+        if self.index.relational() {
+            return self.recompute(styles, doc, interaction);
         }
         // A root inside another's subtree is restyled with it.
         roots.sort_unstable();

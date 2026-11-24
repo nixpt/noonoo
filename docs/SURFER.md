@@ -30,7 +30,7 @@ Noonoo's side of the same question.
 | Surfer need | Noonoo primitive | Where |
 | --- | --- | --- |
 | Canonical DOM, stable ids, checked mutation | `Document`, `NodeId` (never reused), `DocumentMutator` returning `Result` | `noonoo-dom` |
-| Queries | `get_element_by_id`, `get_elements_by_tag_name` (`noonoo-dom`); full-selector `query_selector[_all]`, element-scoped `query_selector[_all]_in` (`querySelectorFrom`), and `matches`, with combinators, attributes, `:not`, `:is`, `:nth-child` | `noonoo-query` over `noonoo-selectors` |
+| Queries | `get_element_by_id`, `get_elements_by_tag_name` (`noonoo-dom`); full-selector `query_selector[_all]`, element-scoped `query_selector[_all]_in` (`querySelectorFrom`), and `matches`, with combinators, attributes, `:not`, `:is`, `:has`, `:nth-child` | `noonoo-query` over `noonoo-selectors` |
 | `text_content`, visible text | `Document::text_content` (surfer's skip-`<script>` wrapper stays host-side) | `noonoo-dom` |
 | Events | `dispatch` with bubbling + phases, `EventListener` | `noonoo-events` |
 | Style | [`noonoo-style`]: UA sheet + author sheets + inline `style`, vars/`calc()`, `:hover/:focus/:active` in the cascade | `noonoo-style` |
