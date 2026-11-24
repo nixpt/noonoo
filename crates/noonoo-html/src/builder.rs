@@ -1428,9 +1428,10 @@ impl<'d, 's> Builder<'d, 's> {
                 if self.in_template_contents() {
                     self.close_in_scope(Tag::Form);
                 } else if let Some(form) = self.form.take()
+                    // Not a fragment's own form, which isn't open in it.
                     && self
                         .find(|open| open.id == form, Tag::bounds_scope)
-                        .is_some()
+                        .is_some_and(|index| index > 0)
                 {
                     self.implied_ends(Tag::Other);
                     self.remove_open(form);

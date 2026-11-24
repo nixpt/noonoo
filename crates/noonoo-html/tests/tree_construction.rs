@@ -156,6 +156,17 @@ fn a_form_in_a_form_is_ignored() {
     assert_eq!(tree(&doc, div), "input");
 }
 
+/// The form the fragment is in isn't on the stack of open elements: its end
+/// tag closes nothing.
+#[test]
+fn a_fragments_own_form_is_not_closed_in_it() {
+    assert_eq!(inner("form", "<p>a</form>b"), r#"p["ab"]"#);
+    assert_eq!(
+        inner("form", "<div><p>a</form>b</div><form>c"),
+        r#"div[p["ab"]] form["c"]"#
+    );
+}
+
 #[test]
 fn a_button_closes_an_open_button() {
     check(&[
