@@ -138,6 +138,7 @@ dependencies = [
  "noonoo-events",
  "noonoo-html",
  "noonoo-net",
+ "noonoo-query",
 ]
 
 [[package]]
