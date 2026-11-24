@@ -15,7 +15,11 @@
 //!
 //! A selector that doesn't parse, or names a pseudo-class this engine does
 //! not evaluate (`:checked`, `:empty`, `:first-of-type`), is an error rather
-//! than an empty answer.
+//! than an empty answer. That is so wherever it is in the selector: one part
+//! makes a list an error (`a, input:checked`, `:is(a, :checked)`), as an
+//! invalid one does in the DOM, and `:not(:checked)`, which would match
+//! everything, is one too. A stylesheet differs: there such a part matches
+//! nothing (and a `:not()` of it everything), and the rest of the list applies.
 //!
 //! [`ElementRef`] is the read-only element view the matcher walks. The style
 //! cascade uses the same view.

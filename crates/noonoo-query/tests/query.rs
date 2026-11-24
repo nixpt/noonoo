@@ -185,3 +185,22 @@ fn a_selector_that_is_not_evaluated_is_an_error() {
     assert!(all(&doc, "li:hover").is_empty());
     assert!(all(&doc, "li::before").is_empty());
 }
+
+/// As in the DOM, where the whole of an invalid list is an error.
+#[test]
+fn one_part_that_is_not_evaluated_makes_the_selector_an_error() {
+    let doc = page();
+    for selector in [
+        "input:not(:checked)",
+        "a:not(:visited)",
+        "li:not(:empty)",
+        "a, input:checked",
+        "input:checked, a",
+        "a:is(a, :checked)",
+        "a:has(b, :checked)",
+    ] {
+        assert!(query_selector_all(&doc, selector).is_err(), "{selector}");
+        let p2 = doc.get_element_by_id("p2").unwrap();
+        assert!(matches(&doc, p2, selector).is_err(), "{selector}");
+    }
+}
