@@ -18,3 +18,4 @@ noonoo-dom.workspace = true
 noonoo-events.workspace = true
 noonoo-html.workspace = true
 noonoo-net.workspace = true
+noonoo-query.workspace = true

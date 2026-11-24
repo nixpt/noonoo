@@ -13,6 +13,14 @@
 //! though `body` is above it. Results are always in document order, whatever
 //! order a selector list names its parts in.
 //!
+//! A selector that doesn't parse, or names a pseudo-class this engine does
+//! not evaluate (`:checked`, `:empty`, `:first-of-type`), is an error rather
+//! than an empty answer. That is so wherever it is in the selector: one part
+//! makes a list an error (`a, input:checked`, `:is(a, :checked)`), as an
+//! invalid one does in the DOM, and `:not(:checked)`, which would match
+//! everything, is one too. A stylesheet differs: there such a part matches
+//! nothing (and a `:not()` of it everything), and the rest of the list applies.
+//!
 //! [`ElementRef`] is the read-only element view the matcher walks. The style
 //! cascade uses the same view.
 
@@ -21,7 +29,9 @@
 
 use noonoo_dom::{Document, NodeId};
 pub use noonoo_parse::ParseError;
-use noonoo_selectors::{Element, MatchContext, SelectorList};
+use noonoo_selectors::{
+    ComplexSelector, Element, MatchContext, PseudoClass, SelectorList, SimpleSelector,
+};
 
 /// One element of a [`Document`], viewed for selector matching.
 ///
@@ -32,12 +42,47 @@ use noonoo_selectors::{Element, MatchContext, SelectorList};
 pub struct ElementRef<'a> {
     doc: &'a Document,
     id: NodeId,
+    interaction: Interaction,
+}
+
+/// The document's hovered, focused and pressed elements.
+#[derive(Clone, Copy, Default)]
+struct Interaction {
+    hovered: Option<NodeId>,
+    focused: Option<NodeId>,
+    active: Option<NodeId>,
 }
 
 impl<'a> ElementRef<'a> {
     /// A view of `id`, if it is an element of `doc`.
     pub fn new(doc: &'a Document, id: NodeId) -> Option<Self> {
-        doc.element(id).is_some().then_some(Self { doc, id })
+        doc.element(id).is_some().then_some(Self {
+            doc,
+            id,
+            interaction: Interaction::default(),
+        })
+    }
+
+    /// The same view in a document with these elements hovered, focused and
+    /// pressed, for `:has()` to find them.
+    pub fn with_interaction(
+        self,
+        hovered: Option<NodeId>,
+        focused: Option<NodeId>,
+        active: Option<NodeId>,
+    ) -> Self {
+        Self {
+            interaction: Interaction {
+                hovered,
+                focused,
+                active,
+            },
+            ..self
+        }
+    }
+
+    fn at(&self, id: NodeId) -> Self {
+        Self { id, ..*self }
     }
 
     /// The node this view is of.
@@ -84,7 +129,8 @@ impl Element for ElementRef<'_> {
             .is_none_or(|element| element.namespace == noonoo_dom::Namespace::Html)
     }
     fn parent(&self) -> Option<Self> {
-        ElementRef::new(self.doc, self.doc.tree().parent(self.id)?)
+        let parent = self.doc.tree().parent(self.id)?;
+        self.doc.element(parent).map(|_| self.at(parent))
     }
     fn previous_siblings(&self) -> Vec<Self> {
         let Some(parent) = self.doc.tree().parent(self.id) else {
@@ -92,8 +138,30 @@ impl Element for ElementRef<'_> {
         };
         self.element_children(parent)
             .take_while(|&child| child != self.id)
-            .map(|id| ElementRef { doc: self.doc, id })
+            .map(|id| self.at(id))
             .collect()
+    }
+    fn next_siblings(&self) -> Vec<Self> {
+        let Some(parent) = self.doc.tree().parent(self.id) else {
+            return Vec::new();
+        };
+        self.element_children(parent)
+            .skip_while(|&child| child != self.id)
+            .skip(1)
+            .map(|id| self.at(id))
+            .collect()
+    }
+    fn children(&self) -> Vec<Self> {
+        self.element_children(self.id)
+            .map(|id| self.at(id))
+            .collect()
+    }
+    fn state(&self) -> MatchContext {
+        MatchContext {
+            hovered: self.interaction.hovered == Some(self.id),
+            focused: self.interaction.focused == Some(self.id),
+            active: self.interaction.active == Some(self.id),
+        }
     }
     fn sibling_index(&self) -> usize {
         let Some(parent) = self.doc.tree().parent(self.id) else {
@@ -111,8 +179,34 @@ impl Element for ElementRef<'_> {
     }
 }
 
+/// `selector` parsed, if every part of it can be evaluated: a pseudo-class
+/// that isn't would match nothing, which reads as an answer.
 fn parse(selector: &str) -> Result<SelectorList, ParseError> {
-    SelectorList::parse(selector)
+    let list = SelectorList::parse(selector)?;
+    match list.selectors.iter().find_map(unevaluated) {
+        Some(name) => Err(ParseError::new(
+            0,
+            format!("unsupported pseudo-class `:{name}`"),
+        )),
+        None => Ok(list),
+    }
+}
+
+fn unevaluated(selector: &ComplexSelector) -> Option<&str> {
+    let simples = selector.compounds.iter().flat_map(|c| &c.simples);
+    simples.into_iter().find_map(|simple| {
+        let SimpleSelector::PseudoClass(pseudo) = simple else {
+            return None;
+        };
+        match pseudo {
+            PseudoClass::Unknown(name) => Some(name.as_str()),
+            PseudoClass::Not(inner) | PseudoClass::Is(inner) => {
+                inner.selectors.iter().find_map(unevaluated)
+            }
+            PseudoClass::Has(list) => list.iter().find_map(|r| unevaluated(&r.selector)),
+            _ => None,
+        }
+    })
 }
 
 fn is_match(doc: &Document, node: NodeId, selectors: &SelectorList) -> bool {

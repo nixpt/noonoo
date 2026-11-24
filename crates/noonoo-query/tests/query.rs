@@ -137,3 +137,70 @@ fn attribute_names_match_by_namespace() {
         Some(s)
     );
 }
+
+#[test]
+fn functions_nest_to_a_limit() {
+    let doc = page();
+    assert_eq!(all(&doc, "li:not(:nth-child(1))"), ["l2"]);
+    assert_eq!(all(&doc, "li:not(:is(#l1, :where(p)))"), ["l2"]);
+    let nested = |depth: usize| format!("li{}#l1{}", ":not(".repeat(depth), ")".repeat(depth));
+    assert_eq!(all(&doc, &nested(32)), ["l1"]);
+    for depth in [33, 10_000] {
+        assert!(query_selector_all(&doc, &nested(depth)).is_err());
+    }
+}
+
+#[test]
+fn a_selector_that_is_not_evaluated_is_an_error() {
+    let doc = page();
+    for selector in [
+        "li:empty",
+        "input:checked",
+        "li:first-of-type",
+        "li:visited",
+        "li:frobnicate",
+        "p, li:empty",
+        "li:not(:empty)",
+        "li:is(a, p:empty) > b",
+        "li:has(> a:empty)",
+        "li:nth-last-child(1)",
+        "li:nth-of-type(1)",
+        "li:nth-child(1 of .x)",
+        "a:lang(en)",
+        "a[href='/LOCAL' i]",
+        "svg|a",
+        "li:not",
+        "li:is(",
+        "li:not()",
+        "li >",
+        "",
+    ] {
+        assert!(
+            query_selector_all(&doc, selector).is_err(),
+            "{selector} should be an error"
+        );
+    }
+    // Known, though a query finds none: nothing is hovered, and a
+    // pseudo-element isn't an element.
+    assert!(all(&doc, "li:hover").is_empty());
+    assert!(all(&doc, "li::before").is_empty());
+}
+
+/// As in the DOM, where the whole of an invalid list is an error.
+#[test]
+fn one_part_that_is_not_evaluated_makes_the_selector_an_error() {
+    let doc = page();
+    for selector in [
+        "input:not(:checked)",
+        "a:not(:visited)",
+        "li:not(:empty)",
+        "a, input:checked",
+        "input:checked, a",
+        "a:is(a, :checked)",
+        "a:has(b, :checked)",
+    ] {
+        assert!(query_selector_all(&doc, selector).is_err(), "{selector}");
+        let p2 = doc.get_element_by_id("p2").unwrap();
+        assert!(matches(&doc, p2, selector).is_err(), "{selector}");
+    }
+}

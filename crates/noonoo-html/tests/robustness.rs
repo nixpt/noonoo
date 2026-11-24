@@ -172,3 +172,234 @@ fn nesting_under_the_depth_limit_is_kept() {
         "<div><div><p>x</p></div></div>"
     );
 }
+
+/// The deepest node, the document being 0.
+fn depth(doc: &noonoo_dom::Document) -> usize {
+    let mut deepest = 0;
+    let mut stack = vec![(doc.root(), 0)];
+    while let Some((node, depth)) = stack.pop() {
+        deepest = deepest.max(depth);
+        stack.extend(doc.tree().children(node).iter().map(|&c| (c, depth + 1)));
+    }
+    deepest
+}
+
+/// Misnested markup the tree builder moves and copies: however much of it
+/// there is, the tree stays within the depth limit and in proportion to the
+/// source.
+#[test]
+fn misnesting_stays_bounded() {
+    const N: usize = 4000;
+    let numbered = |tag: &str| -> String { (0..N).map(|i| format!("<{tag} a={i}>")).collect() };
+    for source in [
+        "<a><div>".repeat(N),
+        "<b><p></b>".repeat(N),
+        "<b>".repeat(N) + "<p>" + &"</b>".repeat(N),
+        format!("<b>{}<p>{}", "<i>".repeat(N), "</b>".repeat(N)),
+        numbered("b") + &"<p>x".repeat(N),
+        numbered("font") + &"<div></font>".repeat(N),
+        format!("<table>{}", "a<b>".repeat(N)),
+        "<table><b><tr><td>".repeat(N),
+        "<table><a>".repeat(N),
+        "<svg><desc><table><b>".repeat(N),
+        "<template><table><tr><a>".repeat(N),
+        "<button><b><p>".repeat(N),
+        "<nobr><div>".repeat(N),
+        "<div>".repeat(N) + &"</x>".repeat(N),
+    ] {
+        let doc = parse(&source);
+        assert!(depth(&doc) <= noonoo_html::MAX_TREE_DEPTH, "{source:.40}");
+        // The copies' allowance, in elements (see `builder`).
+        assert!(
+            doc.elements().len() < 270_000 + source.len(),
+            "{source:.40}"
+        );
+    }
+}
+
+/// Reopened formatting is copied up to an allowance, whatever the markup
+/// asks for; the text all stays.
+#[test]
+fn reopened_formatting_stays_within_its_allowance() {
+    let open: String = (0..500).map(|n| format!("<b x={n}>")).collect();
+    let source = format!("<p>{open}{}", "x<p>".repeat(2000));
+    let doc = parse(&source);
+    // A copy counts 132 or so bytes of the allowance's 16 MiB (see
+    // `builder`), where all that is asked for is a million of them.
+    let elements = doc.elements().len();
+    assert!((100_000..150_000).contains(&elements), "{elements}");
+    assert_eq!(doc.text_content(doc.root()).len(), 2000);
+}
+
+/// Elements that leave the stack of open elements from its middle leave
+/// what is inside them open: the tree is deeper than the stack is long.
+#[test]
+fn what_stays_open_after_its_parent_stays_within_the_depth_limit() {
+    for (unit, tail) in [
+        ("<form><div></form>", ""),
+        ("<form><div></form>", "<table><td>"),
+        ("<a><math><mi>", ""),
+        ("<form><a><math><mi></form>", ""),
+        ("<a><svg><desc><form><div></form>", ""),
+        ("<table><td><form><div></form>", ""),
+        ("<b><form><p></form>", "</b>"),
+        ("<template><tr><a>", ""),
+        ("<template><tr>", "x"),
+    ] {
+        for source in [
+            unit.repeat(3000) + tail,
+            format!("{unit}{tail}").repeat(3000),
+        ] {
+            let doc = parse(&source);
+            assert!(depth(&doc) <= noonoo_html::MAX_TREE_DEPTH, "{source:.60}");
+
+            let mut doc = noonoo_dom::Document::new();
+            let node = doc.create_element("div");
+            let root = doc.root();
+            doc.mutate().append_child(root, node).unwrap();
+            noonoo_html::set_inner_html(&mut doc, node, &source).unwrap();
+            // The context, then as deep below it.
+            assert!(
+                depth(&doc) <= noonoo_html::MAX_TREE_DEPTH + 1,
+                "in a fragment: {source:.60}"
+            );
+        }
+    }
+    // `head` leaves from under a template, `<head>` being closed.
+    let doc = parse(&format!("<head></head><template>{}", "<div>".repeat(3000)));
+    assert!(depth(&doc) <= noonoo_html::MAX_TREE_DEPTH);
+}
+
+/// Deep random markup, mostly start tags, keeps to the depth limit.
+#[test]
+fn deep_random_markup_stays_within_the_depth_limit() {
+    const TAGS: &[&str] = &[
+        "a", "b", "nobr", "form", "div", "p", "button", "table", "tr", "td", "caption", "math",
+        "mi", "svg", "desc", "template", "applet", "li", "ruby", "x-y", "select", "h1",
+    ];
+    for seed in 1..=12 {
+        let mut rng = Rng::new(seed);
+        // A few tags at a time, or most rounds stay shallow.
+        let pool: Vec<&str> = (0..3 + rng.next() as usize % 5)
+            .map(|_| TAGS[rng.next() as usize % TAGS.len()])
+            .collect();
+        let mut source = String::new();
+        for _ in 0..6000 {
+            let tag = pool[rng.next() as usize % pool.len()];
+            match rng.next() % 5 {
+                0 => source += &format!("</{tag}>"),
+                _ => source += &format!("<{tag}>"),
+            }
+        }
+        let doc = parse(&source);
+        assert!(
+            depth(&doc) <= noonoo_html::MAX_TREE_DEPTH,
+            "seed {seed}: {pool:?}"
+        );
+    }
+}
+
+/// Tags that nest, close, move and copy, in no order: every parse gives a
+/// tree whose links agree, the same one each time.
+#[test]
+fn random_tags_give_a_consistent_tree() {
+    const TAGS: &[&str] = &[
+        "a",
+        "b",
+        "i",
+        "nobr",
+        "font",
+        "p",
+        "div",
+        "li",
+        "ul",
+        "dd",
+        "h1",
+        "table",
+        "tbody",
+        "tr",
+        "td",
+        "caption",
+        "colgroup",
+        "col",
+        "select",
+        "option",
+        "optgroup",
+        "input",
+        "button",
+        "form",
+        "template",
+        "svg",
+        "title",
+        "desc",
+        "foreignObject",
+        "math",
+        "mi",
+        "annotation-xml",
+        "frameset",
+        "html",
+        "head",
+        "body",
+        "applet",
+        "ruby",
+        "rt",
+        "textarea",
+        "script",
+        "style",
+        "noscript",
+        "br",
+        "hr",
+        "image",
+        "pre",
+        "x-y",
+    ];
+    let mut rng = Rng::new(7);
+    for round in 0..1500 {
+        let mut source = String::new();
+        for _ in 0..(rng.next() as usize % 120) {
+            let tag = TAGS[rng.next() as usize % TAGS.len()];
+            match rng.next() % 8 {
+                0..=3 => source += &format!("<{tag} a={}>", rng.next() % 4),
+                4 | 5 => source += &format!("</{tag}>"),
+                6 => source += "x",
+                _ => {
+                    source += [" ", "<!--c-->", "<![CDATA[d]]>", "&amp", "\0", "<b>"]
+                        [rng.next() as usize % 6]
+                }
+            }
+        }
+        let doc = match round % 3 {
+            0 => {
+                let mut doc = noonoo_dom::Document::new();
+                let tag = TAGS[rng.next() as usize % TAGS.len()];
+                let root = doc.root();
+                let node = doc.create_element(tag);
+                doc.mutate().append_child(root, node).unwrap();
+                noonoo_html::set_inner_html(&mut doc, node, &source).unwrap();
+                doc
+            }
+            _ => parse(&source),
+        };
+        let tree = doc.tree();
+        let nodes = tree.descendants(doc.root());
+        let mut seen = std::collections::HashSet::new();
+        for &node in &nodes {
+            assert!(seen.insert(node), "{source}");
+            for &child in tree.children(node) {
+                assert_eq!(tree.parent(child), Some(node), "{source}");
+            }
+            // Text is joined up.
+            let texts = tree.children(node).windows(2).filter(|pair| {
+                pair.iter()
+                    .all(|&id| doc.node(id).is_some_and(|n| n.as_text().is_some()))
+            });
+            let moved = source.contains("</") || source.contains("<a") || source.contains("<nobr");
+            assert!(moved || texts.count() == 0, "{source}");
+        }
+        if round % 3 != 0 {
+            let html = tree.children(doc.root()).iter();
+            let elements = html.filter(|&&id| doc.element(id).is_some()).count();
+            assert_eq!(elements, 1, "{source}");
+        }
+    }
+}

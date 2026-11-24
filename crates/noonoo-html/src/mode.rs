@@ -2,8 +2,6 @@
 
 use noonoo_dom::QuirksMode;
 
-use crate::Token;
-
 /// Public identifiers that put a document in quirks mode, matched as
 /// case-insensitive prefixes.
 const QUIRKS_PREFIXES: &[&str] = &[
@@ -84,25 +82,12 @@ const XHTML_LOOSE: &[&str] = &[
     "-//w3c//dtd xhtml 1.0 transitional//",
 ];
 
-/// The mode `tokens` put a parsed document in: the doctype's, when one
-/// comes before anything but comments and white space; quirks without.
-pub(crate) fn of(tokens: &[Token]) -> QuirksMode {
-    for token in tokens {
-        match token {
-            Token::Comment(_) => {}
-            Token::Text(text) if text.trim().is_empty() => {}
-            Token::Doctype {
-                name,
-                public_id,
-                system_id,
-            } => return of_doctype(name, public_id.as_deref(), system_id.as_deref()),
-            _ => return QuirksMode::Quirks,
-        }
-    }
-    QuirksMode::Quirks
-}
-
-fn of_doctype(name: &str, public_id: Option<&str>, system_id: Option<&str>) -> QuirksMode {
+/// The mode a doctype puts a document in; without one it is quirks.
+pub(crate) fn of_doctype(
+    name: &str,
+    public_id: Option<&str>,
+    system_id: Option<&str>,
+) -> QuirksMode {
     if !name.eq_ignore_ascii_case("html") {
         return QuirksMode::Quirks;
     }

@@ -32,12 +32,16 @@ pub struct Selector {
 
 impl Selector {
     /// Parse a compound selector such as `div`, `#main`, `.card`, `a.btn`.
+    ///
+    /// Anything else a selector may have (`p:has(a)`, `a[href]`, `*`) is
+    /// [`SelectorError::Unsupported`]: `noonoo-query` has those.
     pub fn parse(input: &str) -> Result<Self, SelectorError> {
         let source = input.trim();
         if source.is_empty() {
             return Err(SelectorError::Empty);
         }
-        if source.contains(|c: char| c.is_whitespace() || matches!(c, '>' | '+' | '~' | ',')) {
+        let name = |c: char| c.is_alphanumeric() || !c.is_ascii() || matches!(c, '-' | '_');
+        if source.contains(|c: char| c.is_whitespace() || !(name(c) || matches!(c, '#' | '.'))) {
             return Err(SelectorError::Unsupported(source.to_owned()));
         }
 
@@ -119,6 +123,29 @@ mod tests {
             Err(SelectorError::Unsupported(_))
         ));
         assert_eq!(Selector::parse(""), Err(SelectorError::Empty));
+    }
+
+    #[test]
+    fn rejects_what_it_would_never_match() {
+        for selector in [
+            "p:has(input)",
+            "input:checked",
+            ":root",
+            "a[href]",
+            "*",
+            ".card:hover",
+            "#a[b]",
+            "a.b\\:c",
+            "a&b",
+        ] {
+            assert_eq!(
+                Selector::parse(selector),
+                Err(SelectorError::Unsupported(selector.into()))
+            );
+        }
+        for selector in ["x-y_z", "#1", ".mü.日本", "h1#a-1"] {
+            assert!(Selector::parse(selector).is_ok(), "{selector}");
+        }
     }
 
     #[test]

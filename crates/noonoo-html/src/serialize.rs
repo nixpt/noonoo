@@ -9,8 +9,10 @@
 //! Escaping follows the rules the data needs, no more:
 //!
 //! - text nodes escape `&`, `<`, `>`;
-//! - raw-text children (`script`, `style`, `textarea`, `title`) emit
-//!   verbatim — their content is data;
+//! - text directly in a raw-text element (`script`, `style`, `xmp`, ...) is
+//!   emitted verbatim, by `inner_html` too: it is data, and character
+//!   references in it are not decoded. Elements in one (`plaintext` may get
+//!   some) are written as anywhere;
 //! - attribute values are quoted, escaping `&` and `"`; the empty value
 //!   serializes as `name=""` (a bare attribute's value is stored empty, and
 //!   this form round-trips through the tokenizer);
@@ -22,15 +24,13 @@
 //! node itself. Neither sanitizes: a fragment that parses also serializes
 //! back with the same parse.
 
-use crate::{is_raw_text, is_void};
-use noonoo_dom::{Document, NodeData, NodeId};
+use crate::VOID_ELEMENTS;
+use noonoo_dom::{Document, Namespace, NodeData, NodeId};
 
 /// The HTML of `node`'s children.
 pub fn inner_html(document: &Document, node: NodeId) -> String {
     let mut out = String::new();
-    for child in document.tree().children(node) {
-        write_outer(document, *child, &mut out);
-    }
+    write_children(document, node, &mut out);
     out
 }
 
@@ -39,6 +39,19 @@ pub fn outer_html(document: &Document, node: NodeId) -> String {
     let mut out = String::new();
     write_outer(document, node, &mut out);
     out
+}
+
+fn write_children(document: &Document, node: NodeId, out: &mut String) {
+    let raw = document
+        .element(node)
+        .is_some_and(|element| element.namespace == Namespace::Html && is_raw_text(&element.name));
+    for child in document.tree().children(node) {
+        match document.node(*child) {
+            // A raw-text element's own text is data, verbatim.
+            Some(NodeData::Text(text)) if raw => out.push_str(text),
+            _ => write_outer(document, *child, out),
+        }
+    }
 }
 
 fn write_outer(document: &Document, node: NodeId, out: &mut String) {
@@ -54,18 +67,12 @@ fn write_outer(document: &Document, node: NodeId, out: &mut String) {
                 out.push('"');
             }
             out.push('>');
-            if is_void(&element.name) {
+            let html = element.namespace == Namespace::Html;
+            if html && is_void(&element.name) {
                 // Void elements carry no content and take no end tag.
                 return;
             }
-            if is_raw_text(&element.name) {
-                // Its content is data, verbatim.
-                out.push_str(&document.text_content(node));
-            } else {
-                for child in document.tree().children(node) {
-                    write_outer(document, *child, out);
-                }
-            }
+            write_children(document, node, out);
             out.push_str("</");
             out.push_str(&element.name);
             out.push('>');
@@ -77,14 +84,23 @@ fn write_outer(document: &Document, node: NodeId, out: &mut String) {
             out.push_str("-->");
         }
         // The document node is its children; a doctype is not content.
-        Some(NodeData::Document) => {
-            for child in document.tree().children(node) {
-                write_outer(document, *child, out);
-            }
-        }
+        Some(NodeData::Document) => write_children(document, node, out),
         Some(NodeData::Doctype { .. }) => {}
         None => {} // The id is not in this document.
     }
+}
+
+/// The void elements, and the obsolete ones that serialize like them.
+fn is_void(name: &str) -> bool {
+    VOID_ELEMENTS.contains(&name) || matches!(name, "basefont" | "bgsound" | "frame" | "keygen")
+}
+
+/// The elements whose text is written as it is.
+fn is_raw_text(name: &str) -> bool {
+    matches!(
+        name,
+        "iframe" | "noembed" | "noframes" | "plaintext" | "script" | "style" | "xmp"
+    )
 }
 
 /// Contexts to escape, as bit flags.

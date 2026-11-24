@@ -166,12 +166,13 @@ impl CompoundSelector {
                 SimpleSelector::Id(_) => spec.ids += 1,
                 SimpleSelector::Class(_) | SimpleSelector::Attribute(_) => spec.classes += 1,
                 SimpleSelector::PseudoClass(pseudo) => match pseudo {
-                    // :not()/:is() take their most specific argument.
+                    // :not()/:is()/:has() take their most specific argument.
                     PseudoClass::Not(inner) | PseudoClass::Is(inner) => {
-                        let inner = inner.max_specificity();
-                        spec.ids += inner.ids;
-                        spec.classes += inner.classes;
-                        spec.types += inner.types;
+                        spec = spec + inner.max_specificity();
+                    }
+                    PseudoClass::Has(list) => {
+                        let inner = list.iter().map(RelativeSelector::specificity).max();
+                        spec = spec + inner.unwrap_or_default();
                     }
                     _ => spec.classes += 1,
                 },
@@ -296,6 +297,7 @@ impl PseudoClass {
             PseudoClass::Root => element.parent().is_none(),
             PseudoClass::Not(inner) => !inner.matches(element, ctx),
             PseudoClass::Is(inner) => inner.matches(element, ctx),
+            PseudoClass::Has(list) => list.iter().any(|relative| relative.matches_from(element)),
             PseudoClass::Hover => ctx.hovered,
             PseudoClass::Focus => ctx.focused,
             PseudoClass::Active => ctx.active,

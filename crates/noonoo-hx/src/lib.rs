@@ -16,6 +16,9 @@
 //! | `hx-vals` | literal request body for non-GET methods |
 //! | `hx-include` | comma/space selectors whose control values join the body |
 //!
+//! Selectors are `noonoo-query`'s, with `:has()`. One it doesn't evaluate
+//! matches nothing: a target is then the element itself.
+//!
 //! [`Hx::handle`] is called for an event at a node; it walks up to the nearest
 //! `hx-*` element whose trigger matches, performs the request through a
 //! [`Fetcher`], and swaps the response into the target. [`Hx::mount`] fires
@@ -247,14 +250,12 @@ fn body_for(doc: &Document, node: NodeId, method: M) -> Option<String> {
 
     // `hx-include` pulls the values of other controls into the body.
     if let Some(include) = attr(doc, node, "hx-include") {
-        for spec in include.split(|c: char| c == ',' || c.is_whitespace()) {
-            if spec.is_empty() {
-                continue;
-            }
-            let Ok(targets) = doc.query_selector_all(spec) else {
-                continue;
-            };
-            for target in targets {
+        for spec in split_selectors(&include) {
+            let targets = noonoo_query::query_selector_all(doc, spec);
+            for target in targets
+                .or_else(|_| doc.query_selector_all(spec))
+                .unwrap_or_default()
+            {
                 if let Some(name) = attr(doc, target, "name") {
                     let value =
                         attr(doc, target, "value").unwrap_or_else(|| doc.text_content(target));
@@ -310,12 +311,38 @@ fn parse_interval(trigger: &str) -> Option<f64> {
         .map(|value| value * 1000.0)
 }
 
+/// The selectors of a list whose separators are commas and white space, so
+/// that their only combinators are those in brackets.
+fn split_selectors(list: &str) -> impl Iterator<Item = &str> {
+    let mut depth = 0usize;
+    list.split(move |c: char| {
+        match c {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        depth == 0 && (c == ',' || c.is_ascii_whitespace())
+    })
+    .filter(|spec| !spec.is_empty())
+}
+
+/// The first element below `root` matching `selector`.
+fn select(doc: &Document, root: NodeId, selector: &str) -> Option<NodeId> {
+    noonoo_query::query_selector_in(doc, root, selector).unwrap_or_else(|_| {
+        // Not CSS, but a plain name all the same: `#1`.
+        let selector = Selector::parse(selector).ok()?;
+        doc.tree()
+            .descendants(root)
+            .into_iter()
+            .find(|&node| doc.element(node).is_some_and(|e| selector.matches(e)))
+    })
+}
+
 fn matches_selector(doc: &Document, node: NodeId, selector: &str) -> bool {
-    let Ok(selector) = Selector::parse(selector) else {
-        return false;
-    };
-    doc.element(node)
-        .is_some_and(|element| selector.matches(element))
+    noonoo_query::matches(doc, node, selector).unwrap_or_else(|_| {
+        Selector::parse(selector)
+            .is_ok_and(|selector| doc.element(node).is_some_and(|e| selector.matches(e)))
+    })
 }
 
 fn resolve_target(doc: &Document, element: NodeId) -> NodeId {
@@ -340,15 +367,10 @@ fn resolve_target(doc: &Document, element: NodeId) -> NodeId {
     }
 
     if let Some(selector) = spec.strip_prefix("find ") {
-        for node in doc.tree().descendants(element) {
-            if matches_selector(doc, node, selector.trim()) {
-                return node;
-            }
-        }
-        return element;
+        return select(doc, element, selector.trim()).unwrap_or(element);
     }
 
-    doc.query_selector(spec).ok().flatten().unwrap_or(element)
+    select(doc, doc.root(), spec).unwrap_or(element)
 }
 
 /// Swap `html` into `target` per `swap`, importing nodes from `html`'s tree.
@@ -508,6 +530,77 @@ mod tests {
         let child = doc.tree().children(box_id)[0];
         assert_eq!(doc.element(child).unwrap().name, "p");
         assert!(doc.query_selector("span").unwrap().is_none());
+    }
+
+    /// What a click on `button`, with these attributes, swapped.
+    fn swapped(attrs: &str) -> String {
+        let mut doc = noonoo_html::parse(&format!(
+            r##"<form id="f"><p id="1"><input class="a" name="n" value="v"></p><p id="p2"><button hx-get="/x" {attrs}><b></b><i id="i"><em></em></i></button></p></form>"##,
+        ));
+        let fetcher = StaticFetcher::new().with("/x", "<u></u>");
+        let button = doc.query_selector("button").unwrap().unwrap();
+        Hx::new(&fetcher)
+            .handle(&mut doc, &click(), button)
+            .unwrap()
+            .unwrap();
+        let swapped = doc.query_selector("u").unwrap().unwrap();
+        let target = doc.tree().parent(swapped).unwrap();
+        let element = doc.element(target).unwrap();
+        element.id().unwrap_or(&element.name).to_owned()
+    }
+
+    #[test]
+    fn targets_take_full_selectors() {
+        for (attrs, target) in [
+            (r#"hx-target="p:has(input)""#, "1"),
+            (r#"hx-target="form > p + p""#, "p2"),
+            (r#"hx-target="closest form:has(> p)""#, "f"),
+            (r#"hx-target="closest p:nth-child(2)""#, "p2"),
+            (r#"hx-target="find i:has(em)""#, "i"),
+            // Inside the element, not it.
+            (r#"hx-target="find button""#, "button"),
+            (r#"hx-target="find [id]""#, "i"),
+            // As written, where it isn't a selector.
+            (r##"hx-target="#1""##, "1"),
+            // Not evaluated, or no match: the element itself.
+            (r#"hx-target="p:empty""#, "button"),
+            (r#"hx-target="closest table""#, "button"),
+        ] {
+            assert_eq!(swapped(attrs), target, "{attrs}");
+        }
+    }
+
+    #[test]
+    fn includes_take_full_selectors() {
+        let mut doc = noonoo_html::parse(
+            r##"<form><input name="a" value="1"><input name="b" value="2"><button hx-post="/x" hx-include="[name=a] input:nth-child(2), p:empty">go</button></form>"##,
+        );
+        let fetcher = Recorder {
+            body: String::new(),
+            seen: RefCell::new(Vec::new()),
+        };
+        let button = doc.query_selector("button").unwrap().unwrap();
+        Hx::new(&fetcher)
+            .handle(&mut doc, &click(), button)
+            .unwrap()
+            .unwrap();
+        assert_eq!(fetcher.seen.borrow()[0].body.as_deref(), Some("a=1&b=2"));
+    }
+
+    #[test]
+    fn a_response_of_table_rows_keeps_them() {
+        let mut doc = noonoo_html::parse(
+            r##"<table><tbody id="rows"></tbody></table><button hx-get="/x" hx-target="#rows">go</button>"##,
+        );
+        let fetcher = StaticFetcher::new().with("/x", "<tr><td>a</td></tr><tr><td>b</td></tr>");
+        let button = doc.query_selector("button").unwrap().unwrap();
+        Hx::new(&fetcher)
+            .handle(&mut doc, &click(), button)
+            .unwrap()
+            .unwrap();
+        let rows = doc.get_element_by_id("rows").unwrap();
+        assert_eq!(doc.tree().children(rows).len(), 2);
+        assert_eq!(doc.get_elements_by_tag_name("td").len(), 2);
     }
 
     #[test]

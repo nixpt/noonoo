@@ -80,6 +80,11 @@ impl<'a> Element for View<'a> {
         };
         self.element_children(parent).len()
     }
+    fn children(&self) -> Vec<Self> {
+        let doc = self.doc;
+        let children = self.element_children(self.id).into_iter();
+        children.map(|id| View { doc, id }).collect()
+    }
 }
 
 fn sample() -> (Document, NodeId, NodeId) {
@@ -315,6 +320,15 @@ fn specificity_is_computed() {
         }
         .to_u32()
     );
+}
+
+#[test]
+fn has_takes_its_most_specific_arguments_specificity() {
+    let spec = |s: &str| SelectorList::parse(s).unwrap().max_specificity().to_u32();
+    assert_eq!(spec("a:has(b)"), spec("a b"));
+    assert_eq!(spec("a:has(> .b #c)"), spec("a .b #c"));
+    assert_eq!(spec("a:has(b, + .c, ~ i)"), spec("a .c"));
+    assert_eq!(spec(":has(*)"), 0);
 }
 
 #[test]

@@ -235,7 +235,8 @@ impl Document {
             .collect()
     }
 
-    /// The first element matching `selector`, in document order.
+    /// The first element matching the simple `selector` (see [`Selector`];
+    /// `noonoo-query` has full ones), in document order.
     pub fn query_selector(&self, selector: &str) -> Result<Option<NodeId>, SelectorError> {
         let selector = Selector::parse(selector)?;
         Ok(self
@@ -244,7 +245,8 @@ impl Document {
             .find(|&node| self.element(node).is_some_and(|e| selector.matches(e))))
     }
 
-    /// Every element matching `selector`, in document order.
+    /// Every element matching the simple `selector` (see [`Selector`];
+    /// `noonoo-query` has full ones), in document order.
     pub fn query_selector_all(&self, selector: &str) -> Result<Vec<NodeId>, SelectorError> {
         let selector = Selector::parse(selector)?;
         Ok(self

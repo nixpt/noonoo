@@ -139,12 +139,13 @@ impl<'a> DocumentMutator<'a> {
     }
 
     /// Where `child` sits among `parent`'s children. The callers have
-    /// checked that it is one of them.
+    /// checked that it is one of them. Looks from the end, where a parser
+    /// works.
     fn position(&self, parent: NodeId, child: NodeId) -> usize {
         self.tree
             .children(parent)
             .iter()
-            .position(|&id| id == child)
+            .rposition(|&id| id == child)
             .unwrap_or(0)
     }
 
@@ -257,6 +258,27 @@ impl<'a> DocumentMutator<'a> {
         }
     }
 
+    /// Add `text` to the end of `node`.
+    ///
+    /// On a text or comment node this extends the string in place
+    /// (`CharacterData.appendData`), without rewriting what is there as
+    /// [`Self::set_text`] does. On an element it appends a text node.
+    pub fn append_text(&mut self, node: NodeId, text: &str) -> Result<(), MutError> {
+        let data = self.tree.get_mut(node).ok_or(MutError::NoSuchNode(node))?;
+        match &mut data.data {
+            NodeData::Text(current) | NodeData::Comment(current) => {
+                current.push_str(text);
+                self.record(Change::Text(node));
+                Ok(())
+            }
+            NodeData::Document | NodeData::Element(_) => {
+                let child = self.tree.insert_raw(NodeData::Text(text.to_owned()));
+                self.append_child(node, child)
+            }
+            NodeData::Doctype { .. } => Err(MutError::CannotHaveChildren(node)),
+        }
+    }
+
     fn require(&self, id: NodeId) -> Result<(), MutError> {
         if self.tree.contains(id) {
             Ok(())
@@ -339,6 +361,31 @@ mod tests {
         let children = doc.tree().children(body).to_vec();
         assert_eq!(children.len(), 1);
         assert_eq!(doc.node(children[0]).unwrap().as_text(), Some("hello"));
+    }
+
+    #[test]
+    fn append_text_extends_text_and_fills_elements() {
+        let (mut doc, body) = doc_with_body();
+        let text = doc.create_text("a");
+        doc.mutate().append_child(body, text).unwrap();
+        doc.take_changes();
+        doc.mutate().append_text(text, "b").unwrap();
+        let changes = doc.take_changes();
+        assert_eq!(
+            changes.iter().copied().collect::<Vec<_>>(),
+            [Change::Text(text)]
+        );
+        assert_eq!(doc.node(text).unwrap().as_text(), Some("ab"));
+
+        doc.mutate().append_text(body, "c").unwrap();
+        assert_eq!(doc.tree().children(body).len(), 2);
+        assert_eq!(doc.text_content(body), "abc");
+
+        let ghost = NodeId::from_index(99);
+        assert_eq!(
+            doc.mutate().append_text(ghost, "x"),
+            Err(MutError::NoSuchNode(ghost))
+        );
     }
 
     #[test]

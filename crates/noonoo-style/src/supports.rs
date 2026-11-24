@@ -8,7 +8,7 @@
 //! `font-format()`, for technologies noonoo's fonts lack.
 
 use noonoo_css::{Property, parse_declaration};
-use noonoo_selectors::{PseudoClass, SelectorList, SimpleSelector};
+use noonoo_selectors::{ComplexSelector, PseudoClass, SelectorList, SimpleSelector};
 
 /// Whether an `@supports` prelude holds.
 pub(crate) fn holds(prelude: &str) -> bool {
@@ -123,9 +123,13 @@ fn declaration(text: &str) -> bool {
 /// static page (`:target` with no fragment, `:visited` with no history);
 /// a name outside CSS isn't supported at all.
 fn supported(list: &SelectorList) -> bool {
-    list.selectors
+    list.selectors.iter().all(supported_complex)
+}
+
+fn supported_complex(selector: &ComplexSelector) -> bool {
+    selector
+        .compounds
         .iter()
-        .flat_map(|selector| &selector.compounds)
         .flat_map(|compound| &compound.simples)
         .all(|simple| match simple {
             SimpleSelector::PseudoClass(PseudoClass::Unknown(name)) => {
@@ -134,6 +138,9 @@ fn supported(list: &SelectorList) -> bool {
             SimpleSelector::PseudoClass(PseudoClass::Not(inner) | PseudoClass::Is(inner)) => {
                 supported(inner)
             }
+            SimpleSelector::PseudoClass(PseudoClass::Has(list)) => list
+                .iter()
+                .all(|relative| supported_complex(&relative.selector)),
             _ => true,
         })
 }
@@ -193,6 +200,9 @@ mod tests {
     fn a_selector_holds_when_it_parses() {
         assert!(holds("selector(:target)"));
         assert!(holds("selector(a > b)"));
+        assert!(holds("selector(a:has(> b))"));
+        assert!(!holds("selector(a:has(:frobnicate))"));
+        assert!(!holds("selector(a:has(b:has(i)))"));
         assert!(holds("selector(a:visited:not(:focus-within))"));
         assert!(!holds("selector(:frobnicate)"));
         assert!(!holds("selector(:not(:frobnicate))"));
