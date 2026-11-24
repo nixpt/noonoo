@@ -51,6 +51,31 @@ fn raw_text_content_is_emitted_verbatim() {
 }
 
 #[test]
+fn elements_in_a_raw_text_element_are_written() {
+    let source = "<p><b></p><plaintext>x<y&amp;";
+    assert_eq!(
+        body_round_trip(source),
+        "<p><b></b></p><plaintext><b>x&lt;y&amp;amp;</b></plaintext>"
+    );
+}
+
+#[test]
+fn the_text_of_every_raw_text_element_is_verbatim() {
+    for tag in ["iframe", "noembed", "noframes", "script", "style", "xmp"] {
+        let source = format!("<p></p><{tag}>a<b>&amp;</{tag}>");
+        assert_eq!(body_round_trip(&source), source);
+        let doc = parse(&source);
+        let node = doc.get_elements_by_tag_name(tag)[0];
+        assert_eq!(inner_html(&doc, node), "a<b>&amp;", "inside {tag}");
+    }
+    // SVG has elements of these names that are not.
+    assert_eq!(
+        body_round_trip("<svg><style>a&lt;b</style></svg>"),
+        "<svg><style>a&lt;b</style></svg>"
+    );
+}
+
+#[test]
 fn a_doctype_is_dropped() {
     assert_eq!(
         round_trip("<!doctype html><p>x</p>"),

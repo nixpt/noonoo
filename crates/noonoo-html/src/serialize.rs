@@ -9,8 +9,10 @@
 //! Escaping follows the rules the data needs, no more:
 //!
 //! - text nodes escape `&`, `<`, `>`;
-//! - raw-text children (`script`, `style`, `xmp`, ...) emit verbatim: their
-//!   content is data, and character references in it are not decoded;
+//! - text directly in a raw-text element (`script`, `style`, `xmp`, ...) is
+//!   emitted verbatim, by `inner_html` too: it is data, and character
+//!   references in it are not decoded. Elements in one (`plaintext` may get
+//!   some) are written as anywhere;
 //! - attribute values are quoted, escaping `&` and `"`; the empty value
 //!   serializes as `name=""` (a bare attribute's value is stored empty, and
 //!   this form round-trips through the tokenizer);
@@ -28,9 +30,7 @@ use noonoo_dom::{Document, Namespace, NodeData, NodeId};
 /// The HTML of `node`'s children.
 pub fn inner_html(document: &Document, node: NodeId) -> String {
     let mut out = String::new();
-    for child in document.tree().children(node) {
-        write_outer(document, *child, &mut out);
-    }
+    write_children(document, node, &mut out);
     out
 }
 
@@ -39,6 +39,19 @@ pub fn outer_html(document: &Document, node: NodeId) -> String {
     let mut out = String::new();
     write_outer(document, node, &mut out);
     out
+}
+
+fn write_children(document: &Document, node: NodeId, out: &mut String) {
+    let raw = document
+        .element(node)
+        .is_some_and(|element| element.namespace == Namespace::Html && is_raw_text(&element.name));
+    for child in document.tree().children(node) {
+        match document.node(*child) {
+            // A raw-text element's own text is data, verbatim.
+            Some(NodeData::Text(text)) if raw => out.push_str(text),
+            _ => write_outer(document, *child, out),
+        }
+    }
 }
 
 fn write_outer(document: &Document, node: NodeId, out: &mut String) {
@@ -59,14 +72,7 @@ fn write_outer(document: &Document, node: NodeId, out: &mut String) {
                 // Void elements carry no content and take no end tag.
                 return;
             }
-            if html && is_raw_text(&element.name) {
-                // Its content is data, verbatim.
-                out.push_str(&document.text_content(node));
-            } else {
-                for child in document.tree().children(node) {
-                    write_outer(document, *child, out);
-                }
-            }
+            write_children(document, node, out);
             out.push_str("</");
             out.push_str(&element.name);
             out.push('>');
@@ -78,11 +84,7 @@ fn write_outer(document: &Document, node: NodeId, out: &mut String) {
             out.push_str("-->");
         }
         // The document node is its children; a doctype is not content.
-        Some(NodeData::Document) => {
-            for child in document.tree().children(node) {
-                write_outer(document, *child, out);
-            }
-        }
+        Some(NodeData::Document) => write_children(document, node, out),
         Some(NodeData::Doctype { .. }) => {}
         None => {} // The id is not in this document.
     }
