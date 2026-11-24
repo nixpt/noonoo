@@ -9,8 +9,8 @@
 //! Escaping follows the rules the data needs, no more:
 //!
 //! - text nodes escape `&`, `<`, `>`;
-//! - raw-text children (`script`, `style`, `textarea`, `title`) emit
-//!   verbatim — their content is data;
+//! - raw-text children (`script`, `style`, `xmp`, ...) emit verbatim: their
+//!   content is data, and character references in it are not decoded;
 //! - attribute values are quoted, escaping `&` and `"`; the empty value
 //!   serializes as `name=""` (a bare attribute's value is stored empty, and
 //!   this form round-trips through the tokenizer);
@@ -97,15 +97,7 @@ fn is_void(name: &str) -> bool {
 fn is_raw_text(name: &str) -> bool {
     matches!(
         name,
-        "iframe"
-            | "noembed"
-            | "noframes"
-            | "plaintext"
-            | "script"
-            | "style"
-            | "textarea"
-            | "title"
-            | "xmp"
+        "iframe" | "noembed" | "noframes" | "plaintext" | "script" | "style" | "xmp"
     )
 }
 

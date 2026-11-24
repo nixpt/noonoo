@@ -35,6 +35,7 @@
 mod builder;
 mod foreign;
 mod mode;
+mod named;
 mod tags;
 mod tokenizer;
 

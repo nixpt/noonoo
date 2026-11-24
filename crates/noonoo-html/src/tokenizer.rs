@@ -48,7 +48,10 @@ impl Content {
 
     /// The text `source` is, read whole as this (non-markup) content.
     pub(crate) fn text(self, source: &str) -> String {
-        no_nulls(source).into_owned()
+        match self {
+            Content::RcData(_) => entities::decode(&no_nulls(source)),
+            _ => no_nulls(source).into_owned(),
+        }
     }
 }
 
