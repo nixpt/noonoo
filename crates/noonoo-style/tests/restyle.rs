@@ -348,3 +348,73 @@ fn with_has_an_edit_below_or_after_an_element_restyles_it() {
     assert_eq!(styles.get(label).unwrap().font_size, 20.0);
     assert_fresh(&doc, &cascade, &styles, none);
 }
+
+/// The only `:has()` is inside another function: an edit reaches as far.
+#[test]
+fn has_inside_not_or_is_restyles_as_far() {
+    for (css, size) in [
+        ("#card:not(:has(.on)) { font-size: 30px }", [30.0, 16.0]),
+        ("#card:is(:has(.on), i) { font-size: 30px }", [16.0, 30.0]),
+        (
+            "#card:not(:is(:has(.on))) { font-size: 30px }",
+            [30.0, 16.0],
+        ),
+        (":not(:has(.on)) > #p { font-size: 30px }", [16.0, 16.0]),
+    ] {
+        let mut doc = noonoo_html::parse(
+            r#"<!doctype html><body><div id="card"><p id="p"><b id="deep">b</b></p></div></body>"#,
+        );
+        doc.take_changes();
+        let sheet = Stylesheet::parse(css).unwrap();
+        let cascade = Cascade::new(&[sheet], Viewport::DEFAULT);
+        let none = Interaction::default();
+        let mut styles = cascade.compute(&doc, none);
+        let (card, deep) = (id(&doc, "card"), id(&doc, "deep"));
+        assert_eq!(styles.get(card).unwrap().font_size, size[0], "{css}");
+
+        doc.mutate().set_attribute(deep, "class", "on").unwrap();
+        restyle(&mut doc, &cascade, &mut styles);
+        assert_eq!(styles.get(card).unwrap().font_size, size[1], "{css}");
+        assert_fresh(&doc, &cascade, &styles, none);
+    }
+}
+
+/// A fresh compute and a restyle agree on these, so what they give counts.
+#[test]
+fn has_finds_the_hovered_focused_and_pressed() {
+    let doc = noonoo_html::parse(
+        r#"<!doctype html><body><p id="p"><b id="b">b</b><i id="i">i</i></p></body>"#,
+    );
+    let sheet = Stylesheet::parse(
+        "p:has(b:hover) { font-size: 20px } p:has(b:focus) { font-size: 30px }
+         p:has(b:active) { font-size: 40px }",
+    )
+    .unwrap();
+    let cascade = Cascade::new(&[sheet], Viewport::DEFAULT);
+    let (p, b, i) = (id(&doc, "p"), id(&doc, "b"), id(&doc, "i"));
+    let states = |node| {
+        let none = Interaction::default();
+        [
+            Interaction {
+                hovered: Some(node),
+                ..none
+            },
+            Interaction {
+                focused: Some(node),
+                ..none
+            },
+            Interaction {
+                active: Some(node),
+                ..none
+            },
+        ]
+    };
+    let mut styles = cascade.compute(&doc, Interaction::default());
+    for (on, off, size) in [(0, 1, 20.0), (1, 2, 30.0), (2, 0, 40.0)] {
+        for (state, size) in [(states(b)[on], size), (states(i)[off], 16.0)] {
+            cascade.restyle(&mut styles, &doc, state, &Default::default());
+            assert_eq!(styles.get(p).unwrap().font_size, size, "{state:?}");
+            assert_fresh(&doc, &cascade, &styles, state);
+        }
+    }
+}

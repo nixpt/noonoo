@@ -40,6 +40,25 @@ fn misnested_formatting_is_adopted() {
     ]);
 }
 
+/// The adoption agency goes down eight blocks, leaving an `a` in each.
+#[test]
+fn an_end_tag_reaches_into_eight_blocks() {
+    for blocks in 0..12 {
+        let source = format!("<a>{}1</a>2", "<div>".repeat(blocks));
+        let reached = blocks.min(8);
+        // Going down eight leaves none to close the link with: it holds the
+        // blocks after them.
+        let mut expected = match blocks - reached {
+            0 if reached < 8 => r#"a["1"] "2""#.to_owned(),
+            rest => format!("a[{}\"12\"{}]", "div[".repeat(rest), "]".repeat(rest)),
+        };
+        for _ in 0..reached {
+            expected = format!("a div[{expected}]");
+        }
+        check(&[(&source, &expected)]);
+    }
+}
+
 #[test]
 fn an_unclosed_paragraph_passes_its_formatting_on() {
     check(&[(
@@ -65,6 +84,77 @@ fn a_link_closes_an_open_link() {
             r#"a(href=1) p[a(href=1)["x"] a(href=2)["y"]]"#,
         ),
         ("<nobr>1<nobr>2", r#"nobr["1"] nobr["2"]"#),
+    ]);
+}
+
+#[test]
+fn a_link_outside_the_scope_of_the_next_is_not_left_open() {
+    check(&[(
+        "<a><math><mi><a>1</a></math>2",
+        r#"a[math:math[math:mi[a["1"]]]] "2""#,
+    )]);
+}
+
+#[test]
+fn up_to_three_alike_formatting_elements_reopen() {
+    check(&[
+        (
+            "<p><b x=1><b x=2><b x=3><b x=4>1<p>2",
+            r#"p[b(x=1)[b(x=2)[b(x=3)[b(x=4)["1"]]]]] p[b(x=1)[b(x=2)[b(x=3)[b(x=4)["2"]]]]]"#,
+        ),
+        (
+            "<p><b x=1><b x=1><b x=1><b x=1>1<p>2",
+            r#"p[b(x=1)[b(x=1)[b(x=1)[b(x=1)["1"]]]]] p[b(x=1)[b(x=1)[b(x=1)["2"]]]]"#,
+        ),
+        (
+            "<p><b x=1 y=1><b y=1 x=1><b x=1 y=1><b x=1 y=1>1<p>2",
+            concat!(
+                r#"p[b(x=1 y=1)[b(y=1 x=1)[b(x=1 y=1)[b(x=1 y=1)["1"]]]]] "#,
+                r#"p[b(y=1 x=1)[b(x=1 y=1)[b(x=1 y=1)["2"]]]]"#
+            ),
+        ),
+    ]);
+}
+
+/// How many differ is the page's affair.
+#[test]
+fn many_formatting_elements_reopen() {
+    let open: String = (0..500).map(|n| format!("<b x={n}>")).collect();
+    let nested = |text: &str| {
+        let open: String = (0..500).map(|n| format!("b(x={n})[")).collect();
+        format!("{open}\"{text}\"{}", "]".repeat(500))
+    };
+    let expected = format!("p[{}] p[{}]", nested("1"), nested("2"));
+    check(&[(&format!("<p>{open}1<p>2"), &expected)]);
+}
+
+/// So is how deep it nests.
+#[test]
+fn an_end_tag_closes_an_element_far_up() {
+    let spans = 400;
+    let source = format!("<div>{}</div>x", "<span>".repeat(spans));
+    let nested = format!("{}span{}", "span[".repeat(spans - 1), "]".repeat(spans - 1));
+    check(&[(&source, &format!(r#"div[{nested}] "x""#))]);
+    // Past the depth limit the tree is flat, but the stack is not.
+    let source = format!("<div>{}</div>x", "<span>".repeat(4000));
+    let doc = noonoo_html::parse(&source);
+    let body = doc.get_elements_by_tag_name("body")[0];
+    assert_eq!(doc.tree().children(body).len(), 2);
+}
+
+#[test]
+fn a_caption_takes_its_formatting_with_it() {
+    check(&[(
+        "<table><caption><b>1</caption>2",
+        r#""2" table[caption[b["1"]]]"#,
+    )]);
+}
+
+#[test]
+fn preformatted_text_rules_a_frameset_out() {
+    check(&[
+        ("<pre></pre><frameset>", "pre"),
+        ("<listing></listing><frameset>", "listing"),
     ]);
 }
 
@@ -293,6 +383,29 @@ fn integration_points_hold_html() {
             "math:math[math:annotation-xml[svg:svg[svg:g]]] div",
         ),
     ]);
+}
+
+#[test]
+fn an_end_tag_does_not_close_an_integration_point() {
+    for (root, point) in [
+        ("svg", "desc"),
+        ("svg", "title"),
+        ("svg", "foreignobject"),
+        ("math", "mi"),
+        ("math", "mo"),
+        ("math", "mn"),
+        ("math", "ms"),
+        ("math", "mtext"),
+    ] {
+        check(&[(
+            &format!("<x-y><{root}><{point}></x-y>z"),
+            &format!(r#"x-y[{root}:{root}[{root}:{point}["z"]]]"#),
+        )]);
+    }
+    check(&[(
+        "<x-y><math><annotation-xml encoding=text/html></x-y>z",
+        r#"x-y[math:math[math:annotation-xml(encoding=text/html)["z"]]]"#,
+    )]);
 }
 
 #[test]

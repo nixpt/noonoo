@@ -217,6 +217,20 @@ fn misnesting_stays_bounded() {
     }
 }
 
+/// Reopened formatting is copied up to an allowance, whatever the markup
+/// asks for; the text all stays.
+#[test]
+fn reopened_formatting_stays_within_its_allowance() {
+    let open: String = (0..500).map(|n| format!("<b x={n}>")).collect();
+    let source = format!("<p>{open}{}", "x<p>".repeat(2000));
+    let doc = parse(&source);
+    // A copy counts 132 or so bytes of the allowance's 16 MiB (see
+    // `builder`), where all that is asked for is a million of them.
+    let elements = doc.elements().len();
+    assert!((100_000..150_000).contains(&elements), "{elements}");
+    assert_eq!(doc.text_content(doc.root()).len(), 2000);
+}
+
 /// Elements that leave the stack of open elements from its middle leave
 /// what is inside them open: the tree is deeper than the stack is long.
 #[test]
