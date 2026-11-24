@@ -206,7 +206,9 @@ struct Builder<'d, 's> {
     first_new: usize,
     /// Bytes of elements that may still be copied.
     copies: usize,
-    /// Whether the tree may be deeper than the stack's depth limit made it.
+    /// Whether the tree may be deeper than the stack is long, whose length
+    /// is what the depth limit goes by: an element left the stack's middle,
+    /// or nodes moved.
     moved: bool,
 }
 
@@ -381,6 +383,9 @@ impl<'d, 's> Builder<'d, 's> {
         if let Some(index) = self.find(|open| open.id == id, |_| false)
             && index > 0
         {
+            // What is inside it stays open: the stack gets shorter than the
+            // tree is deep.
+            self.moved |= index + 1 < self.open.len();
             self.open.remove(index);
             self.set_open(id, false);
         }
@@ -633,11 +638,11 @@ impl<'d, 's> Builder<'d, 's> {
         };
         let open = self.open[index];
         if open.tag == Tag::Template {
-            return (open.id, None);
+            return (self.parent_at(index), None);
         }
         match self.doc.tree().parent(open.id) {
             Some(parent) => (parent, Some(open.id)),
-            None => (self.open[index.saturating_sub(1)].id, None),
+            None => (self.parent_at(index.saturating_sub(1)), None),
         }
     }
 

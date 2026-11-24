@@ -217,6 +217,74 @@ fn misnesting_stays_bounded() {
     }
 }
 
+/// Elements that leave the stack of open elements from its middle leave
+/// what is inside them open: the tree is deeper than the stack is long.
+#[test]
+fn what_stays_open_after_its_parent_stays_within_the_depth_limit() {
+    for (unit, tail) in [
+        ("<form><div></form>", ""),
+        ("<form><div></form>", "<table><td>"),
+        ("<a><math><mi>", ""),
+        ("<form><a><math><mi></form>", ""),
+        ("<a><svg><desc><form><div></form>", ""),
+        ("<table><td><form><div></form>", ""),
+        ("<b><form><p></form>", "</b>"),
+        ("<template><tr><a>", ""),
+        ("<template><tr>", "x"),
+    ] {
+        for source in [
+            unit.repeat(3000) + tail,
+            format!("{unit}{tail}").repeat(3000),
+        ] {
+            let doc = parse(&source);
+            assert!(depth(&doc) <= noonoo_html::MAX_TREE_DEPTH, "{source:.60}");
+
+            let mut doc = noonoo_dom::Document::new();
+            let node = doc.create_element("div");
+            let root = doc.root();
+            doc.mutate().append_child(root, node).unwrap();
+            noonoo_html::set_inner_html(&mut doc, node, &source).unwrap();
+            // The context, then as deep below it.
+            assert!(
+                depth(&doc) <= noonoo_html::MAX_TREE_DEPTH + 1,
+                "in a fragment: {source:.60}"
+            );
+        }
+    }
+    // `head` leaves from under a template, `<head>` being closed.
+    let doc = parse(&format!("<head></head><template>{}", "<div>".repeat(3000)));
+    assert!(depth(&doc) <= noonoo_html::MAX_TREE_DEPTH);
+}
+
+/// Deep random markup, mostly start tags, keeps to the depth limit.
+#[test]
+fn deep_random_markup_stays_within_the_depth_limit() {
+    const TAGS: &[&str] = &[
+        "a", "b", "nobr", "form", "div", "p", "button", "table", "tr", "td", "caption", "math",
+        "mi", "svg", "desc", "template", "applet", "li", "ruby", "x-y", "select", "h1",
+    ];
+    for seed in 1..=12 {
+        let mut rng = Rng::new(seed);
+        // A few tags at a time, or most rounds stay shallow.
+        let pool: Vec<&str> = (0..3 + rng.next() as usize % 5)
+            .map(|_| TAGS[rng.next() as usize % TAGS.len()])
+            .collect();
+        let mut source = String::new();
+        for _ in 0..6000 {
+            let tag = pool[rng.next() as usize % pool.len()];
+            match rng.next() % 5 {
+                0 => source += &format!("</{tag}>"),
+                _ => source += &format!("<{tag}>"),
+            }
+        }
+        let doc = parse(&source);
+        assert!(
+            depth(&doc) <= noonoo_html::MAX_TREE_DEPTH,
+            "seed {seed}: {pool:?}"
+        );
+    }
+}
+
 /// Tags that nest, close, move and copy, in no order: every parse gives a
 /// tree whose links agree, the same one each time.
 #[test]
